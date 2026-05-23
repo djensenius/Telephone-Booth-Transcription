@@ -15,19 +15,24 @@ struct SettingsView: View {
 
     private enum BackendKind: String, CaseIterable, Identifiable {
         case proxy
+        case appleSpeechAnalyzer
         case nativeMacOS
         var id: String { rawValue }
         var label: String {
             switch self {
             case .proxy: return "Proxy (LM Studio / OpenAI-compatible)"
-            case .nativeMacOS: return "Built-in macOS (Speech framework)"
+            case .appleSpeechAnalyzer: return "macOS 26 Speech Analyzer (Apple Intelligence)"
+            case .nativeMacOS: return "macOS legacy Speech Recognizer"
             }
         }
     }
 
     private var currentBackendKind: BackendKind {
-        if case .nativeMacOS = host.config.transcriptionBackend { return .nativeMacOS }
-        return .proxy
+        switch host.config.transcriptionBackend {
+        case .nativeMacOS: return .nativeMacOS
+        case .appleSpeechAnalyzer: return .appleSpeechAnalyzer
+        case .proxy: return .proxy
+        }
     }
 
     private var proxyUpstream: UpstreamConfig {
@@ -60,6 +65,8 @@ struct SettingsView: View {
                             host.config.transcriptionBackend = .proxy(proxyUpstream)
                         case .nativeMacOS:
                             host.config.transcriptionBackend = .nativeMacOS
+                        case .appleSpeechAnalyzer:
+                            host.config.transcriptionBackend = .appleSpeechAnalyzer
                         }
                     }
                 )) {
@@ -119,18 +126,27 @@ struct SettingsView: View {
                         get: { host.config.nativeTranscriptionLocale },
                         set: { host.config.nativeTranscriptionLocale = $0 }
                     )) {
-                        ForEach(nativeLocales(), id: \.self) { id in
+                        ForEach(nativeLocales(for: currentBackendKind), id: \.self) { id in
                             Text(displayName(for: id)).tag(id)
                         }
-                        if !nativeLocales().contains(host.config.nativeTranscriptionLocale) {
+                        if !nativeLocales(for: currentBackendKind).contains(host.config.nativeTranscriptionLocale) {
                             Text(host.config.nativeTranscriptionLocale)
                                 .tag(host.config.nativeTranscriptionLocale)
                         }
                     }
-                    Text("Uses macOS's on-device Speech framework. First use will " +
-                         "prompt for permission. No data leaves this machine.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if currentBackendKind == .appleSpeechAnalyzer {
+                        Text("Uses macOS 26's SpeechAnalyzer — the engine behind Apple " +
+                             "Intelligence transcription. First use of a new locale may " +
+                             "trigger a one-time on-device model download.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Uses macOS's legacy SFSpeechRecognizer. Wider locale coverage " +
+                             "than the SpeechAnalyzer engine and no model download, but " +
+                             "lower accuracy. First use will prompt for permission.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -218,12 +234,20 @@ struct SettingsView: View {
         )
     }
 
-    private func nativeLocales() -> [String] {
+    private func nativeLocales(for kind: BackendKind) -> [String] {
         #if canImport(Speech) && os(macOS)
+        // TODO: When `kind == .appleSpeechAnalyzer` we'd ideally surface
+        // `SpeechTranscriber.supportedLocales` here, but that API is async
+        // and the picker is built synchronously. As a pragmatic interim we
+        // use `SFSpeechRecognizer.supportedLocales()` for both engines —
+        // any locale not actually supported by `SpeechTranscriber` will be
+        // rejected at runtime by `supportedLocale(equivalentTo:)`.
+        _ = kind
         return SFSpeechRecognizer.supportedLocales()
             .map { $0.identifier }
             .sorted()
         #else
+        _ = kind
         return ["en-US"]
         #endif
     }

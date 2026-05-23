@@ -63,3 +63,16 @@ Subsequent requests run fully on-device — no network involved, no external mod
 server required. Note that the response is the OpenAI default `{ "text": "…" }`
 shape; verbose JSON / SRT / VTT formats are only available through the proxy
 backend.
+
+### Picking between the two macOS backends
+
+macOS 26 ships two on-device transcription engines, and the app exposes both:
+
+| Setting | Engine | Strengths | Trade-offs |
+| --- | --- | --- | --- |
+| **macOS 26 Speech Analyzer (Apple Intelligence)** | `SpeechAnalyzer` + `SpeechTranscriber` | Higher accuracy. Handles long-form audio (lectures, meetings, podcasts). Same engine behind Notes / Voice Memos transcription. | Per-locale model assets must download the first time you use a new locale (typically tens of MB; the system shares assets across apps once installed). Requires macOS 26+. |
+| **macOS legacy Speech Recognizer** | `SFSpeechRecognizer` | Wider locale coverage out of the box. No model download. Works on macOS 12+. | Lower accuracy, especially for long audio. |
+
+The Apple-Intelligence engine is the recommended default if you're on macOS 26.
+The legacy engine remains a useful fallback for locales the new engine doesn't
+support yet, or when you want zero first-run latency.

@@ -24,20 +24,28 @@ Unauthenticated liveness probe.
 ## `POST /v1/audio/transcriptions`
 
 OpenAI-compatible multipart upload. The behaviour depends on the configured
-**transcription backend** (see *Settings → Transcription backend* in the app):
+**transcription backend** (see _Settings → Transcription backend_ in the app):
 
 - **Proxy backend** (default) — the server forwards all multipart fields
   verbatim to the configured upstream (faster-whisper-server, OpenAI, etc.).
   Only `model` is extracted for the request log. If you've picked a default
   model in Settings and the request doesn't carry one, the server injects it
   before forwarding.
-- **Native macOS backend** — the server parses the multipart body, extracts
-  the `file` field, and feeds it to `SFSpeechRecognizer` for on-device
-  transcription. The response is the OpenAI default JSON shape:
-  `{ "text": "…" }`. Other multipart fields (`prompt`, `temperature`,
-  `response_format`, etc.) are currently ignored on this backend; only
-  `language` (via the locale chosen in Settings) is honoured. First use will
-  prompt the user for Speech Recognition permission.
+- **macOS 26 Speech Analyzer (Apple Intelligence)** — the server parses the
+  multipart body, extracts the `file` field, and feeds it to `SpeechAnalyzer`
+  paired with `SpeechTranscriber`. Same engine that powers Apple-Intelligence
+  transcription in Notes / Voice Memos. Highest accuracy, handles long-form
+  audio. First use of a new locale may trigger a one-time on-device model
+  download via `AssetInventory`.
+- **macOS legacy Speech Recognizer** — uses the older `SFSpeechRecognizer`.
+  Wider locale coverage and no model download, but lower accuracy. Useful
+  fallback for locales the new engine doesn't yet support.
+
+For both native backends the response is the OpenAI default JSON shape:
+`{ "text": "…" }`. Other multipart fields (`prompt`, `temperature`,
+`response_format`, etc.) are ignored on the native backends; only `language`
+(via the locale chosen in Settings) is honoured. First use will prompt for
+Speech Recognition permission.
 
 Common fields:
 

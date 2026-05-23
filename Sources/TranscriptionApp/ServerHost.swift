@@ -194,7 +194,7 @@ enum ConfigPersistence {
     private struct ConfigDTO: Codable {
         var bindHost: String
         var bindPort: Int
-        var transcriptionBackendKind: String       // "proxy" | "nativeMacOS"
+        var transcriptionBackendKind: String       // "proxy" | "nativeMacOS" | "appleSpeechAnalyzer"
         var transcriptionBase: String
         var transcriptionKey: String?
         var moderationBase: String
@@ -220,6 +220,10 @@ enum ConfigPersistence {
                 transcriptionBackendKind = "nativeMacOS"
                 transcriptionBase = UpstreamConfig.defaultTranscription.baseURL
                 transcriptionKey = nil
+            case .appleSpeechAnalyzer:
+                transcriptionBackendKind = "appleSpeechAnalyzer"
+                transcriptionBase = UpstreamConfig.defaultTranscription.baseURL
+                transcriptionKey = nil
             }
             moderationBase = c.moderationUpstream.baseURL
             moderationKey = c.moderationUpstream.apiKey
@@ -238,6 +242,8 @@ enum ConfigPersistence {
             switch transcriptionBackendKind {
             case "nativeMacOS":
                 backend = .nativeMacOS
+            case "appleSpeechAnalyzer":
+                backend = .appleSpeechAnalyzer
             default:
                 backend = .proxy(.init(baseURL: transcriptionBase, apiKey: transcriptionKey))
             }
