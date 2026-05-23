@@ -39,7 +39,7 @@ Set the transcription upstream base URL to `http://127.0.0.1:8000/v1`.
 Set the transcription upstream base URL to `https://api.openai.com/v1` and put
 your OpenAI key in the API key field. The app will forward it as
 `Authorization: Bearer …` to OpenAI (separate from the token clients use to
-authenticate to *this* app).
+authenticate to _this_ app).
 
 ### Option C: any other OpenAI-compatible ASR server
 

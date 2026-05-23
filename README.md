@@ -65,7 +65,7 @@ You'll need:
   server (e.g. [`faster-whisper-server`][fws]) on `http://localhost:8000/v1`,
   **or** an OpenAI API key (point the transcription upstream at
   `https://api.openai.com/v1`).
-- Alternatively, switch the transcription backend in *Settings* to
+- Alternatively, switch the transcription backend in _Settings_ to
   **Built-in macOS (Speech framework)** for fully on-device transcription with
   no separate server — just grant the permission prompt at first use.
 

@@ -49,7 +49,7 @@
 ### Two layers
 
 `TranscriptionCore` is a platform-agnostic Swift library with no AppKit /
-SwiftUI / IOKit dependencies. Everything that *can* be tested without a window
+SwiftUI / IOKit dependencies. Everything that _can_ be tested without a window
 server lives here, and the tests run in CI on macOS without any special
 permissions.
 
@@ -92,7 +92,7 @@ is dangerous for moderation inputs in particular.
 
 `PowerAssertion` wraps `IOPMAssertionCreateWithName` with
 `kIOPMAssertionTypePreventUserIdleSystemSleep`. The Mac is kept awake only
-when *both* `preventSleep` is on in Settings AND the server is running. The
+when _both_ `preventSleep` is on in Settings AND the server is running. The
 assertion is always released on server stop, on toggle-off, and on app quit.
 
 ### Testing
