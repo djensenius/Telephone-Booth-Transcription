@@ -33,7 +33,7 @@ OpenAI-compatible multipart upload. The behaviour depends on the configured
   before forwarding.
 - **macOS 26 Speech Analyzer (Apple Intelligence)** — the server parses the
   multipart body, extracts the `file` field, and feeds it to `SpeechAnalyzer`
-  + `SpeechTranscriber`. Same engine that powers Apple-Intelligence
+  paired with `SpeechTranscriber`. Same engine that powers Apple-Intelligence
   transcription in Notes / Voice Memos. Highest accuracy, handles long-form
   audio. First use of a new locale may trigger a one-time on-device model
   download via `AssetInventory`.
