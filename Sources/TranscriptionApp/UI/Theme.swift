@@ -100,6 +100,10 @@ public enum Theme {
         )
 
         public static let textPrimary = dynamic(light: CatppuccinLatte.text, dark: CatppuccinMocha.text)
+        // Asymmetric on purpose: Latte's `subtext0` over a translucent Liquid
+        // Glass card was visually marginal (~4:1 contrast), so light mode
+        // uses the slightly darker `subtext1`. Mocha keeps `subtext0` since
+        // dark-mode contrast on the same glass surface is already strong.
         public static let textSecondary = dynamic(
             light: CatppuccinLatte.subtext1,
             dark: CatppuccinMocha.subtext0
