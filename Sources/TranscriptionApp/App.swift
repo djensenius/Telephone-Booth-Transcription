@@ -9,7 +9,10 @@ struct TelephoneBoothTranscriptionApp: App {
         WindowGroup("Telephone Booth Transcription") {
             ContentView()
                 .environmentObject(host)
-                .frame(minWidth: 720, minHeight: 480)
+                .frame(minWidth: 760, minHeight: 520)
+                .tint(Theme.Colors.accent)
+                .foregroundStyle(Theme.Colors.textPrimary)
+                .background(ThemedWindowBackground())
         }
         .windowResizability(.contentSize)
     }

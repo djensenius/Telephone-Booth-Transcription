@@ -13,6 +13,7 @@ struct ContentView: View {
             RequestLogView()
                 .tabItem { Label("Requests", systemImage: "list.bullet.rectangle") }
         }
-        .padding()
+        .padding(Theme.Spacing.large)
+        .scrollContentBackground(.hidden)
     }
 }
