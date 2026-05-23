@@ -120,7 +120,7 @@ struct SettingsView: View {
                     Text("Models are fetched from `<base URL>/models`. Default upstream " +
                          "is faster-whisper-server (`http://127.0.0.1:8000/v1`).")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Colors.textSecondary)
                 } else {
                     Picker("Locale", selection: Binding(
                         get: { host.config.nativeTranscriptionLocale },
@@ -139,13 +139,13 @@ struct SettingsView: View {
                              "Intelligence transcription. First use of a new locale may " +
                              "trigger a one-time on-device model download.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.Colors.textSecondary)
                     } else {
                         Text("Uses macOS's legacy SFSpeechRecognizer. Wider locale coverage " +
                              "than the SpeechAnalyzer engine and no model download, but " +
                              "lower accuracy. First use will prompt for permission.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.Colors.textSecondary)
                     }
                 }
             }
@@ -188,7 +188,7 @@ struct SettingsView: View {
                 Text("Default points at LM Studio (`http://127.0.0.1:1234/v1`). LM Studio " +
                      "does not implement `/v1/moderations`; the fallback uses chat-completions.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colors.textSecondary)
             }
 
             Section("Limits") {
@@ -209,6 +209,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .foregroundStyle(Theme.Colors.textPrimary)
         .task {
             await reloadTranscriptionModels()
             await reloadModerationModels()
