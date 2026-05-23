@@ -53,10 +53,11 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - name: Install markdownlint-cli2
-        run: npm install -g markdownlint-cli2
+      - name: Install markdownlint-cli2 and lychee
+        run: |
+          npm install -g markdownlint-cli2
+          brew install lychee
       - name: markdownlint
         run: markdownlint-cli2 'README.md' 'docs/**/*.md'
-      - uses: lycheeverse/lychee-action@v2
-        with:
-          args: --offline --no-progress 'README.md' 'docs/**/*.md'
+      - name: lychee (offline link check)
+        run: lychee --offline --no-progress 'README.md' 'docs/**/*.md'
