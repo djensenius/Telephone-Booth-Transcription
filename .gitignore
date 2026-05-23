@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+.swiftpm/
+Packages/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+Package.resolved
+build/
+dist/
+*.app
+*.dSYM
+*.log
+.env
+.env.local

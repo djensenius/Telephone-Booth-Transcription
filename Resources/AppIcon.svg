@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Telephone-Booth-Transcription app icon.
+  Style: matches FluxHaus / Rhizome / gt3pro — single ink/brush-stroke
+  subject on a warm off-white tile. Subject: a tilted vintage telephone
+  handset with a transcript "ribbon" of ink strokes flowing out of the
+  earpiece, indicating audio → text transcription. The companion Operator
+  app will get the phone-booth shell; this one keeps the focus on the
+  receiver-to-transcript motion.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Telephone Booth Transcription">
+  <defs>
+    <filter id="rough" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.6"/>
+    </filter>
+    <filter id="roughHeavy" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4.2"/>
+    </filter>
+    <radialGradient id="paper" cx="0.5" cy="0.45" r="0.85">
+      <stop offset="0%"  stop-color="#f5f0e6"/>
+      <stop offset="100%" stop-color="#ece4d2"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="url(#paper)"/>
+
+  <g fill="#141414" stroke="#141414" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)">
+
+    <!-- Handset, tilted -->
+    <g transform="translate(330 360) rotate(-22)">
+      <path d="
+        M 18 60
+        C 18 6, 110 -6, 168 14
+        L 296 56
+        C 354 76, 396 50, 410 56
+        C 444 70, 430 134, 386 132
+        L 256 124
+        C 200 122, 132 156, 80 142
+        C 30 130, 18 100, 18 60 Z"
+        fill="#141414"/>
+
+      <circle cx="64" cy="60" r="58" fill="#141414"/>
+      <g fill="#f1ead9">
+        <circle cx="50" cy="46" r="6"/>
+        <circle cx="74" cy="44" r="6"/>
+        <circle cx="46" cy="68" r="6"/>
+        <circle cx="72" cy="72" r="6"/>
+        <circle cx="60" cy="58" r="5"/>
+        <circle cx="86" cy="60" r="5"/>
+      </g>
+
+      <g transform="translate(386 80) rotate(8)">
+        <circle cx="0" cy="0" r="56" fill="#141414"/>
+        <g fill="#f1ead9">
+          <circle cx="-14" cy="-12" r="5"/>
+          <circle cx="8" cy="-14" r="5"/>
+          <circle cx="-18" cy="10" r="5"/>
+          <circle cx="6" cy="14" r="5"/>
+          <circle cx="-4" cy="-2" r="4"/>
+          <circle cx="20" cy="2" r="4"/>
+        </g>
+      </g>
+
+      <g fill="none" stroke="#141414" stroke-width="9" filter="url(#roughHeavy)">
+        <path d="
+          M 430 110
+          C 460 130, 470 168, 446 188
+          C 422 208, 446 240, 472 248
+          C 498 256, 480 290, 458 300
+          C 436 310, 462 342, 488 348
+          C 514 354, 498 388, 478 398"/>
+      </g>
+    </g>
+
+    <!-- Transcript ribbon -->
+    <g transform="translate(170 540)" stroke="#141414" stroke-linecap="round" fill="none" filter="url(#rough)">
+      <path d="M 0 0 C 30 -16, 60 -16, 90 0"  stroke-width="10"/>
+      <path d="M 6 32 C 36 18, 78 18, 116 32" stroke-width="10"/>
+      <path d="M 14 64 C 50 50, 94 50, 138 64" stroke-width="10"/>
+
+      <g stroke-width="16" stroke-linecap="round">
+        <line x1="40"  y1="118" x2="430" y2="124"/>
+        <line x1="44"  y1="170" x2="556" y2="178"/>
+        <line x1="38"  y1="222" x2="492" y2="226"/>
+        <line x1="42"  y1="274" x2="610" y2="280"/>
+        <line x1="46"  y1="326" x2="404" y2="330"/>
+        <line x1="40"  y1="378" x2="540" y2="382"/>
+        <line x1="44"  y1="430" x2="332" y2="432"/>
+      </g>
+
+      <path d="M 36 460 C 200 478, 380 470, 560 472 C 600 472, 622 464, 640 446"
+            stroke-width="9" filter="url(#roughHeavy)"/>
+    </g>
+
+    <g filter="url(#roughHeavy)">
+      <circle cx="298" cy="332" r="6"/>
+      <circle cx="282" cy="354" r="3"/>
+      <circle cx="318" cy="318" r="4"/>
+    </g>
+  </g>
+</svg>

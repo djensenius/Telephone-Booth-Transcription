@@ -1,0 +1,62 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build + test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift toolchain
+        run: |
+          swift --version
+          xcrun --show-sdk-version
+      - name: Resolve dependencies
+        run: swift package resolve
+      - name: Build (debug)
+        run: swift build -c debug
+      - name: Test
+        run: swift test --parallel
+      - name: Build (release)
+        run: swift build -c release
+
+  app-bundle:
+    name: build .app bundle
+    runs-on: macos-26
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install librsvg for icon rendering
+        run: brew install librsvg
+      - name: Regenerate AppIcon.icns from SVG
+        run: ./scripts/make-icon.sh
+      - name: Build .app bundle
+        run: ./scripts/build-app.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telephone-Booth-Transcription.app
+          path: build/Telephone Booth Transcription.app
+          if-no-files-found: error
+
+  docs:
+    name: docs lint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install markdownlint-cli2
+        run: npm install -g markdownlint-cli2
+      - name: markdownlint
+        run: markdownlint-cli2 'README.md' 'docs/**/*.md'
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --no-progress 'README.md' 'docs/**/*.md'
