@@ -236,12 +236,13 @@ struct SettingsView: View {
 
     private func nativeLocales(for kind: BackendKind) -> [String] {
         #if canImport(Speech) && os(macOS)
-        if kind == .appleSpeechAnalyzer, #available(macOS 26.0, *) {
-            // SpeechTranscriber.supportedLocales is async; we synchronously
-            // fall back to SFSpeechRecognizer's broader set in the picker
-            // and let runtime errors surface if the chosen locale isn't
-            // actually supported by SpeechTranscriber.
-        }
+        // TODO: When `kind == .appleSpeechAnalyzer` we'd ideally surface
+        // `SpeechTranscriber.supportedLocales` here, but that API is async
+        // and the picker is built synchronously. As a pragmatic interim we
+        // use `SFSpeechRecognizer.supportedLocales()` for both engines —
+        // any locale not actually supported by `SpeechTranscriber` will be
+        // rejected at runtime by `supportedLocale(equivalentTo:)`.
+        _ = kind
         return SFSpeechRecognizer.supportedLocales()
             .map { $0.identifier }
             .sorted()

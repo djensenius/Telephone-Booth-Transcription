@@ -36,6 +36,12 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
         try part.data.write(to: tmp)
         defer { try? FileManager.default.removeItem(at: tmp) }
 
+        guard SpeechTranscriber.isAvailable else {
+            throw TranscriptionBackendError.unauthorized(
+                "SpeechTranscriber is not available on this device"
+            )
+        }
+
         // Resolve a supported locale equivalent (e.g. `en-CA` -> `en-US` if
         // the device only has en-US installed/downloadable).
         guard let effectiveLocale = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
@@ -46,12 +52,6 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
 
         let transcriber = SpeechTranscriber(locale: effectiveLocale, preset: .transcription)
 
-        guard SpeechTranscriber.isAvailable else {
-            throw TranscriptionBackendError.unauthorized(
-                "SpeechTranscriber is not available on this device"
-            )
-        }
-
         // Ensure the on-device assets for this locale are installed. The
         // first request for a new locale can trigger a one-time download.
         try await ensureAssetsInstalled(for: transcriber)
@@ -59,6 +59,7 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
         // Collect every result phrase as it arrives, joining into a single
         // transcript. We materialise the AttributedString into a plain
         // String for the OpenAI-compatible response.
+        let streamLogger = logger
         let resultsTask = Task { () -> String in
             var combined = AttributedString()
             do {
@@ -66,7 +67,12 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
                     combined.append(result.text)
                 }
             } catch {
-                // Surface partial transcripts even if the stream errors.
+                // Surface partial transcripts even if the stream errors, but
+                // log the error so production failures are diagnosable.
+                streamLogger.error(
+                    "SpeechTranscriber result stream errored; returning partial transcript",
+                    metadata: ["error": .string(String(describing: error))]
+                )
             }
             return String(combined.characters)
         }
