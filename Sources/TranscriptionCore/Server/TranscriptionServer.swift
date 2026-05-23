@@ -78,6 +78,22 @@ public struct TranscriptionServer: Sendable {
             #else
             backendImpl = NativeMacOSTranscriptionBackend()
             #endif
+        case .appleSpeechAnalyzer:
+            #if canImport(Speech) && os(macOS)
+            if #available(macOS 26.0, *) {
+                backendImpl = SpeechAnalyzerBackend(
+                    locale: Locale(identifier: config.nativeTranscriptionLocale),
+                    logger: logger
+                )
+            } else {
+                backendImpl = NativeMacOSTranscriptionBackend(
+                    locale: Locale(identifier: config.nativeTranscriptionLocale),
+                    logger: logger
+                )
+            }
+            #else
+            backendImpl = SpeechAnalyzerBackend()
+            #endif
         }
 
         let transcription = TranscriptionRoute<BasicRequestContext>(
@@ -96,7 +112,12 @@ public struct TranscriptionServer: Sendable {
             upstream: upstream,
             transcriptionUpstream: config.transcriptionUpstream,
             moderationUpstream: config.moderationUpstream,
-            includeNativeMacOS: { if case .nativeMacOS = config.transcriptionBackend { return true } else { return false } }()
+            includeNativeMacOS: {
+                switch config.transcriptionBackend {
+                case .nativeMacOS, .appleSpeechAnalyzer: return true
+                case .proxy: return false
+                }
+            }()
         )
         let health = HealthRoute<BasicRequestContext>()
 

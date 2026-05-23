@@ -88,10 +88,16 @@ public enum TranscriptionBackend: Sendable, Equatable {
     /// Proxy to an OpenAI-compatible upstream (faster-whisper-server,
     /// OpenAI, any other Whisper-compatible server).
     case proxy(UpstreamConfig)
-    /// Use macOS's built-in `Speech` framework for on-device transcription.
-    /// Requires `NSSpeechRecognitionUsageDescription` in Info.plist and user
-    /// approval at first use.
+    /// Use macOS's legacy `SFSpeechRecognizer` for on-device transcription.
+    /// Widely supported (50+ locales, no separate asset download) but less
+    /// accurate than the macOS 26 `SpeechAnalyzer`. Requires
+    /// `NSSpeechRecognitionUsageDescription` and user approval at first use.
     case nativeMacOS
+    /// Use macOS 26's `SpeechAnalyzer` + `SpeechTranscriber` (the same engine
+    /// behind Apple Intelligence transcription in Notes/Voice Memos). Higher
+    /// accuracy, handles long-form audio, fully on-device. Requires per-locale
+    /// model assets to be downloaded the first time a given locale is used.
+    case appleSpeechAnalyzer
 }
 
 public struct UpstreamConfig: Sendable, Equatable {

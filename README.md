@@ -65,9 +65,14 @@ You'll need:
   server (e.g. [`faster-whisper-server`][fws]) on `http://localhost:8000/v1`,
   **or** an OpenAI API key (point the transcription upstream at
   `https://api.openai.com/v1`).
-- Alternatively, switch the transcription backend in _Settings_ to
-  **Built-in macOS (Speech framework)** for fully on-device transcription with
-  no separate server — just grant the permission prompt at first use.
+- Alternatively, switch the transcription backend in _Settings_ to either:
+  - **macOS 26 Speech Analyzer (Apple Intelligence)** — the new on-device
+    engine powering Notes / Voice Memos transcription. Highest accuracy.
+  - **macOS legacy Speech Recognizer** — older `SFSpeechRecognizer`, broader
+    locales but lower accuracy.
+
+  Both run fully on-device, no separate server. Grant the permission prompt at
+  first use.
 
 The Settings panel auto-discovers available models by calling `GET /v1/models`
 on each upstream, and shows them in a picker. Refresh the list with the

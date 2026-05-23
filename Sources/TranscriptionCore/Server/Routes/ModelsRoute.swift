@@ -39,11 +39,17 @@ public struct ModelsRoute<Context: RequestContext>: Sendable {
         var combined = await transcription + (await moderation)
         if includeNativeMacOS {
             combined.insert([
-                "id": "macos-speech",
+                "id": "macos-speech-analyzer",
                 "object": "model",
                 "owned_by": "transcription",
                 "created": 0
             ], at: 0)
+            combined.insert([
+                "id": "macos-speech",
+                "object": "model",
+                "owned_by": "transcription",
+                "created": 0
+            ], at: 1)
         }
         let payload: [String: Any] = ["object": "list", "data": combined]
         let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
