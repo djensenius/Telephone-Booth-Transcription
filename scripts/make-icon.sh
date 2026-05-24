@@ -7,8 +7,9 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-source="$root/Resources/AppIconSource.png"
-reference_background="${REFERENCE_BACKGROUND:-$HOME/Developer/gt3pro/Icons/scooter-bkgrd.png}"
+source_png="$root/Resources/AppIconSource.png"
+default_reference_background="$HOME/Developer/gt3pro/Icons/scooter-bkgrd.png"
+reference_background="${REFERENCE_BACKGROUND:-}"
 background="$root/Resources/AppIcon-background.png"
 foreground="$root/Resources/AppIcon-foreground.png"
 composite="$root/Resources/AppIcon-composite.png"
@@ -21,25 +22,31 @@ if ! command -v magick >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "$source" ]]; then
-  echo "missing $source" >&2
+if [[ ! -f "$source_png" ]]; then
+  echo "missing $source_png" >&2
   exit 1
 fi
 
-if [[ ! -f "$reference_background" ]]; then
-  echo "missing reference background $reference_background" >&2
-  exit 1
+if [[ -z "$reference_background" && -f "$default_reference_background" ]]; then
+  reference_background="$default_reference_background"
 fi
 
-magick "$reference_background" -resize 1024x1024! -depth 8 "$background"
-magick "$source" -resize 1024x1024! \
+if [[ -n "$reference_background" || ! -f "$background" ]]; then
+  if [[ ! -f "$reference_background" ]]; then
+    echo "missing reference background $reference_background" >&2
+    exit 1
+  fi
+  magick "$reference_background" -resize 1024x1024! -depth 8 "$background"
+fi
+
+magick "$source_png" -resize 1024x1024! \
   -alpha off \
   -colorspace Gray \
   -negate \
   -level 34%,82% \
   -blur 0x0.25 \
   "$mask"
-magick "$source" -resize 1024x1024! "$mask" \
+magick "$source_png" -resize 1024x1024! "$mask" \
   -compose CopyOpacity \
   -composite \
   -depth 8 \
