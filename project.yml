@@ -1,0 +1,109 @@
+name: TelephoneBoothTranscription
+options:
+  bundleIdPrefix: dev.djensenius
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  hummingbird:
+    url: https://github.com/hummingbird-project/hummingbird.git
+    from: 2.5.0
+  async-http-client:
+    url: https://github.com/swift-server/async-http-client.git
+    from: 1.21.0
+  swift-log:
+    url: https://github.com/apple/swift-log.git
+    from: 1.5.0
+  swift-crypto:
+    url: https://github.com/apple/swift-crypto.git
+    from: 3.0.0
+  grdb-swift:
+    url: https://github.com/groue/GRDB.swift.git
+    from: 6.29.0
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_VERSION: "6.0"
+targets:
+  TranscriptionCore:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionCore
+    info:
+      path: Resources/TranscriptionCore-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionCore
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - package: hummingbird
+        product: Hummingbird
+      - package: async-http-client
+        product: AsyncHTTPClient
+      - package: swift-log
+        product: Logging
+      - package: swift-crypto
+        product: Crypto
+      - package: grdb-swift
+        product: GRDB
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.core
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionApp:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionApp
+      - path: Resources/AppIcon.icns
+        buildPhase: resources
+    dependencies:
+      - target: TranscriptionCore
+    info:
+      path: Resources/TranscriptionApp-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIconFile: AppIcon
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: "Telephone Booth Transcription"
+        CFBundleDisplayName: "Telephone Booth Transcription"
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHighResolutionCapable: true
+        NSHumanReadableCopyright: "Copyright 2026 David Jensenius"
+        NSMicrophoneUsageDescription: "Transcription Booth needs microphone access only if you point a client at the macOS Speech backend with a live audio source."
+        NSSpeechRecognitionUsageDescription: "Transcription Booth uses on-device speech recognition to convert audio to text when the built-in macOS transcription backend is selected."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription
+        PRODUCT_NAME: "Telephone Booth Transcription"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny"
+schemes:
+  TranscriptionApp:
+    build:
+      targets:
+        TranscriptionApp: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  TranscriptionCore:
+    build:
+      targets:
+        TranscriptionCore: all

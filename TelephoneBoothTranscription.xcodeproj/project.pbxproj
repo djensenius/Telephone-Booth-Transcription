@@ -1,0 +1,720 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0E8C6E249E9E8FE917F9CCF7 /* OpenAIUpstream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */; };
+		1483338277245BE2BB02514A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6210AE9282C77F3A1B460D7 /* SettingsView.swift */; };
+		20B13A0E53299A203F188D96 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
+		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
+		31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
+		387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
+		3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */; };
+		3CAA088588C74F197B6B9EBC /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */; };
+		44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
+		4758D59FEA3ADCFDD42B7C29 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 17F785B05537C247EAD138DA /* AppIcon.icns */; };
+		4DF794AA0E36D51F5E57C346 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */; };
+		555EF6F474CF6859E392B1EC /* TranscriptionCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		6E73BE5F12E29990DF28B5CE /* RequestsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F093D733703A349373FC072 /* RequestsRoute.swift */; };
+		71C0578ACA40218655461456 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3907F4CA5B6A5DEE723037D /* Theme.swift */; };
+		71C45CC53AA5DF8D72FB0066 /* RequestLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7D772BF49912B0122CA505 /* RequestLogStore.swift */; };
+		7B07E25FA5845D36518A09C5 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A02866ECC373EE0C2D83000B /* GRDB */; };
+		8100ADE862B8A5C3F9F265E4 /* InMemoryTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */; };
+		8125148F00BC05AB11D5B7E8 /* TranscriptionCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */; };
+		8379FD8BA09D9AE62D60454C /* InMemoryRequestLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */; };
+		97EAA1AE12C62E18721C3F75 /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8544DD720CB364126F1627E3 /* AuthMiddleware.swift */; };
+		9CBE58E58CE7518C2A5290D8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D45EC1EC5F8BFB4925DB38 /* ContentView.swift */; };
+		9D09F129BECBBF985E7D3FB0 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB96230C24FF2DCCC9CF7753 /* App.swift */; };
+		A0549FECC22FFA3C3C214DF7 /* TranscriptionServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */; };
+		A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */; };
+		A50D8C6CB265D61B374DC0A4 /* RequestLogMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5115419BB0495CF787561459 /* RequestLogMiddleware.swift */; };
+		AC30D0FB747F41276C215796 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 2320F84D08B4C9BB1DE3109D /* Crypto */; };
+		BB3712EE81939BF730AA2D1E /* TranscriptionRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */; };
+		BF2D7FA7194F9A18AEB4E819 /* ModerationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */; };
+		C2E5578B378B0DA01E58BC6B /* HealthRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EF607E80299C4B7F64F0DA /* HealthRoute.swift */; };
+		C4C6CEA6FCF73DBC89384F39 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 3FFEFFD21A7B27E9C8860886 /* AsyncHTTPClient */; };
+		CE47268555219DA284ABB838 /* ModelsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */; };
+		E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */; };
+		F3A64BBF3084E4FF12371096 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 727CA8D8C2312BC5490A8AC8 /* Logging */; };
+		F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */; };
+		FAEE4E2B26A75549FBCB1F9E /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = 9E7C0AD8BC115F2CB4C08F0E /* Hummingbird */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BCE2944ADA68E7139E491FFD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BED2F949749BD9B6EA3E896B;
+			remoteInfo = TranscriptionCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		05A2757752B7DE686BB391FA /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				555EF6F474CF6859E392B1EC /* TranscriptionCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerAssertion.swift; sourceTree = "<group>"; };
+		01682C9E143027DFBB660EBF /* TranscriptionCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyTranscriptionBackend.swift; sourceTree = "<group>"; };
+		0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBackend.swift; sourceTree = "<group>"; };
+		13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
+		17F785B05537C247EAD138DA /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationClassifier.swift; sourceTree = "<group>"; };
+		257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTokenStore.swift; sourceTree = "<group>"; };
+		2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
+		3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRoute.swift; sourceTree = "<group>"; };
+		3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationRoute.swift; sourceTree = "<group>"; };
+		3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUpstream.swift; sourceTree = "<group>"; };
+		4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHost.swift; sourceTree = "<group>"; };
+		5115419BB0495CF787561459 /* RequestLogMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogMiddleware.swift; sourceTree = "<group>"; };
+		53EF607E80299C4B7F64F0DA /* HealthRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRoute.swift; sourceTree = "<group>"; };
+		5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryRequestLogStore.swift; sourceTree = "<group>"; };
+		6F093D733703A349373FC072 /* RequestsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsRoute.swift; sourceTree = "<group>"; };
+		8544DD720CB364126F1627E3 /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
+		9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TranscriptionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServer.swift; sourceTree = "<group>"; };
+		AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogView.swift; sourceTree = "<group>"; };
+		C6210AE9282C77F3A1B460D7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
+		CB96230C24FF2DCCC9CF7753 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		D3907F4CA5B6A5DEE723037D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		D3D45EC1EC5F8BFB4925DB38 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMacOSTranscriptionBackend.swift; sourceTree = "<group>"; };
+		DD7D772BF49912B0122CA505 /* RequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogStore.swift; sourceTree = "<group>"; };
+		DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsRoute.swift; sourceTree = "<group>"; };
+		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A6690C6C30F6B640C65B8563 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8125148F00BC05AB11D5B7E8 /* TranscriptionCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C94CFEE6C0F78E69FBCF8074 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FAEE4E2B26A75549FBCB1F9E /* Hummingbird in Frameworks */,
+				C4C6CEA6FCF73DBC89384F39 /* AsyncHTTPClient in Frameworks */,
+				F3A64BBF3084E4FF12371096 /* Logging in Frameworks */,
+				AC30D0FB747F41276C215796 /* Crypto in Frameworks */,
+				7B07E25FA5845D36518A09C5 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		22A07E9C85F3FE26A212C047 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */,
+				13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */,
+				2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		28FB528105157FE57C3E2E5E /* Routes */ = {
+			isa = PBXGroup;
+			children = (
+				53EF607E80299C4B7F64F0DA /* HealthRoute.swift */,
+				DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */,
+				3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */,
+				6F093D733703A349373FC072 /* RequestsRoute.swift */,
+				3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */,
+			);
+			path = Routes;
+			sourceTree = "<group>";
+		};
+		2F9E3539B9790A62B026FCE8 /* TranscriptionCore */ = {
+			isa = PBXGroup;
+			children = (
+				EC515CEBB052723FAC579782 /* Config.swift */,
+				22A07E9C85F3FE26A212C047 /* Auth */,
+				3FD11C9F49BD29933AAC6BBA /* Logging */,
+				8A8C049E298924524A56933C /* Server */,
+				5B778F42A9CC908E3D2661B6 /* Upstream */,
+			);
+			path = TranscriptionCore;
+			sourceTree = "<group>";
+		};
+		3FD11C9F49BD29933AAC6BBA /* Logging */ = {
+			isa = PBXGroup;
+			children = (
+				5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */,
+				DD7D772BF49912B0122CA505 /* RequestLogStore.swift */,
+			);
+			path = Logging;
+			sourceTree = "<group>";
+		};
+		5B778F42A9CC908E3D2661B6 /* Upstream */ = {
+			isa = PBXGroup;
+			children = (
+				21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */,
+				D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */,
+				3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */,
+				07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */,
+				0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */,
+			);
+			path = Upstream;
+			sourceTree = "<group>";
+		};
+		7245DF5E1764D82965B6D652 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				17F785B05537C247EAD138DA /* AppIcon.icns */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		773B5A91131256DC4B9D6B59 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */,
+				01682C9E143027DFBB660EBF /* TranscriptionCore.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		82AA824586D4A373EE6FF040 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				D3D45EC1EC5F8BFB4925DB38 /* ContentView.swift */,
+				AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */,
+				C6210AE9282C77F3A1B460D7 /* SettingsView.swift */,
+				CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */,
+				D3907F4CA5B6A5DEE723037D /* Theme.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		82E4FA30659B2D32B78BD52E /* TranscriptionApp */ = {
+			isa = PBXGroup;
+			children = (
+				CB96230C24FF2DCCC9CF7753 /* App.swift */,
+				012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */,
+				4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */,
+				82AA824586D4A373EE6FF040 /* UI */,
+			);
+			path = TranscriptionApp;
+			sourceTree = "<group>";
+		};
+		8A8C049E298924524A56933C /* Server */ = {
+			isa = PBXGroup;
+			children = (
+				8544DD720CB364126F1627E3 /* AuthMiddleware.swift */,
+				5115419BB0495CF787561459 /* RequestLogMiddleware.swift */,
+				9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */,
+				28FB528105157FE57C3E2E5E /* Routes */,
+			);
+			path = Server;
+			sourceTree = "<group>";
+		};
+		A667A8E5579177A7DC40EB5F /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				82E4FA30659B2D32B78BD52E /* TranscriptionApp */,
+				2F9E3539B9790A62B026FCE8 /* TranscriptionCore */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		F908566EB1EAB88BBA301F23 = {
+			isa = PBXGroup;
+			children = (
+				7245DF5E1764D82965B6D652 /* Resources */,
+				A667A8E5579177A7DC40EB5F /* Sources */,
+				773B5A91131256DC4B9D6B59 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		18DCE446EC0244E62AEECB97 /* TranscriptionApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 72BAF15AF6B319B02F7AC396 /* Build configuration list for PBXNativeTarget "TranscriptionApp" */;
+			buildPhases = (
+				9045050E271F80A8C191C77C /* Sources */,
+				5E8E5D7769198EE082B9EC58 /* Resources */,
+				A6690C6C30F6B640C65B8563 /* Frameworks */,
+				05A2757752B7DE686BB391FA /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6F57E94EF33521462960A389 /* PBXTargetDependency */,
+			);
+			name = TranscriptionApp;
+			packageProductDependencies = (
+			);
+			productName = TranscriptionApp;
+			productReference = 9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BED2F949749BD9B6EA3E896B /* TranscriptionCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C289E4891604BC50D7C12EBF /* Build configuration list for PBXNativeTarget "TranscriptionCore" */;
+			buildPhases = (
+				DB70EB0B7B8EEFB2CC4EBD87 /* Sources */,
+				C94CFEE6C0F78E69FBCF8074 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TranscriptionCore;
+			packageProductDependencies = (
+				9E7C0AD8BC115F2CB4C08F0E /* Hummingbird */,
+				3FFEFFD21A7B27E9C8860886 /* AsyncHTTPClient */,
+				727CA8D8C2312BC5490A8AC8 /* Logging */,
+				2320F84D08B4C9BB1DE3109D /* Crypto */,
+				A02866ECC373EE0C2D83000B /* GRDB */,
+			);
+			productName = TranscriptionCore;
+			productReference = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D66FDE6C2D699C44E9D5D19F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					18DCE446EC0244E62AEECB97 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 52001B08813E959EFE097328 /* Build configuration list for PBXProject "TelephoneBoothTranscription" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F908566EB1EAB88BBA301F23;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DFE940041BE2F7F72AB179F9 /* XCRemoteSwiftPackageReference "async-http-client" */,
+				F90367554FE96C2A3BE7CD82 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				E4A082C1C7A7E929B4603EB1 /* XCRemoteSwiftPackageReference "hummingbird" */,
+				F62D063A895F6C9C0FE0CC28 /* XCRemoteSwiftPackageReference "swift-crypto" */,
+				9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 773B5A91131256DC4B9D6B59 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				18DCE446EC0244E62AEECB97 /* TranscriptionApp */,
+				BED2F949749BD9B6EA3E896B /* TranscriptionCore */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5E8E5D7769198EE082B9EC58 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4758D59FEA3ADCFDD42B7C29 /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9045050E271F80A8C191C77C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D09F129BECBBF985E7D3FB0 /* App.swift in Sources */,
+				9CBE58E58CE7518C2A5290D8 /* ContentView.swift in Sources */,
+				A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */,
+				E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */,
+				2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */,
+				1483338277245BE2BB02514A /* SettingsView.swift in Sources */,
+				3CAA088588C74F197B6B9EBC /* StatusView.swift in Sources */,
+				71C0578ACA40218655461456 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB70EB0B7B8EEFB2CC4EBD87 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97EAA1AE12C62E18721C3F75 /* AuthMiddleware.swift in Sources */,
+				20B13A0E53299A203F188D96 /* Config.swift in Sources */,
+				C2E5578B378B0DA01E58BC6B /* HealthRoute.swift in Sources */,
+				8379FD8BA09D9AE62D60454C /* InMemoryRequestLogStore.swift in Sources */,
+				8100ADE862B8A5C3F9F265E4 /* InMemoryTokenStore.swift in Sources */,
+				4DF794AA0E36D51F5E57C346 /* KeychainTokenStore.swift in Sources */,
+				CE47268555219DA284ABB838 /* ModelsRoute.swift in Sources */,
+				3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */,
+				BF2D7FA7194F9A18AEB4E819 /* ModerationRoute.swift in Sources */,
+				387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */,
+				0E8C6E249E9E8FE917F9CCF7 /* OpenAIUpstream.swift in Sources */,
+				44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */,
+				A50D8C6CB265D61B374DC0A4 /* RequestLogMiddleware.swift in Sources */,
+				71C45CC53AA5DF8D72FB0066 /* RequestLogStore.swift in Sources */,
+				6E73BE5F12E29990DF28B5CE /* RequestsRoute.swift in Sources */,
+				31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */,
+				F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */,
+				BB3712EE81939BF730AA2D1E /* TranscriptionRoute.swift in Sources */,
+				A0549FECC22FFA3C3C214DF7 /* TranscriptionServer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6F57E94EF33521462960A389 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BED2F949749BD9B6EA3E896B /* TranscriptionCore */;
+			targetProxy = BCE2944ADA68E7139E491FFD /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		035092A1B9D648DC2CC293B9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = "Resources/TranscriptionCore-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency";
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.djensenius.telephone-booth-transcription.core";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		1C09554044012F32B32FFAE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.djensenius.telephone-booth-transcription";
+				PRODUCT_NAME = "Telephone Booth Transcription";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		972C66BE3BA57BDF87462A70 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = "Resources/TranscriptionCore-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency";
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.djensenius.telephone-booth-transcription.core";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		C2983A2974D63D10C782A194 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D1C552045CA8895A1E0EB170 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.djensenius.telephone-booth-transcription";
+				PRODUCT_NAME = "Telephone Booth Transcription";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		EBDC347064AC1776D09CED58 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		52001B08813E959EFE097328 /* Build configuration list for PBXProject "TelephoneBoothTranscription" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C2983A2974D63D10C782A194 /* Debug */,
+				EBDC347064AC1776D09CED58 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		72BAF15AF6B319B02F7AC396 /* Build configuration list for PBXNativeTarget "TranscriptionApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1C09554044012F32B32FFAE4 /* Debug */,
+				D1C552045CA8895A1E0EB170 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C289E4891604BC50D7C12EBF /* Build configuration list for PBXNativeTarget "TranscriptionCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				972C66BE3BA57BDF87462A70 /* Debug */,
+				035092A1B9D648DC2CC293B9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-log.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
+		DFE940041BE2F7F72AB179F9 /* XCRemoteSwiftPackageReference "async-http-client" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swift-server/async-http-client.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.21.0;
+			};
+		};
+		E4A082C1C7A7E929B4603EB1 /* XCRemoteSwiftPackageReference "hummingbird" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hummingbird-project/hummingbird.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.0;
+			};
+		};
+		F62D063A895F6C9C0FE0CC28 /* XCRemoteSwiftPackageReference "swift-crypto" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-crypto.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
+		F90367554FE96C2A3BE7CD82 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.29.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2320F84D08B4C9BB1DE3109D /* Crypto */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F62D063A895F6C9C0FE0CC28 /* XCRemoteSwiftPackageReference "swift-crypto" */;
+			productName = Crypto;
+		};
+		3FFEFFD21A7B27E9C8860886 /* AsyncHTTPClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFE940041BE2F7F72AB179F9 /* XCRemoteSwiftPackageReference "async-http-client" */;
+			productName = AsyncHTTPClient;
+		};
+		727CA8D8C2312BC5490A8AC8 /* Logging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
+			productName = Logging;
+		};
+		9E7C0AD8BC115F2CB4C08F0E /* Hummingbird */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E4A082C1C7A7E929B4603EB1 /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = Hummingbird;
+		};
+		A02866ECC373EE0C2D83000B /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F90367554FE96C2A3BE7CD82 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D66FDE6C2D699C44E9D5D19F /* Project object */;
+}

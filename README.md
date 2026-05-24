@@ -79,10 +79,10 @@ on each upstream, and shows them in a picker. Refresh the list with the
 circular-arrow button next to it.
 
 ```sh
-# Run from the source tree without bundling an .app
-swift run
+# Open the native macOS app project in Xcode
+open TelephoneBoothTranscription.xcodeproj
 
-# Or build a real .app bundle into ./build/
+# Or build a local .app bundle into ./build/
 ./scripts/build-app.sh
 open ./build/Telephone\ Booth\ Transcription.app
 ```
@@ -119,9 +119,10 @@ fallback works (and how it differs from OpenAI's first-party moderation model).
 | `Sources/TranscriptionApp/` | `@main` SwiftUI app, server lifecycle, power assertion, UI. |
 | `Sources/TranscriptionCore/` | Platform-agnostic library: auth, request log, upstream proxy, route handlers, server composition. Fully unit-tested. |
 | `Tests/TranscriptionCoreTests/` | Swift Testing suite for `TranscriptionCore`. |
+| `TelephoneBoothTranscription.xcodeproj` + `project.yml` | Native macOS app project and its XcodeGen source. |
 | `Resources/AppIcon.svg` + `Resources/AppIcon.icns` | Source-of-truth app icon. |
 | `scripts/make-icon.sh` | Rasterizes the SVG into a complete `.icns` bundle. |
-| `scripts/build-app.sh` | Builds a real `.app` bundle around the SwiftPM executable. |
+| `scripts/build-app.sh` | Builds the native macOS `.app` bundle from the Xcode project. |
 | `docs/` | Architecture notes, API reference, LM Studio setup, moderation design. |
 | `.github/workflows/ci.yml` | macOS CI: build, test, `.app` packaging, doc lint. |
 
