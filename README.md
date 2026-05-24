@@ -23,6 +23,7 @@ Lives next to the rest of the [Telephone-Booth][tb] family:
 | --- | --- |
 | [`Telephone-Booth`][tb] | Rust phone client running on a Pi inside the booth. |
 | [`Telephone-Booth-Operator`][tbo] | Hono + React operator console, Postgres-backed. |
+| [`Telephone-Booth-Operator-Mobile`][tbom] | Native Swift/SwiftUI operator app for iOS, macOS, watchOS, visionOS, and tvOS. |
 | `Telephone-Booth-Transcription` (this repo) | Local OpenAI-compat ASR + moderation gateway. |
 
 [lmstudio]: https://lmstudio.ai
@@ -30,6 +31,7 @@ Lives next to the rest of the [Telephone-Booth][tb] family:
 [speech]: https://developer.apple.com/documentation/speech
 [tb]: https://github.com/djensenius/Telephone-Booth
 [tbo]: https://github.com/djensenius/Telephone-Booth-Operator
+[tbom]: https://github.com/djensenius/Telephone-Booth-Operator-Mobile
 
 ## How it fits together
 
