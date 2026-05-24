@@ -1,64 +1,60 @@
 #!/usr/bin/env bash
-# Rasterize Resources/AppIcon.svg to a complete .icns bundle.
+# Render Resources/AppIconSource.png into the macOS icon.
 #
-# Output: Resources/AppIcon.icns (and the intermediate Resources/AppIcon.iconset/).
-#
-# Dependencies (any one of):
-#   - rsvg-convert  (preferred — sharpest output, `brew install librsvg`)
-#   - magick        (ImageMagick — `brew install imagemagick`)
-#   - qlmanage      (built into macOS; lower quality but always available)
-# Plus iconutil + sips (both shipped with macOS).
+# The generated source background is stripped away. The final icon uses the
+# gt3pro-style background plus the extracted brushstroke foreground.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-svg="$root/Resources/AppIcon.svg"
+source="$root/Resources/AppIconSource.png"
+reference_background="${REFERENCE_BACKGROUND:-$HOME/Developer/gt3pro/Icons/scooter-bkgrd.png}"
+background="$root/Resources/AppIcon-background.png"
+foreground="$root/Resources/AppIcon-foreground.png"
+composite="$root/Resources/AppIcon-composite.png"
+mask="$root/Resources/.AppIcon-mask.png"
 iconset="$root/Resources/AppIcon.iconset"
 icns="$root/Resources/AppIcon.icns"
 
-if [[ ! -f "$svg" ]]; then
-  echo "missing $svg" >&2
+if ! command -v magick >/dev/null 2>&1; then
+  echo "magick not found — brew install imagemagick" >&2
   exit 1
 fi
 
-rasterizer=""
-if command -v rsvg-convert >/dev/null 2>&1; then
-  rasterizer="rsvg"
-elif command -v magick >/dev/null 2>&1; then
-  rasterizer="magick"
-elif command -v qlmanage >/dev/null 2>&1; then
-  rasterizer="qlmanage"
-else
-  echo "need rsvg-convert, magick, or qlmanage" >&2
+if [[ ! -f "$source" ]]; then
+  echo "missing $source" >&2
   exit 1
 fi
 
-echo "rasterizer: $rasterizer"
+if [[ ! -f "$reference_background" ]]; then
+  echo "missing reference background $reference_background" >&2
+  exit 1
+fi
+
+magick "$reference_background" -resize 1024x1024! -depth 8 "$background"
+magick "$source" -resize 1024x1024! \
+  -alpha off \
+  -colorspace Gray \
+  -negate \
+  -level 34%,82% \
+  -blur 0x0.25 \
+  "$mask"
+magick "$source" -resize 1024x1024! "$mask" \
+  -compose CopyOpacity \
+  -composite \
+  -depth 8 \
+  "$foreground"
+magick "$background" "$foreground" -composite -depth 8 "$composite"
+rm -f "$mask"
 
 rm -rf "$iconset"
 mkdir -p "$iconset"
 
 render() {
   local size="$1" out="$2"
-  case "$rasterizer" in
-    rsvg)
-      rsvg-convert -w "$size" -h "$size" "$svg" -o "$out"
-      ;;
-    magick)
-      magick -background none -density 600 -resize "${size}x${size}" "$svg" "$out"
-      ;;
-    qlmanage)
-      local tmp
-      tmp="$(mktemp -d)"
-      qlmanage -t -s 1024 -o "$tmp" "$svg" >/dev/null
-      sips -z "$size" "$size" "$tmp"/*.png --out "$out" >/dev/null
-      rm -rf "$tmp"
-      ;;
-  esac
+  magick "$composite" -resize "${size}x${size}!" -depth 8 "$out"
 }
 
-# Sizes required for a complete .icns by iconutil:
-#   16, 32, 64, 128, 256, 512, 1024 (the 1024 is "512x512@2x")
 declare -a entries=(
   "16    icon_16x16.png"
   "32    icon_16x16@2x.png"
