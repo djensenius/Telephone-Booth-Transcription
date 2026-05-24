@@ -39,8 +39,8 @@ projects collectively run the Telephone Booth art installation.
 | `Sources/TranscriptionApp/` | `@main` SwiftUI executable. Owns lifecycle (server, power assertion, HTTPClient), settings persistence, and all UI. macOS-only — depends on AppKit, SwiftUI, IOKit, Security. |
 | `Sources/TranscriptionCore/` | Platform-agnostic library. Auth, request log, upstream proxy, route handlers, server composition. Fully unit-testable; the SwiftUI app is a thin shell over this. |
 | `Tests/TranscriptionCoreTests/` | Swift Testing suite. |
-| `Resources/` | `AppIcon.svg` (source of truth) + generated `AppIcon.icns`. |
-| `scripts/` | `make-icon.sh` (rasterize SVG → .icns), `build-app.sh` (bundle .app). |
+| `Resources/` | `AppIconSource.png` (source of truth), generated layer split, and `AppIcon.icns`. |
+| `scripts/` | `make-icon.sh` (PNG source → `.icns`), `build-app.sh` (bundle `.app`). |
 | `docs/` | Architecture, API reference, LM Studio + Whisper setup, moderation design. |
 | `.github/workflows/` | macOS CI: `ci.yml` builds + tests + bundles + docs-lints. |
 
@@ -93,9 +93,9 @@ projects collectively run the Telephone Booth art installation.
 
 ## How to change the icon
 
-- Edit `Resources/AppIcon.svg`. Stay within the sumi-ink visual language of the
-  user's other apps (FluxHaus, Rhizome, gt3pro): off-white tile, single black
-  brush-stroke subject, no color.
+- Edit `Resources/AppIconSource.png`. Stay within the sumi-ink visual language of
+  the user's other apps (FluxHaus, Rhizome, gt3pro): a single black brush-stroke
+  subject extracted onto the shared warm background, no extra ornament.
 - Run `./scripts/make-icon.sh` to regenerate `Resources/AppIcon.icns`.
 - The same script runs in CI; you don't need to commit the `.icns` if it's
   regenerable, but committing it keeps the artifact stable across runs.

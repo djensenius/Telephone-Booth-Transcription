@@ -35,9 +35,9 @@ jobs:
     needs: build-test
     steps:
       - uses: actions/checkout@v4
-      - name: Install librsvg for icon rendering
-        run: brew install librsvg
-      - name: Regenerate AppIcon.icns from SVG
+      - name: Install ImageMagick for icon rendering
+        run: brew install imagemagick
+      - name: Regenerate AppIcon.icns from PNG source
         run: ./scripts/make-icon.sh
       - name: Build .app bundle
         run: ./scripts/build-app.sh
