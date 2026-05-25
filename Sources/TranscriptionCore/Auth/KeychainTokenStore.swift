@@ -26,12 +26,7 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
 
     public func current() throws -> String {
         lock.lock(); defer { lock.unlock() }
-        if let existing = try read() {
-            return existing
-        }
-        let fresh = Self.generateToken()
-        try write(fresh)
-        return fresh
+        return try _currentUnlocked()
     }
 
     @discardableResult
@@ -44,15 +39,21 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
 
     public func verify(_ presented: String) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
-        let stored: String
-        if let existing = try read() {
-            stored = existing
-        } else {
-            let fresh = Self.generateToken()
-            try write(fresh)
-            stored = fresh
-        }
+        let stored = try _currentUnlocked()
         return constantTimeEquals(stored, presented)
+    }
+
+    // MARK: - Internal helpers
+
+    /// Returns the current token, creating one if necessary.
+    /// Caller must already hold `lock`.
+    private func _currentUnlocked() throws -> String {
+        if let existing = try read() {
+            return existing
+        }
+        let fresh = Self.generateToken()
+        try write(fresh)
+        return fresh
     }
 
     // MARK: - Keychain primitives
