@@ -11,4 +11,8 @@ public enum UpstreamError: Error, Sendable, Equatable {
     /// The upstream response was not fully received within the configured
     /// deadline (includes both the request execution and body collection phases).
     case deadlineExceeded
+
+    /// An API key would be sent to a non-loopback upstream over an insecure
+    /// (non-HTTPS) connection. The request is refused to prevent key leakage.
+    case insecureUpstream(url: String)
 }

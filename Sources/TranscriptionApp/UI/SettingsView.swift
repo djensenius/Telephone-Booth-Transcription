@@ -93,6 +93,13 @@ struct SettingsView: View {
                             host.config.transcriptionBackend = .proxy(cfg)
                         }
                     ))
+                    if case .failure = proxyUpstream.validateSecurity() {
+                        Label("HTTPS is required for remote upstreams with an API key. "
+                              + "The key will not be sent over this connection.",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption)
+                    }
                     HStack {
                         Picker("Default model", selection: Binding(
                             get: { host.config.defaultTranscriptionModel },
@@ -159,6 +166,13 @@ struct SettingsView: View {
                     get: { host.config.moderationUpstream.apiKey ?? "" },
                     set: { host.config.moderationUpstream.apiKey = $0.isEmpty ? nil : $0 }
                 ))
+                if case .failure = host.config.moderationUpstream.validateSecurity() {
+                    Label("HTTPS is required for remote upstreams with an API key. "
+                          + "The key will not be sent over this connection.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                }
                 HStack {
                     Picker("Model", selection: Binding(
                         get: { host.config.moderationModel },

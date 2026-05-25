@@ -105,6 +105,12 @@ public struct ServerConfig: Sendable, Equatable {
             )
         }
 
+        // Security: strip API keys from insecure non-loopback upstreams
+        copy.moderationUpstream = copy.moderationUpstream.strippingKeyIfInsecure()
+        if case .proxy(let upstream) = copy.transcriptionBackend {
+            copy.transcriptionBackend = .proxy(upstream.strippingKeyIfInsecure())
+        }
+
         return copy
     }
 
@@ -190,6 +196,56 @@ public struct UpstreamConfig: Sendable, Equatable {
         }
         return UpstreamConfig(baseURL: trimmed, apiKey: apiKey)
     }
+
+    // MARK: - Security validation
+
+    /// Whether the parsed host is a loopback address (safe for plaintext HTTP).
+    public var isLoopback: Bool {
+        guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let host = url.host?.lowercased() else {
+            return false
+        }
+        let stripped = host.hasPrefix("[") && host.hasSuffix("]")
+            ? String(host.dropFirst().dropLast())
+            : host
+        return stripped == "127.0.0.1" || stripped == "::1" || stripped == "localhost"
+    }
+
+    /// True when an API key is configured and the target is not loopback,
+    /// meaning HTTPS is required to protect the key in transit.
+    public var requiresSecureTransport: Bool {
+        guard let key = apiKey, !key.isEmpty else { return false }
+        return !isLoopback
+    }
+
+    /// Validates that the upstream URL is safe to receive the configured API key.
+    /// Returns `.insecureRemoteWithAPIKey` when a non-loopback URL uses a scheme
+    /// other than HTTPS while an API key is present.
+    public func validateSecurity() -> Result<Void, UpstreamURLSecurityError> {
+        guard requiresSecureTransport else { return .success(()) }
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              url.scheme?.lowercased() == "https" else {
+            return .failure(.insecureRemoteWithAPIKey(url: trimmed))
+        }
+        return .success(())
+    }
+
+    /// Returns a copy with the API key stripped if security validation fails.
+    public func strippingKeyIfInsecure() -> UpstreamConfig {
+        switch validateSecurity() {
+        case .success:
+            return self
+        case .failure:
+            return UpstreamConfig(baseURL: baseURL, apiKey: nil)
+        }
+    }
+}
+
+/// Security error raised when an upstream URL is not safe for key transmission.
+public enum UpstreamURLSecurityError: Error, Sendable, Equatable {
+    /// A non-loopback upstream URL does not use HTTPS but has an API key configured.
+    case insecureRemoteWithAPIKey(url: String)
 }
 
 /// Small Sendable wrapper around a TimeInterval-in-seconds.
