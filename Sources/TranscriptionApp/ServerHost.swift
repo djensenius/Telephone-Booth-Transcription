@@ -271,7 +271,8 @@ final class ServerHost: ObservableObject {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        if let key = apiKey, !key.isEmpty {
+        let upstream = UpstreamConfig(baseURL: baseURL, apiKey: apiKey).strippingKeyIfInsecure()
+        if let key = upstream.apiKey, !key.isEmpty {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
         request.timeoutInterval = 5
@@ -353,16 +354,26 @@ enum ConfigPersistence {
             UserDefaults.standard.set(cleaned, forKey: key)
         }
 
-        // Inject keys from Keychain into the config
+        // Inject keys from Keychain into the in-memory config so Settings can
+        // validate and warn about insecure URLs without serializing keys to
+        // UserDefaults. Runtime startup still calls validated(), which strips
+        // keys before forwarding to insecure upstreams.
         var config = dto.asConfig
         let transcriptionKey = try? keyStore.read(account: APIKeyAccount.transcription)
         let moderationKey = try? keyStore.read(account: APIKeyAccount.moderation)
-        if case .proxy(var up) = config.transcriptionBackend {
-            up.apiKey = transcriptionKey
-            config.transcriptionBackend = .proxy(up)
+        if case .proxy(var upstream) = config.transcriptionBackend {
+            upstream.apiKey = transcriptionKey
+            config.transcriptionBackend = .proxy(upstream)
         }
         config.moderationUpstream.apiKey = moderationKey
-        return config.validated()
+
+        var validated = config.validated()
+        if case .proxy(var upstream) = validated.transcriptionBackend {
+            upstream.apiKey = transcriptionKey
+            validated.transcriptionBackend = .proxy(upstream)
+        }
+        validated.moderationUpstream.apiKey = moderationKey
+        return validated
     }
 
     private static func persistKey(_ value: String?, account: String, store: any APIKeyStoring) {
