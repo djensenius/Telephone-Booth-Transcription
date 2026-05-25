@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0E8C6E249E9E8FE917F9CCF7 /* OpenAIUpstream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */; };
 		1483338277245BE2BB02514A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6210AE9282C77F3A1B460D7 /* SettingsView.swift */; };
+		20064C1E3EE6440E2B9C4B7A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE434919A1E3F53ECD075137 /* AppDelegate.swift */; };
 		20B13A0E53299A203F188D96 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
 		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
 		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
@@ -101,6 +102,7 @@
 		DD7D772BF49912B0122CA505 /* RequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogStore.swift; sourceTree = "<group>"; };
 		DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsRoute.swift; sourceTree = "<group>"; };
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		FE434919A1E3F53ECD075137 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -215,6 +217,7 @@
 			isa = PBXGroup;
 			children = (
 				CB96230C24FF2DCCC9CF7753 /* App.swift */,
+				FE434919A1E3F53ECD075137 /* AppDelegate.swift */,
 				012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */,
 				4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */,
 				82AA824586D4A373EE6FF040 /* UI */,
@@ -358,6 +361,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9D09F129BECBBF985E7D3FB0 /* App.swift in Sources */,
+				20064C1E3EE6440E2B9C4B7A /* AppDelegate.swift in Sources */,
 				9CBE58E58CE7518C2A5290D8 /* ContentView.swift in Sources */,
 				A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */,
 				E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */,

@@ -97,6 +97,8 @@ final class ServerHost: ObservableObject {
                 try await app.runService()
             } catch {
                 await MainActor.run {
+                    // Skip error publication when cancellation was deliberate.
+                    guard self?.state != .stopping else { return }
                     self?.state = .errored(String(describing: error))
                 }
             }
@@ -114,6 +116,23 @@ final class ServerHost: ObservableObject {
         serverTask = nil
         if let client = httpClient {
             Task.detached { try? await client.shutdown() }
+        }
+        httpClient = nil
+        state = .stopped
+        applyPowerAssertion()
+    }
+
+    /// Gracefully shuts down the server, awaiting in-flight work and HTTP client
+    /// cleanup. Use this from app termination handlers that can defer exit.
+    func shutdown() async {
+        guard state.isRunning || state == .starting else { return }
+        state = .stopping
+        serverTask?.cancel()
+        // Await the server task to allow in-flight requests to drain.
+        await serverTask?.value
+        serverTask = nil
+        if let client = httpClient {
+            try? await client.shutdown()
         }
         httpClient = nil
         state = .stopped

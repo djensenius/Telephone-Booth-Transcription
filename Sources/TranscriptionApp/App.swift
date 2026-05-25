@@ -3,6 +3,7 @@ import TranscriptionCore
 
 @main
 struct TelephoneBoothTranscriptionApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @StateObject private var host = ServerHost()
 
     var body: some Scene {
@@ -13,6 +14,7 @@ struct TelephoneBoothTranscriptionApp: App {
                 .tint(Theme.Colors.accent)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .background(ThemedWindowBackground())
+                .onAppear { appDelegate.serverHost = host }
         }
         .windowResizability(.contentSize)
     }
