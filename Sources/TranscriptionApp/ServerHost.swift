@@ -327,17 +327,27 @@ enum ConfigPersistence {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         guard var dto = try? JSONDecoder().decode(ConfigDTO.self, from: data) else { return nil }
 
-        // One-time migration: move keys from DTO into Keychain
+        // One-time migration: move keys from DTO into Keychain.
+        // Only clear a key from the DTO if the Keychain write succeeds,
+        // so a locked Keychain doesn't permanently lose the key.
         var migrated = false
         if let tKey = dto.transcriptionKey, !tKey.isEmpty {
-            try? keyStore.write(account: APIKeyAccount.transcription, value: tKey)
-            dto.transcriptionKey = nil
-            migrated = true
+            do {
+                try keyStore.write(account: APIKeyAccount.transcription, value: tKey)
+                dto.transcriptionKey = nil
+                migrated = true
+            } catch {
+                // Leave in DTO for retry on next launch
+            }
         }
         if let mKey = dto.moderationKey, !mKey.isEmpty {
-            try? keyStore.write(account: APIKeyAccount.moderation, value: mKey)
-            dto.moderationKey = nil
-            migrated = true
+            do {
+                try keyStore.write(account: APIKeyAccount.moderation, value: mKey)
+                dto.moderationKey = nil
+                migrated = true
+            } catch {
+                // Leave in DTO for retry on next launch
+            }
         }
         if migrated, let cleaned = try? JSONEncoder().encode(dto) {
             UserDefaults.standard.set(cleaned, forKey: key)
