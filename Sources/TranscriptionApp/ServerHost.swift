@@ -38,7 +38,7 @@ final class ServerHost: ObservableObject {
 
         var isActive: Bool {
             switch self {
-            case .starting, .running: return true
+            case .starting, .running, .stopping: return true
             default: return false
             }
         }
@@ -84,11 +84,26 @@ final class ServerHost: ObservableObject {
     }
 
     func start() async {
-        // Wait for any prior lifecycle transition to complete.
+        // Wait for any prior stop transition to complete.
         await lifecycleGate?.value
 
-        guard case .stopped = state else { return }
+        switch state {
+        case .stopped, .errored:
+            break
+        default:
+            return
+        }
         state = .starting
+
+        if let previousTask = serverTask {
+            await previousTask.value
+            serverTask = nil
+        }
+
+        if let client = httpClient {
+            try? await client.shutdown()
+            httpClient = nil
+        }
 
         let cfg = config
         let tokenStore = self.tokenStore
@@ -130,41 +145,41 @@ final class ServerHost: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.state = .errored(String(describing: error))
+                    self?.applyPowerAssertion()
                 }
             }
         }
         self.serverTask = task
-
-        // The lifecycle gate for this start includes the server running.
-        // stop() will cancel the task and await it.
-        lifecycleGate = task
     }
 
     func stop() async {
-        // Wait for any prior lifecycle transition to complete.
-        await lifecycleGate?.value
-
         guard state.isActive else { return }
+        if case .stopping = state { return }
         state = .stopping
 
-        // Cancel the server task (triggers CancellationError in runService).
-        serverTask?.cancel()
+        let stopTask = Task { @MainActor [weak self] in
+            guard let self else { return }
 
-        // Await the server task so runService() fully winds down.
-        await serverTask?.value
-        serverTask = nil
+            // Cancel the server task (triggers CancellationError in runService).
+            self.serverTask?.cancel()
 
-        // Shut down the HTTP client after the server is done using it.
-        if let client = httpClient {
-            try? await client.shutdown()
+            // Await the server task so runService() fully winds down.
+            await self.serverTask?.value
+            self.serverTask = nil
+
+            // Shut down the HTTP client after the server is done using it.
+            if let client = self.httpClient {
+                try? await client.shutdown()
+            }
+            self.httpClient = nil
+
+            self.state = .stopped
+            self.applyPowerAssertion()
+            self.lifecycleGate = nil
         }
-        httpClient = nil
 
-        state = .stopped
-        applyPowerAssertion()
-
-        // Update the gate so the next start() can proceed immediately.
-        lifecycleGate = nil
+        lifecycleGate = stopTask
+        await stopTask.value
     }
 
     func rotateToken() {
