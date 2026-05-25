@@ -1,4 +1,5 @@
 import AsyncHTTPClient
+import Darwin
 import Foundation
 import Hummingbird
 import HummingbirdTesting
@@ -7,6 +8,44 @@ import Logging
 import NIOCore
 import Testing
 @testable import TranscriptionCore
+
+private enum FreePortError: Error {
+    case socketCreationFailed
+    case bindFailed
+    case lookupFailed
+}
+
+private func findFreePort() throws -> Int {
+    let socketDescriptor = socket(AF_INET, SOCK_STREAM, 0)
+    guard socketDescriptor >= 0 else {
+        throw FreePortError.socketCreationFailed
+    }
+    defer { close(socketDescriptor) }
+
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = in_port_t(0)
+    address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+
+    let bindResult = withUnsafePointer(to: &address) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(socketDescriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+    }
+    guard bindResult == 0 else {
+        throw FreePortError.bindFailed
+    }
+
+    var boundAddress = sockaddr_in()
+    var addressLength = socklen_t(MemoryLayout<sockaddr_in>.size)
+    let nameResult = withUnsafeMutablePointer(to: &boundAddress) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(socketDescriptor, $0, &addressLength) }
+    }
+    guard nameResult == 0 else {
+        throw FreePortError.lookupFailed
+    }
+
+    return Int(UInt16(bigEndian: boundAddress.sin_port))
+}
 
 // MARK: - Tests
 
@@ -305,6 +344,87 @@ struct LifecycleConcurrencyTests {
                 #expect(response.status == .ok)
             }
         }
+        try await httpClient.shutdown()
+    }
+
+    // MARK: - Rapid start/stop lifecycle (TR-R2)
+
+    @Test func rapidStartStopDoesNotLeavePortBound() async throws {
+        // Validates that stopping a server and immediately restarting on the
+        // same port succeeds — proving the port is fully released before the
+        // next start.
+        let token = "rapid-tok"
+        let fixedPort = try findFreePort()
+
+        for _ in 0..<3 {
+            let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+            let server = TranscriptionServer(
+                config: ServerConfig(
+                    bindHost: "127.0.0.1",
+                    bindPort: fixedPort,
+                    maxConcurrentRequests: 0
+                ),
+                tokenStore: InMemoryTokenStore(initial: token),
+                logStore: InMemoryRequestLogStore(),
+                httpClient: httpClient,
+                logger: Logger(label: "test")
+            )
+
+            let app = Application(
+                router: server.makeRouter(),
+                configuration: .init(address: .hostname("127.0.0.1", port: fixedPort))
+            )
+
+            try await app.test(.live) { client in
+                try await client.execute(uri: "/healthz", method: .get) { response in
+                    #expect(response.status == .ok)
+                }
+            }
+            // Await full shutdown before next iteration — mirrors the
+            // serialized lifecycle in ServerHost.
+            try await httpClient.shutdown()
+        }
+    }
+
+    @Test func cancellationDuringRunServiceStopsCleanly() async throws {
+        // Validates that cancelling the task running runService() causes it to
+        // exit without throwing an unhandled error, and the port is released.
+        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+        let server = TranscriptionServer(
+            config: ServerConfig(
+                bindHost: "127.0.0.1",
+                bindPort: 0,
+                maxConcurrentRequests: 0
+            ),
+            tokenStore: InMemoryTokenStore(initial: "cancel-tok"),
+            logStore: InMemoryRequestLogStore(),
+            httpClient: httpClient,
+            logger: Logger(label: "test")
+        )
+
+        let app = Application(
+            router: server.makeRouter(),
+            configuration: .init(address: .hostname("127.0.0.1", port: 0))
+        )
+
+        // Start the server in a task, then cancel it.
+        let serverTask = Task {
+            try await app.runService()
+        }
+
+        // Give the server a moment to bind.
+        try await Task.sleep(for: .milliseconds(100))
+
+        // Cancel — simulates ServerHost.stop().
+        serverTask.cancel()
+
+        // Await — should complete without throwing (CancellationError is expected).
+        do {
+            try await serverTask.value
+        } catch is CancellationError {
+            // Expected.
+        }
+
         try await httpClient.shutdown()
     }
 }

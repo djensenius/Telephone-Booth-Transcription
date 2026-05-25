@@ -34,14 +34,16 @@ struct StatusView: View {
             }
 
             HStack(spacing: Theme.Spacing.medium) {
-                if host.state.isRunning {
-                    Button("Stop") { host.stop() }
+                if host.state.isActive {
+                    Button("Stop") { Task { await host.stop() } }
                         .keyboardShortcut(".", modifiers: [.command])
                         .buttonStyle(.tbtPrimary)
+                        .disabled(host.state == .stopping)
                 } else {
-                    Button("Start") { host.start() }
+                    Button("Start") { Task { await host.start() } }
                         .keyboardShortcut("r", modifiers: [.command])
                         .buttonStyle(.tbtPrimary)
+                        .disabled(host.state == .starting)
                 }
             }
         }
