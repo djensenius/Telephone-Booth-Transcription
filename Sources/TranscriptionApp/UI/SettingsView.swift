@@ -47,7 +47,7 @@ struct SettingsView: View {
                     get: { host.config.bindHost },
                     set: { host.config.bindHost = $0 }
                 ))
-                if !ServerConfig.loopbackHosts.contains(host.config.bindHost.lowercased())
+                if !host.config.isLoopbackHost
                     && !host.config.bindHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Toggle("Allow non-loopback bind (insecure without TLS)", isOn: Binding(
                         get: { host.config.nonLoopbackBindAcknowledged },

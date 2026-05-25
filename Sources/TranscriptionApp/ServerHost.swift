@@ -105,7 +105,7 @@ final class ServerHost: ObservableObject {
             httpClient = nil
         }
 
-        let cfg = config
+        let cfg = config.validated()
         let tokenStore = self.tokenStore
         let logStore = self.logStore
         let logger = self.logger
