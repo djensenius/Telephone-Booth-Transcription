@@ -3,17 +3,17 @@ import Hummingbird
 import Logging
 import NIOCore
 
-/// Middleware that records every request to the `RequestLogStoring`.
+/// Middleware that records every request to a bounded `RequestLogWriter`.
 ///
 /// We log metadata only — never bodies — unless `Config.logBodies` is set
 /// (currently unused at this layer; body capture would happen at the route
 /// handler since we proxy raw bytes through).
 public struct RequestLogMiddleware<Context: RequestContext>: RouterMiddleware {
-    public let store: any RequestLogStoring
+    public let writer: RequestLogWriter
     public let logger: Logger
 
-    public init(store: any RequestLogStoring, logger: Logger = Logger(label: "request-log")) {
-        self.store = store
+    public init(writer: RequestLogWriter, logger: Logger = Logger(label: "request-log")) {
+        self.writer = writer
         self.logger = logger
     }
 
@@ -84,14 +84,7 @@ public struct RequestLogMiddleware<Context: RequestContext>: RouterMiddleware {
             moderationFlagged: nil,
             error: error
         )
-        let store = self.store
-        let log = self.logger
-        Task.detached {
-            do {
-                try await store.record(entry)
-            } catch {
-                log.error("failed to record request log: \(error)")
-            }
-        }
+        let writer = self.writer
+        Task { await writer.enqueue(entry) }
     }
 }

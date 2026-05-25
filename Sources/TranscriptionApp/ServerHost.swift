@@ -89,13 +89,22 @@ final class ServerHost: ObservableObject {
                 logger: logger
             )
             let app = server.makeApplication()
+            let writer = server.logWriter
             await MainActor.run {
                 self?.state = .running(host: cfg.bindHost, port: cfg.bindPort)
                 self?.applyPowerAssertion()
             }
             do {
-                try await app.runService()
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    group.addTask { await writer.run() }
+                    group.addTask { try await app.runService() }
+                    // When the app finishes (cancelled or error), shut down the writer
+                    try await group.next()
+                    await writer.shutdown()
+                    group.cancelAll()
+                }
             } catch {
+                await writer.shutdown()
                 await MainActor.run {
                     self?.state = .errored(String(describing: error))
                 }
