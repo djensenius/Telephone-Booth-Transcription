@@ -53,7 +53,9 @@ public struct NativeMacOSTranscriptionBackend: TranscriptionBackendImpl {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("transcription-\(UUID().uuidString).\(ext)")
         var buf = part.data
-        let fileData = buf.readData(length: buf.readableBytes) ?? Data()
+        guard let fileData = buf.readData(length: buf.readableBytes) else {
+            throw TranscriptionBackendError.badRequest("failed to read audio data from multipart body")
+        }
         try fileData.write(to: tmp)
         defer { try? FileManager.default.removeItem(at: tmp) }
 
@@ -132,7 +134,8 @@ struct MultipartFilePart {
     /// Returns nil if the body isn't multipart, the boundary can't be parsed,
     /// or no part with `name="file"` is present.
     static func extractFile(from buffer: ByteBuffer, contentType: String) -> MultipartFilePart? {
-        guard let boundary = MultipartHelpers.parseBoundary(from: contentType) else { return nil }
+        guard let boundary = MultipartHelpers.parseBoundary(from: contentType),
+              !boundary.isEmpty else { return nil }
 
         let view = buffer.readableBytesView
         guard !view.isEmpty else { return nil }
@@ -185,7 +188,7 @@ struct MultipartFilePart {
             // Parse headers (they're always ASCII/UTF-8).
             let headersSlice = view[contentStart..<headersEnd]
             guard let headers = String(bytes: headersSlice, encoding: .utf8) else { continue }
-            guard headers.contains("name=\"file\"") else { continue }
+            guard Self.hasExactNameParameter(headers, name: "file") else { continue }
 
             let filename = Self.matchHeader(headers, key: "filename")
             let mimeType = Self.matchHeader(headers, key: "Content-Type", isCT: true)
@@ -193,14 +196,17 @@ struct MultipartFilePart {
             // Return a zero-copy slice of the buffer for the body.
             let bodyLength = contentEnd - bodyStart
             let sliceStart = bodyStart - view.startIndex + buffer.readerIndex
-            let bodyBuffer = buffer.getSlice(at: sliceStart, length: bodyLength) ?? ByteBuffer()
+            guard let bodyBuffer = buffer.getSlice(at: sliceStart, length: bodyLength) else {
+                continue
+            }
             return MultipartFilePart(filename: filename, mimeType: mimeType, data: bodyBuffer)
         }
         return nil
     }
 
     /// Find all positions in `view` where `delimiter` appears, only accepting
-    /// matches that are at position 0 or preceded by `crlf`.
+    /// matches that are at position 0 or preceded by `crlf`, AND followed by
+    /// CRLF or `--` (per RFC 2046 boundary line framing).
     private static func findDelimiters(
         in view: ByteBufferView,
         delimiter: [UInt8],
@@ -223,7 +229,21 @@ struct MultipartFilePart {
                 isFramed = false
             }
 
-            if isFramed {
+            // Also verify post-boundary terminator: must be CRLF or "--".
+            let afterDelim = pos + delimiter.count
+            let hasValidSuffix: Bool
+            if afterDelim + 1 < view.endIndex {
+                let b0 = view[afterDelim]
+                let b1 = view[afterDelim + 1]
+                hasValidSuffix = (b0 == 0x0D && b1 == 0x0A) || (b0 == 0x2D && b1 == 0x2D)
+            } else if afterDelim == view.endIndex {
+                // Boundary at very end of body (no trailing bytes) — valid closing.
+                hasValidSuffix = true
+            } else {
+                hasValidSuffix = false
+            }
+
+            if isFramed && hasValidSuffix {
                 positions.append(pos)
             }
             searchFrom = pos + 1
@@ -270,6 +290,22 @@ struct MultipartFilePart {
         let rest = headers[r.upperBound...]
         guard let end = rest.firstIndex(of: "\"") else { return nil }
         return String(rest[..<end])
+    }
+
+    /// Check if the Content-Disposition header contains an exact `name="<name>"` parameter.
+    /// Prevents false positives like matching `name="file2"` when looking for `name="file"`.
+    private static func hasExactNameParameter(_ headers: String, name: String) -> Bool {
+        let needle = "name=\"\(name)\""
+        var searchStart = headers.startIndex
+        while let range = headers.range(of: needle, range: searchStart..<headers.endIndex) {
+            // Verify the character after the closing quote isn't alphanumeric (no "file2" match).
+            let afterEnd = range.upperBound
+            if afterEnd == headers.endIndex || !headers[afterEnd].isLetter && !headers[afterEnd].isNumber {
+                return true
+            }
+            searchStart = range.upperBound
+        }
+        return false
     }
 }
 

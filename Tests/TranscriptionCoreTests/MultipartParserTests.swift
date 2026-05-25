@@ -133,4 +133,45 @@ struct MultipartParserTests {
         let result = MultipartFilePart.extractFile(from: buffer, contentType: "text/plain")
         #expect(result == nil)
     }
+
+    @Test func doesNotSplitOnCRLFBoundaryInsideFileBody() {
+        // Embed \r\n--<boundary> (with CRLF prefix) inside file content.
+        // The parser must not treat this as a real delimiter since it lacks
+        // a valid post-boundary terminator (CRLF or --).
+        let boundary = "TestBound"
+        var fakeContent: [UInt8] = Array(repeating: 0xAA, count: 50)
+        // Embed CRLF + --TestBound + arbitrary non-CRLF/non-dash byte.
+        fakeContent.append(contentsOf: [0x0D, 0x0A])
+        fakeContent.append(contentsOf: "--TestBound".utf8)
+        fakeContent.append(0x58) // 'X' — not CRLF or '--'
+        fakeContent.append(contentsOf: Array(repeating: 0xBB, count: 50))
+
+        let body = makeMultipartBody(boundary: boundary, parts: [
+            (headers: "Content-Disposition: form-data; name=\"file\"; filename=\"tricky.wav\"\r\nContent-Type: audio/wav",
+             body: fakeContent)
+        ])
+
+        let result = MultipartFilePart.extractFile(from: body, contentType: contentType(boundary: boundary))
+        #expect(result != nil)
+        #expect(result?.data.readableBytes == fakeContent.count)
+    }
+
+    @Test func doesNotMatchPartNamedFile2AsFile() {
+        // A part named "file2" must NOT match when looking for "file".
+        let boundary = "NameBound"
+        let body = makeMultipartBody(boundary: boundary, parts: [
+            (headers: "Content-Disposition: form-data; name=\"file2\"; filename=\"wrong.wav\"\r\nContent-Type: audio/wav",
+             body: [0x01, 0x02, 0x03])
+        ])
+
+        let result = MultipartFilePart.extractFile(from: body, contentType: contentType(boundary: boundary))
+        #expect(result == nil)
+    }
+
+    @Test func returnsNilForEmptyBoundary() {
+        let ct = "multipart/form-data; boundary="
+        let body = ByteBuffer(string: "--\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\ndata\r\n----\r\n")
+        let result = MultipartFilePart.extractFile(from: body, contentType: ct)
+        #expect(result == nil)
+    }
 }

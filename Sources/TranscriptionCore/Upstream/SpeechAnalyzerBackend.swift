@@ -34,7 +34,9 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("transcription-\(UUID().uuidString).\(ext)")
         var buf = part.data
-        let fileData = buf.readData(length: buf.readableBytes) ?? Data()
+        guard let fileData = buf.readData(length: buf.readableBytes) else {
+            throw TranscriptionBackendError.badRequest("failed to read audio data from multipart body")
+        }
         try fileData.write(to: tmp)
         defer { try? FileManager.default.removeItem(at: tmp) }
 
