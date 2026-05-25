@@ -4,28 +4,15 @@ import Security
 import Testing
 @testable import TranscriptionCore
 
-@Suite("KeychainTokenStore integration", .serialized)
+@Suite("KeychainTokenStore integration", .serialized, .enabled(if: KeychainTokenStoreTests.keychainAvailable))
 struct KeychainTokenStoreTests {
     /// Unique service per test run to avoid collisions.
     private static let testService = "dev.djensenius.tbt-test-\(UUID().uuidString)"
     private static let testAccount = "test-token"
 
-    private func makeStore() -> KeychainTokenStore {
-        KeychainTokenStore(service: Self.testService, account: Self.testAccount)
-    }
-
-    private func cleanup() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.testService,
-            kSecAttrAccount as String: Self.testAccount
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
-
     /// Returns true if the Keychain is fully available in this environment
     /// (supports add, attribute retrieval, and delete).
-    private func keychainAvailable() -> Bool {
+    static let keychainAvailable: Bool = {
         let probeService = "dev.djensenius.tbt-availability-probe"
         let probeAccount = "probe"
         let query: [String: Any] = [
@@ -35,15 +22,12 @@ struct KeychainTokenStoreTests {
             kSecValueData as String: Data("probe".utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
-        // Clean up any leftover probe item
         SecItemDelete(query as CFDictionary)
 
         let addStatus = SecItemAdd(query as CFDictionary, nil)
         guard addStatus == errSecSuccess else { return false }
-        defer {
-            SecItemDelete(query as CFDictionary)
-        }
-        // Verify we can read back the accessibility attribute
+        defer { SecItemDelete(query as CFDictionary) }
+
         var readQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: probeService,
@@ -59,10 +43,24 @@ struct KeychainTokenStoreTests {
             return false
         }
         return true
+    }()
+
+    private func makeStore() -> KeychainTokenStore {
+        KeychainTokenStore(service: Self.testService, account: Self.testAccount)
     }
 
+    private func cleanup() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Self.testService,
+            kSecAttrAccount as String: Self.testAccount
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
+
+
     @Test func newItemUsesThisDeviceOnlyAccessibility() throws {
-        try #require(keychainAvailable(), "Keychain not available in this environment")
         defer { cleanup() }
         let store = makeStore()
         _ = try store.current()
@@ -83,7 +81,6 @@ struct KeychainTokenStoreTests {
     }
 
     @Test func migratesFromBroaderAccessibility() throws {
-        try #require(keychainAvailable(), "Keychain not available in this environment")
         defer { cleanup() }
 
         // Manually insert an item with the old (broader) accessibility
@@ -120,7 +117,6 @@ struct KeychainTokenStoreTests {
     }
 
     @Test func rotatePreservesCorrectAccessibility() throws {
-        try #require(keychainAvailable(), "Keychain not available in this environment")
         defer { cleanup() }
         let store = makeStore()
         _ = try store.current()
