@@ -35,7 +35,7 @@ public actor InMemoryRequestLogStore: RequestLogStoring {
             let cutoff = now.addingTimeInterval(-maxAge)
             entries.removeAll { $0.receivedAt < cutoff }
         }
-        if let maxRows = retention.maxRows, entries.count > maxRows {
+        if let maxRows = retention.maxRows, maxRows > 0, entries.count > maxRows {
             entries.sort { $0.receivedAt > $1.receivedAt }
             entries = Array(entries.prefix(maxRows))
         }
