@@ -52,7 +52,11 @@ public struct NativeMacOSTranscriptionBackend: TranscriptionBackendImpl {
         let ext = AudioExtension.from(mimeType: part.mimeType) ?? "wav"
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("transcription-\(UUID().uuidString).\(ext)")
-        try part.data.write(to: tmp)
+        var buf = part.data
+        guard let fileData = buf.readData(length: buf.readableBytes) else {
+            throw TranscriptionBackendError.badRequest("failed to read audio data from multipart body")
+        }
+        try fileData.write(to: tmp)
         defer { try? FileManager.default.removeItem(at: tmp) }
 
         guard let recognizer = SFSpeechRecognizer(locale: locale) else {
@@ -117,53 +121,156 @@ enum AudioExtension {
 struct MultipartFilePart {
     let filename: String?
     let mimeType: String?
-    let data: Data
+    let data: ByteBuffer
 
-    /// Best-effort extraction of the `file` part from a `multipart/form-data`
-    /// body. Returns nil if the body isn't multipart, the boundary can't be
-    /// parsed, or no part with `name="file"` is present.
+    /// Delimiter-correct extraction of the `file` part from a `multipart/form-data`
+    /// body. Works directly on `ByteBuffer` without copying the entire body into
+    /// `Data` or `[UInt8]`.
+    ///
+    /// The parser only recognizes boundary delimiters that are preceded by CRLF
+    /// (or appear at offset 0), preventing false matches against binary content
+    /// that happens to contain boundary-like byte sequences.
+    ///
+    /// Returns nil if the body isn't multipart, the boundary can't be parsed,
+    /// or no part with `name="file"` is present.
     static func extractFile(from buffer: ByteBuffer, contentType: String) -> MultipartFilePart? {
-        guard let boundary = MultipartHelpers.parseBoundary(from: contentType) else { return nil }
-        let bytes = buffer.getBytes(at: buffer.readerIndex, length: buffer.readableBytes) ?? []
-        let data = Data(bytes)
-        let boundaryBytes = "--\(boundary)".data(using: .ascii)!
-        let crlf = Data([0x0D, 0x0A])
+        guard let boundary = MultipartHelpers.parseBoundary(from: contentType),
+              !boundary.isEmpty else { return nil }
 
-        // Split on the boundary. Each section starts with CRLF and is terminated
-        // by CRLF before the next boundary marker.
-        var parts: [Data] = []
-        var searchStart = data.startIndex
-        var sectionStart: Data.Index?
-        while let range = data.range(of: boundaryBytes, in: searchStart..<data.endIndex) {
-            if let start = sectionStart {
-                parts.append(data.subdata(in: start..<range.lowerBound))
-            }
-            sectionStart = range.upperBound
-            searchStart = range.upperBound
-        }
+        let view = buffer.readableBytesView
+        guard !view.isEmpty else { return nil }
 
-        for raw in parts {
-            // Strip leading CRLF after the boundary marker.
-            var part = raw
-            if part.starts(with: crlf) {
-                part = part.subdata(in: part.index(part.startIndex, offsetBy: 2)..<part.endIndex)
+        let delimiter: [UInt8] = Array("--\(boundary)".utf8)
+        let crlf: [UInt8] = [0x0D, 0x0A]
+        let headerSep: [UInt8] = [0x0D, 0x0A, 0x0D, 0x0A]
+
+        // Locate all boundary positions that are correctly framed:
+        // either at the very start of the body or preceded by CRLF.
+        let positions = Self.findDelimiters(in: view, delimiter: delimiter, crlf: crlf)
+        guard positions.count >= 2 else { return nil }
+
+        // Each part sits between consecutive delimiter positions.
+        // The content starts after the delimiter line (delimiter + CRLF or delimiter + "--").
+        for i in 0..<(positions.count - 1) {
+            let delimStart = positions[i]
+            let nextDelimStart = positions[i + 1]
+
+            // Skip past delimiter bytes.
+            var contentStart = delimStart + delimiter.count
+            // Check for closing marker `--` — skip this "part".
+            if contentStart + 1 < view.endIndex,
+               view[contentStart] == 0x2D, view[contentStart + 1] == 0x2D {
+                continue
             }
-            // Header/body split on CRLFCRLF.
-            let headerSep = Data([0x0D, 0x0A, 0x0D, 0x0A])
-            guard let sep = part.range(of: headerSep) else { continue }
-            let headersData = part.subdata(in: part.startIndex..<sep.lowerBound)
-            var bodyData = part.subdata(in: sep.upperBound..<part.endIndex)
-            // Strip trailing CRLF that precedes the next boundary.
-            if bodyData.count >= 2,
-               bodyData[bodyData.endIndex - 2] == 0x0D,
-               bodyData[bodyData.endIndex - 1] == 0x0A {
-                bodyData = bodyData.subdata(in: bodyData.startIndex..<(bodyData.endIndex - 2))
+            // Skip the CRLF after the delimiter line.
+            if contentStart + 1 < view.endIndex,
+               view[contentStart] == 0x0D, view[contentStart + 1] == 0x0A {
+                contentStart += 2
             }
-            guard let headers = String(data: headersData, encoding: .utf8) else { continue }
-            if !headers.contains("name=\"file\"") { continue }
+
+            // The part content ends where the next delimiter's preceding CRLF begins.
+            var contentEnd = nextDelimStart
+            // Strip the CRLF that precedes the next boundary marker.
+            if contentEnd >= 2,
+               view[contentEnd - 2] == 0x0D, view[contentEnd - 1] == 0x0A {
+                contentEnd -= 2
+            }
+
+            guard contentStart < contentEnd else { continue }
+
+            // Find header/body separator (CRLFCRLF).
+            guard let sepOffset = Self.findSequence(headerSep, in: view, from: contentStart, to: contentEnd) else {
+                continue
+            }
+            let headersEnd = sepOffset
+            let bodyStart = sepOffset + headerSep.count
+
+            // Parse headers (they're always ASCII/UTF-8).
+            let headersSlice = view[contentStart..<headersEnd]
+            guard let headers = String(bytes: headersSlice, encoding: .utf8) else { continue }
+            guard Self.hasExactNameParameter(headers, name: "file") else { continue }
+
             let filename = Self.matchHeader(headers, key: "filename")
             let mimeType = Self.matchHeader(headers, key: "Content-Type", isCT: true)
-            return MultipartFilePart(filename: filename, mimeType: mimeType, data: bodyData)
+
+            // Return a zero-copy slice of the buffer for the body.
+            let bodyLength = contentEnd - bodyStart
+            let sliceStart = bodyStart - view.startIndex + buffer.readerIndex
+            guard let bodyBuffer = buffer.getSlice(at: sliceStart, length: bodyLength) else {
+                continue
+            }
+            return MultipartFilePart(filename: filename, mimeType: mimeType, data: bodyBuffer)
+        }
+        return nil
+    }
+
+    /// Find all positions in `view` where `delimiter` appears, only accepting
+    /// matches that are at position 0 or preceded by `crlf`, AND followed by
+    /// CRLF or `--` (per RFC 2046 boundary line framing).
+    private static func findDelimiters(
+        in view: ByteBufferView,
+        delimiter: [UInt8],
+        crlf: [UInt8]
+    ) -> [ByteBufferView.Index] {
+        var positions: [ByteBufferView.Index] = []
+        var searchFrom = view.startIndex
+
+        while searchFrom <= view.endIndex - delimiter.count {
+            guard let pos = Self.findSequence(delimiter, in: view, from: searchFrom, to: view.endIndex) else {
+                break
+            }
+
+            let isFramed: Bool
+            if pos == view.startIndex {
+                isFramed = true
+            } else if pos >= view.startIndex + crlf.count {
+                isFramed = view[pos - 2] == crlf[0] && view[pos - 1] == crlf[1]
+            } else {
+                isFramed = false
+            }
+
+            // Also verify post-boundary terminator: must be CRLF or "--".
+            let afterDelim = pos + delimiter.count
+            let hasValidSuffix: Bool
+            if afterDelim + 1 < view.endIndex {
+                let b0 = view[afterDelim]
+                let b1 = view[afterDelim + 1]
+                hasValidSuffix = (b0 == 0x0D && b1 == 0x0A) || (b0 == 0x2D && b1 == 0x2D)
+            } else if afterDelim == view.endIndex {
+                // Boundary at very end of body (no trailing bytes) — valid closing.
+                hasValidSuffix = true
+            } else {
+                hasValidSuffix = false
+            }
+
+            if isFramed && hasValidSuffix {
+                positions.append(pos)
+            }
+            searchFrom = pos + 1
+        }
+        return positions
+    }
+
+    /// Locate the first occurrence of `needle` in `view[from..<to]`.
+    private static func findSequence(
+        _ needle: [UInt8],
+        in view: ByteBufferView,
+        from start: ByteBufferView.Index,
+        to end: ByteBufferView.Index
+    ) -> ByteBufferView.Index? {
+        guard needle.count > 0, end - start >= needle.count else { return nil }
+        let limit = end - needle.count
+        var i = start
+        while i <= limit {
+            var matched = true
+            for j in 0..<needle.count {
+                if view[i + j] != needle[j] {
+                    matched = false
+                    break
+                }
+            }
+            if matched { return i }
+            i += 1
         }
         return nil
     }
@@ -178,12 +285,27 @@ struct MultipartFilePart {
             }
             return nil
         }
-        // Find `key="value"` in the headers blob.
         let needle = "\(key)=\""
         guard let r = headers.range(of: needle) else { return nil }
         let rest = headers[r.upperBound...]
         guard let end = rest.firstIndex(of: "\"") else { return nil }
         return String(rest[..<end])
+    }
+
+    /// Check if the Content-Disposition header contains an exact `name="<name>"` parameter.
+    /// Prevents false positives like matching `name="file2"` when looking for `name="file"`.
+    private static func hasExactNameParameter(_ headers: String, name: String) -> Bool {
+        let needle = "name=\"\(name)\""
+        var searchStart = headers.startIndex
+        while let range = headers.range(of: needle, range: searchStart..<headers.endIndex) {
+            // Verify the character after the closing quote isn't alphanumeric (no "file2" match).
+            let afterEnd = range.upperBound
+            if afterEnd == headers.endIndex || !headers[afterEnd].isLetter && !headers[afterEnd].isNumber {
+                return true
+            }
+            searchStart = range.upperBound
+        }
+        return false
     }
 }
 
