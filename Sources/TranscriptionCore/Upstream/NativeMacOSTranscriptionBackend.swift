@@ -112,19 +112,15 @@ public struct NativeMacOSTranscriptionBackend: TranscriptionBackendImpl {
             let result = try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, any Error>) in
                     let task = recognizer.recognitionTask(with: request) { result, error in
-                        // Double-resume guard: only the first resume wins.
-                        guard state.markResumed() else { return }
-
                         if let error {
+                            guard state.markResumed() else { return }
                             continuation.resume(throwing: error)
                         } else if let result, result.isFinal {
+                            guard state.markResumed() else { return }
                             continuation.resume(returning: result.bestTranscription.formattedString)
-                        } else {
-                            // Neither error nor final result — shouldn't happen with
-                            // shouldReportPartialResults=false, but guard against it.
-                            continuation.resume(throwing: TranscriptionBackendError.badRequest(
-                                "speech recognition ended without a final result"))
                         }
+                        // Silently ignore non-final, non-error callbacks (unexpected
+                        // partial results) without consuming the one-shot resume flag.
                     }
                     state.setTask(task)
 
@@ -140,12 +136,12 @@ public struct NativeMacOSTranscriptionBackend: TranscriptionBackendImpl {
 
             // If the timeout fired and caused the cancellation, surface that.
             if state.didTimeout {
-                throw TranscriptionTimeoutError()
+                throw TranscriptionBackendError.timeout("transcription timed out")
             }
             return result
         } catch {
             if state.didTimeout {
-                throw TranscriptionTimeoutError()
+                throw TranscriptionBackendError.timeout("transcription timed out")
             }
             throw error
         }
@@ -209,11 +205,6 @@ private final class RecognitionState: Sendable {
         _resumed = true
         return true
     }
-}
-
-/// Thrown when the transcription timeout elapses before Speech framework returns.
-struct TranscriptionTimeoutError: Error, CustomStringConvertible {
-    var description: String { "transcription timed out" }
 }
 
 enum AudioExtension {
