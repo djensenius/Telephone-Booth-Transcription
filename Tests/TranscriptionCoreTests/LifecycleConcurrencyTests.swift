@@ -325,34 +325,54 @@ struct LifecycleConcurrencyTests {
         #expect(c == false)
     }
 
-    @Test func healthzWorksUnderSequentialConcurrencyLimit() async throws {
-        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-
-        // /healthz passes through auth (excluded path) but still goes through
-        // the concurrency limit middleware. With limit=1 and sequential requests
-        // this works fine; under concurrent load it would be subject to the limit.
-        let server = TranscriptionServer(
-            config: ServerConfig(maxConcurrentRequests: 1),
-            tokenStore: InMemoryTokenStore(initial: "tok"),
-            logStore: InMemoryRequestLogStore(),
-            httpClient: httpClient,
-            logger: Logger(label: "test")
-        )
+    @Test func healthzBypassesConcurrencyLimitUnderLoad() async throws {
+        // Build a minimal router with a slow /slow endpoint that holds the
+        // semaphore slot for a controlled duration. With maxConcurrent=1 and
+        // excludedPaths=["/healthz"], /healthz must still return 200 while
+        // the single permit is occupied.
+        let router = Router(context: BasicRequestContext.self)
+        router.add(middleware: ConcurrencyLimitMiddleware<BasicRequestContext>(
+            maxConcurrent: 1,
+            excludedPaths: ["/healthz"]
+        ))
+        router.get("/healthz") { _, _ in Response(status: .ok) }
+        router.get("/slow") { _, _ in
+            try await Task.sleep(for: .milliseconds(500))
+            return Response(status: .ok)
+        }
 
         let app = Application(
-            router: server.makeRouter(),
+            router: router,
             configuration: .init(address: .hostname("127.0.0.1", port: 0))
         )
 
         try await app.test(.live) { client in
-            // /healthz is excluded from auth, so it passes through auth middleware,
-            // then hits concurrency limit, then the handler. With limit=1 and
-            // sequential requests this should be fine.
+            // Fire a slow request to occupy the single concurrency slot
+            async let slowResult: HTTPResponse.Status = {
+                var status: HTTPResponse.Status = .internalServerError
+                try await client.execute(uri: "/slow", method: .get) { response in
+                    status = response.status
+                }
+                return status
+            }()
+
+            // Give the slow request time to acquire the permit
+            try await Task.sleep(for: .milliseconds(50))
+
+            // /healthz must succeed even though the slot is occupied
             try await client.execute(uri: "/healthz", method: .get) { response in
                 #expect(response.status == .ok)
             }
+
+            // A non-excluded path must be rejected (503) while slot is held
+            try await client.execute(uri: "/slow", method: .get) { response in
+                #expect(response.status == .serviceUnavailable)
+            }
+
+            // Wait for the original slow request to complete
+            let finalStatus = try await slowResult
+            #expect(finalStatus == .ok)
         }
-        try await httpClient.shutdown()
     }
 
     // MARK: - Rapid start/stop lifecycle (TR-R2)
