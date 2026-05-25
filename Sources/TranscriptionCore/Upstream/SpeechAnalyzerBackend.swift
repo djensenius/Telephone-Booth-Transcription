@@ -81,12 +81,23 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
             return String(combined.characters)
         }
 
+        // Ensure resultsTask is always canceled on error paths so it cannot
+        // leak or hang waiting on a stream that will never finish.
+        defer { resultsTask.cancel() }
+
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         let audioFile = try AVAudioFile(forReading: tmp)
-        if let lastSample = try await analyzer.analyzeSequence(from: audioFile) {
-            try await analyzer.finalizeAndFinish(through: lastSample)
-        } else {
-            try await analyzer.finalizeAndFinishThroughEndOfInput()
+        do {
+            if let lastSample = try await analyzer.analyzeSequence(from: audioFile) {
+                try await analyzer.finalizeAndFinish(through: lastSample)
+            } else {
+                try await analyzer.finalizeAndFinishThroughEndOfInput()
+            }
+        } catch {
+            // Await the task to ensure resources are fully released before
+            // rethrowing. The defer above already issued cancel().
+            _ = await resultsTask.value
+            throw error
         }
 
         let text = await resultsTask.value
