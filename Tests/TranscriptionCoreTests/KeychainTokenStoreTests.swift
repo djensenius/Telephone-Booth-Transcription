@@ -23,21 +23,42 @@ struct KeychainTokenStoreTests {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// Returns true if the Keychain is available in this environment.
+    /// Returns true if the Keychain is fully available in this environment
+    /// (supports add, attribute retrieval, and delete).
     private func keychainAvailable() -> Bool {
+        let probeService = "dev.djensenius.tbt-availability-probe"
+        let probeAccount = "probe"
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "dev.djensenius.tbt-availability-probe",
-            kSecAttrAccount as String: "probe",
+            kSecAttrService as String: probeService,
+            kSecAttrAccount as String: probeAccount,
             kSecValueData as String: Data("probe".utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
-        let status = SecItemAdd(query as CFDictionary, nil)
-        if status == errSecSuccess || status == errSecDuplicateItem {
+        // Clean up any leftover probe item
+        SecItemDelete(query as CFDictionary)
+
+        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        guard addStatus == errSecSuccess else { return false }
+        defer {
             SecItemDelete(query as CFDictionary)
-            return true
         }
-        return false
+        // Verify we can read back the accessibility attribute
+        var readQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: probeService,
+            kSecAttrAccount as String: probeAccount,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let readStatus = SecItemCopyMatching(readQuery as CFDictionary, &item)
+        guard readStatus == errSecSuccess,
+              let dict = item as? [String: Any],
+              dict[kSecAttrAccessible as String] as? String != nil else {
+            return false
+        }
+        return true
     }
 
     @Test func newItemUsesThisDeviceOnlyAccessibility() throws {
