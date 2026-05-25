@@ -11,6 +11,7 @@
 		1483338277245BE2BB02514A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6210AE9282C77F3A1B460D7 /* SettingsView.swift */; };
 		20B13A0E53299A203F188D96 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
 		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
+		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
 		31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
 		387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
 		3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */; };
@@ -90,6 +91,7 @@
 		9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TranscriptionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServer.swift; sourceTree = "<group>"; };
 		AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogView.swift; sourceTree = "<group>"; };
+		AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrencyLimitMiddleware.swift; sourceTree = "<group>"; };
 		C6210AE9282C77F3A1B460D7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 		CB96230C24FF2DCCC9CF7753 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 			isa = PBXGroup;
 			children = (
 				8544DD720CB364126F1627E3 /* AuthMiddleware.swift */,
+				AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */,
 				5115419BB0495CF787561459 /* RequestLogMiddleware.swift */,
 				9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */,
 				28FB528105157FE57C3E2E5E /* Routes */,
@@ -370,6 +373,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				97EAA1AE12C62E18721C3F75 /* AuthMiddleware.swift in Sources */,
+				2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */,
 				20B13A0E53299A203F188D96 /* Config.swift in Sources */,
 				C2E5578B378B0DA01E58BC6B /* HealthRoute.swift in Sources */,
 				8379FD8BA09D9AE62D60454C /* InMemoryRequestLogStore.swift in Sources */,
