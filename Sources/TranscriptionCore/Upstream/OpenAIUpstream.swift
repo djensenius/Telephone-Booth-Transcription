@@ -78,13 +78,20 @@ public final class OpenAIUpstream: Sendable {
         }
 
         let deadline = NIODeadline.now() + .nanoseconds(timeout.asNanoseconds)
-        let response = try await httpClient.execute(request, deadline: deadline)
+        let response: HTTPClientResponse
+        do {
+            response = try await httpClient.execute(request, deadline: deadline)
+        } catch let error as HTTPClientError where error == .deadlineExceeded {
+            throw UpstreamError.deadlineExceeded
+        }
 
         let buffer: ByteBuffer
         do {
             buffer = try await response.body.collect(upTo: maxResponseBytes)
         } catch is NIOTooManyBytesError {
             throw UpstreamError.responseTooLarge(maxBytes: maxResponseBytes)
+        } catch let error as HTTPClientError where error == .deadlineExceeded {
+            throw UpstreamError.deadlineExceeded
         }
         let headers: [(String, String)] = response.headers.map { ($0.name, $0.value) }
         return ProxyResult(

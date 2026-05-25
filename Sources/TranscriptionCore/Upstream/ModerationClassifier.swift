@@ -170,7 +170,12 @@ public final class ModerationClassifier: Sendable {
         request.body = .bytes(ByteBuffer(bytes: bodyData))
 
         let deadline = NIODeadline.now() + .nanoseconds(timeout.asNanoseconds)
-        let response = try await httpClient.execute(request, deadline: deadline)
+        let response: HTTPClientResponse
+        do {
+            response = try await httpClient.execute(request, deadline: deadline)
+        } catch let error as HTTPClientError where error == .deadlineExceeded {
+            throw UpstreamError.deadlineExceeded
+        }
         guard response.status.code == 200 else {
             throw ClassifierError.upstreamHTTP(Int(response.status.code))
         }
@@ -180,6 +185,8 @@ public final class ModerationClassifier: Sendable {
             buffer = try await response.body.collect(upTo: maxResponseBytes)
         } catch is NIOTooManyBytesError {
             throw UpstreamError.responseTooLarge(maxBytes: maxResponseBytes)
+        } catch let error as HTTPClientError where error == .deadlineExceeded {
+            throw UpstreamError.deadlineExceeded
         }
         let bodyBytes = buffer.getBytes(at: buffer.readerIndex, length: buffer.readableBytes) ?? []
         let bodyData2 = Data(bodyBytes)

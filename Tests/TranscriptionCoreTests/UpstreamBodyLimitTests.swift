@@ -118,11 +118,9 @@ struct UpstreamBodyLimitTests {
                 body: nil,
                 maxResponseBytes: 1 * 1024 * 1024
             )
-            Issue.record("Expected a timeout error")
-        } catch {
-            // AsyncHTTPClient throws HTTPClientError.deadlineExceeded or similar
-            // when the deadline passes. The important thing is it doesn't hang.
-            #expect(!(error is UpstreamError) || error is UpstreamError)
+            Issue.record("Expected UpstreamError.deadlineExceeded")
+        } catch let error as UpstreamError {
+            #expect(error == .deadlineExceeded)
         }
     }
 
