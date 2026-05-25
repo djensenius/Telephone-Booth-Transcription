@@ -94,8 +94,9 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
                 try await analyzer.finalizeAndFinishThroughEndOfInput()
             }
         } catch {
-            // Await the task to ensure resources are fully released before
-            // rethrowing. The defer above already issued cancel().
+            // Cancel explicitly before awaiting so the stream unblocks
+            // immediately. The defer is a safety net for other exit paths.
+            resultsTask.cancel()
             _ = await resultsTask.value
             throw error
         }
