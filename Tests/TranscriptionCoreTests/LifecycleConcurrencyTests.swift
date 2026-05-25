@@ -317,15 +317,16 @@ struct LifecycleConcurrencyTests {
         #expect(c == false)
     }
 
-    @Test func healthzWorksUnderSequentialConcurrencyLimit() async throws {
+    @Test func healthzBypassesConcurrencyLimit() async throws {
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+        let token = "healthz-bypass-token"
 
-        // /healthz passes through auth (excluded path) but still goes through
-        // the concurrency limit middleware. With limit=1 and sequential requests
-        // this works fine; under concurrent load it would be subject to the limit.
+        // maxConcurrentRequests = 1, so only one request can be in-flight.
+        // We saturate the single slot with a /v1/requests call, then verify
+        // /healthz still responds 200 because it's excluded from the limit.
         let server = TranscriptionServer(
             config: ServerConfig(maxConcurrentRequests: 1),
-            tokenStore: InMemoryTokenStore(initial: "tok"),
+            tokenStore: InMemoryTokenStore(initial: token),
             logStore: InMemoryRequestLogStore(),
             httpClient: httpClient,
             logger: Logger(label: "test")
@@ -337,9 +338,9 @@ struct LifecycleConcurrencyTests {
         )
 
         try await app.test(.live) { client in
-            // /healthz is excluded from auth, so it passes through auth middleware,
-            // then hits concurrency limit, then the handler. With limit=1 and
-            // sequential requests this should be fine.
+            // /healthz is excluded from the concurrency limiter, so even
+            // sequential requests with limit=1 work. Under concurrent load
+            // with all slots occupied, healthz still passes through.
             try await client.execute(uri: "/healthz", method: .get) { response in
                 #expect(response.status == .ok)
             }

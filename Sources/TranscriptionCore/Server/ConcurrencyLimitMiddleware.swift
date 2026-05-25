@@ -10,10 +10,16 @@ import NIOCore
 public struct ConcurrencyLimitMiddleware<Context: RequestContext>: RouterMiddleware, Sendable {
     private let semaphore: AsyncSemaphore
     private let limit: Int
+    private let excludedPaths: Set<String>
     private let logger: Logger
 
-    public init(maxConcurrent: Int, logger: Logger = Logger(label: "concurrency-limit")) {
+    public init(
+        maxConcurrent: Int,
+        excludedPaths: Set<String> = [],
+        logger: Logger = Logger(label: "concurrency-limit")
+    ) {
         self.limit = maxConcurrent
+        self.excludedPaths = excludedPaths
         self.semaphore = AsyncSemaphore(count: maxConcurrent)
         self.logger = logger
     }
@@ -24,6 +30,10 @@ public struct ConcurrencyLimitMiddleware<Context: RequestContext>: RouterMiddlew
         next: (Request, Context) async throws -> Response
     ) async throws -> Response {
         guard limit > 0 else {
+            return try await next(request, context)
+        }
+
+        if excludedPaths.contains(request.uri.path) {
             return try await next(request, context)
         }
 

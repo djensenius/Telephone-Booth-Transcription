@@ -63,6 +63,7 @@ public struct TranscriptionServer: Sendable {
         if config.maxConcurrentRequests > 0 {
             router.add(middleware: ConcurrencyLimitMiddleware<BasicRequestContext>(
                 maxConcurrent: config.maxConcurrentRequests,
+                excludedPaths: ["/healthz"],
                 logger: logger
             ))
         }
