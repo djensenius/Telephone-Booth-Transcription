@@ -98,10 +98,11 @@ final class ServerHost: ObservableObject {
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     group.addTask { await writer.run() }
                     group.addTask { try await app.runService() }
-                    // When the app finishes (cancelled or error), shut down the writer
+                    // When the app finishes (cancelled or error), shut down the writer.
+                    // shutdown() finishes the stream so run() returns naturally;
+                    // no cancelAll() needed -- let the group await the writer to completion.
                     try await group.next()
                     await writer.shutdown()
-                    group.cancelAll()
                 }
             } catch {
                 await writer.shutdown()
