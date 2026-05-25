@@ -88,6 +88,23 @@ exists for future opt-in body capture but is not yet wired through the route
 handlers — see [`moderation.md`](./moderation.md) for why opt-in body capture
 is dangerous for moderation inputs in particular.
 
+### Request log retention
+
+`RequestLogStore` enforces a configurable `RetentionPolicy` with two optional
+limits:
+
+- **`maxRows`** (default 10 000) — after each insert, if the total row count
+  exceeds this limit the oldest rows (by `receivedAt`) are deleted.
+- **`maxAge`** (default 30 days) — rows older than `now − maxAge` are deleted
+  on the next write.
+
+Both limits are enforced inside the same write transaction as the insert, so
+retention is effectively zero-overhead and requires no background timer. The
+`receivedAt` column is indexed, making pruning cheap even on large tables.
+
+The defaults are generous enough for a continuously running art installation
+while guaranteeing the database cannot grow without bound.
+
 ### Power assertion
 
 `PowerAssertion` wraps `IOPMAssertionCreateWithName` with

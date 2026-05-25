@@ -72,3 +72,146 @@ struct PersistentRequestLogStoreTests {
         #expect(recent[0].model == "omni-moderation-latest")
     }
 }
+
+// MARK: - Retention policy tests
+
+@Suite("Retention (in-memory)")
+struct InMemoryRetentionTests {
+    @Test func maxRowsTrimsOldest() async throws {
+        let store = InMemoryRequestLogStore(retention: .init(maxRows: 3))
+        let base = Date()
+        for i in 0..<5 {
+            try await store.record(.init(
+                receivedAt: base.addingTimeInterval(Double(i)),
+                method: "GET", path: "/\(i)", status: 200, durationMs: 1
+            ))
+        }
+        let count = try await store.count()
+        #expect(count == 3)
+        let entries = try await store.recent(limit: 10)
+        // Should keep the 3 most recent (paths /2, /3, /4)
+        let paths = entries.map(\.path).sorted()
+        #expect(paths == ["/2", "/3", "/4"])
+    }
+
+    @Test func maxAgeDeletesExpiredRows() async throws {
+        let store = InMemoryRequestLogStore(retention: .init(maxAge: 60))
+        let now = Date()
+        // Old entry — 120 seconds ago
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-120),
+            method: "GET", path: "/old", status: 200, durationMs: 1
+        ))
+        // Recent entry
+        try await store.record(.init(
+            receivedAt: now,
+            method: "GET", path: "/new", status: 200, durationMs: 1
+        ))
+        let count = try await store.count()
+        #expect(count == 1)
+        let entries = try await store.recent(limit: 10)
+        #expect(entries[0].path == "/new")
+    }
+
+    @Test func combinedPolicyAppliesBoth() async throws {
+        let store = InMemoryRequestLogStore(retention: .init(maxRows: 2, maxAge: 60))
+        let now = Date()
+        // Expired entry
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-120),
+            method: "GET", path: "/expired", status: 200, durationMs: 1
+        ))
+        // Three recent entries — exceeds maxRows after age prune
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-10),
+            method: "GET", path: "/a", status: 200, durationMs: 1
+        ))
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-5),
+            method: "GET", path: "/b", status: 200, durationMs: 1
+        ))
+        try await store.record(.init(
+            receivedAt: now,
+            method: "GET", path: "/c", status: 200, durationMs: 1
+        ))
+        let count = try await store.count()
+        #expect(count == 2)
+        let entries = try await store.recent(limit: 10)
+        let paths = entries.map(\.path).sorted()
+        #expect(paths == ["/b", "/c"])
+    }
+}
+
+@Suite("Retention (SQLite)")
+struct SQLiteRetentionTests {
+    @Test func maxRowsTrimsOldest() async throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ret-rows-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = try RequestLogStore(path: tmp.path, retention: .init(maxRows: 3))
+        let base = Date()
+        for i in 0..<5 {
+            try await store.record(.init(
+                receivedAt: base.addingTimeInterval(Double(i)),
+                method: "GET", path: "/\(i)", status: 200, durationMs: 1
+            ))
+        }
+        let count = try await store.count()
+        #expect(count == 3)
+        let entries = try await store.recent(limit: 10)
+        let paths = entries.map(\.path).sorted()
+        #expect(paths == ["/2", "/3", "/4"])
+    }
+
+    @Test func maxAgeDeletesExpiredRows() async throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ret-age-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = try RequestLogStore(path: tmp.path, retention: .init(maxAge: 60))
+        let now = Date()
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-120),
+            method: "GET", path: "/old", status: 200, durationMs: 1
+        ))
+        try await store.record(.init(
+            receivedAt: now,
+            method: "GET", path: "/new", status: 200, durationMs: 1
+        ))
+        let count = try await store.count()
+        #expect(count == 1)
+        let entries = try await store.recent(limit: 10)
+        #expect(entries[0].path == "/new")
+    }
+
+    @Test func combinedPolicyAppliesBoth() async throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ret-combo-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = try RequestLogStore(path: tmp.path, retention: .init(maxRows: 2, maxAge: 60))
+        let now = Date()
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-120),
+            method: "GET", path: "/expired", status: 200, durationMs: 1
+        ))
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-10),
+            method: "GET", path: "/a", status: 200, durationMs: 1
+        ))
+        try await store.record(.init(
+            receivedAt: now.addingTimeInterval(-5),
+            method: "GET", path: "/b", status: 200, durationMs: 1
+        ))
+        try await store.record(.init(
+            receivedAt: now,
+            method: "GET", path: "/c", status: 200, durationMs: 1
+        ))
+        let count = try await store.count()
+        #expect(count == 2)
+        let entries = try await store.recent(limit: 10)
+        let paths = entries.map(\.path).sorted()
+        #expect(paths == ["/b", "/c"])
+    }
+}
