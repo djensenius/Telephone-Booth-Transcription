@@ -122,6 +122,7 @@ final class ServerHost: ObservableObject {
                 logger: logger
             )
             let app = server.makeApplication()
+            let writer = server.logWriter
 
             // Check for early cancellation before entering runService.
             guard !Task.isCancelled else {
@@ -139,10 +140,20 @@ final class ServerHost: ObservableObject {
             }
 
             do {
-                try await app.runService()
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    group.addTask { await writer.run() }
+                    group.addTask { try await app.runService() }
+                    // When the app finishes (cancelled or error), shut down the writer.
+                    // shutdown() finishes the stream so run() returns naturally;
+                    // no cancelAll() needed -- let the group await the writer to completion.
+                    try await group.next()
+                    await writer.shutdown()
+                }
             } catch is CancellationError {
                 // Expected on stop — not an error.
+                await writer.shutdown()
             } catch {
+                await writer.shutdown()
                 await MainActor.run {
                     // Skip error publication when cancellation was deliberate.
                     guard self?.state != .stopping else { return }

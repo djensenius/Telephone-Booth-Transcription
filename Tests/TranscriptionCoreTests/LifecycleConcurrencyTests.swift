@@ -244,6 +244,9 @@ struct LifecycleConcurrencyTests {
             configuration: .init(address: .hostname("127.0.0.1", port: 0))
         )
 
+        let writer = server.logWriter
+        let writerTask = Task { await writer.run() }
+
         try await app.test(.live) { client in
             var headers = HTTPFields()
             headers[.authorization] = "Bearer \(token)"
@@ -252,11 +255,12 @@ struct LifecycleConcurrencyTests {
             }
         }
 
-        // RequestLogMiddleware uses Task.detached to record — give it time to drain
-        try await Task.sleep(for: .milliseconds(100))
+        // Shutdown the writer to drain buffered entries
+        await writer.shutdown()
+        await writerTask.value
 
         let count = try await logStore.count()
-        #expect(count >= 1, "request log entry should have been recorded by fire-and-forget task")
+        #expect(count >= 1, "request log entry should have been recorded by writer")
         try await httpClient.shutdown()
     }
 
@@ -278,6 +282,9 @@ struct LifecycleConcurrencyTests {
             configuration: .init(address: .hostname("127.0.0.1", port: 0))
         )
 
+        let writer = server.logWriter
+        let writerTask = Task { await writer.run() }
+
         try await app.test(.live) { client in
             for _ in 0..<3 {
                 var headers = HTTPFields()
@@ -286,8 +293,9 @@ struct LifecycleConcurrencyTests {
             }
         }
 
-        // Allow fire-and-forget tasks to drain
-        try await Task.sleep(for: .milliseconds(200))
+        // Shutdown the writer to drain buffered entries
+        await writer.shutdown()
+        await writerTask.value
 
         let count = try await logStore.count()
         #expect(count == 3, "all 3 request log entries should drain")

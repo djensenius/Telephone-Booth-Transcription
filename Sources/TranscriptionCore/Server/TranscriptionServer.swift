@@ -10,6 +10,7 @@ public struct TranscriptionServer: Sendable {
     public let config: ServerConfig
     public let tokenStore: any TokenStore
     public let logStore: any RequestLogStoring
+    public let logWriter: RequestLogWriter
     public let httpClient: HTTPClient
     public let logger: Logger
 
@@ -23,6 +24,7 @@ public struct TranscriptionServer: Sendable {
         self.config = config
         self.tokenStore = tokenStore
         self.logStore = logStore
+        self.logWriter = RequestLogWriter(store: logStore, logger: logger)
         self.httpClient = httpClient
         self.logger = logger
     }
@@ -58,7 +60,7 @@ public struct TranscriptionServer: Sendable {
             logger: logger
         )
 
-        router.add(middleware: RequestLogMiddleware(store: logStore, logger: logger))
+        router.add(middleware: RequestLogMiddleware(writer: logWriter, logger: logger))
         router.add(middleware: AuthMiddleware(tokenStore: tokenStore, logger: logger))
         if config.maxConcurrentRequests > 0 {
             router.add(middleware: ConcurrencyLimitMiddleware<BasicRequestContext>(
