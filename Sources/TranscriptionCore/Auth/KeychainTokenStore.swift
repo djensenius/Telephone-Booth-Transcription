@@ -1,5 +1,6 @@
 #if canImport(Security)
 import Foundation
+import Logging
 import Security
 
 /// Stores the server's bearer token in the macOS login keychain.
@@ -15,6 +16,8 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
     private let lock = NSLock()
     private let service: String
     private let account: String
+
+    private let logger = Logger(label: "keychain-token-store")
 
     public init(
         service: String = KeychainTokenStore.defaultService,
@@ -69,15 +72,28 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
     private func read() throws -> String? {
         var query = baseQuery()
         query[kSecReturnData as String] = true
+        query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         switch status {
         case errSecSuccess:
-            guard let data = item as? Data,
+            guard let dict = item as? [String: Any],
+                  let data = dict[kSecValueData as String] as? Data,
                   let str = String(data: data, encoding: .utf8) else {
                 throw TokenStoreError.encodingFailed
+            }
+            // Migrate items stored with a broader accessibility level.
+            // Migration is best-effort; a failure still returns the token.
+            let currentAccessibility = dict[kSecAttrAccessible as String] as? String
+            let desired = Self.desiredAccessibility as String
+            if currentAccessibility != desired {
+                do {
+                    try migrateAccessibility(token: str)
+                } catch {
+                    logger.warning("Keychain accessibility migration failed, will retry next read: \(error)")
+                }
             }
             return str
         case errSecItemNotFound:
@@ -86,6 +102,30 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
             throw TokenStoreError.keychainStatus(status)
         }
     }
+
+    /// Re-creates the keychain item with the correct accessibility attribute.
+    /// `SecItemUpdate` cannot change `kSecAttrAccessible`, so we delete + re-add.
+    private func migrateAccessibility(token: String) throws {
+        guard let data = token.data(using: .utf8) else {
+            throw TokenStoreError.encodingFailed
+        }
+        let deleteStatus = SecItemDelete(baseQuery() as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+            throw TokenStoreError.keychainStatus(deleteStatus)
+        }
+        var addQuery = baseQuery()
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = Self.desiredAccessibility
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw TokenStoreError.keychainStatus(addStatus)
+        }
+    }
+
+    /// The accessibility level for new and migrated keychain items.
+    /// "AfterFirstUnlock" allows background access (needed for auto-launch);
+    /// "ThisDeviceOnly" excludes the item from backups and iCloud Keychain sync.
+    nonisolated(unsafe) static let desiredAccessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
     private func write(_ token: String) throws {
         guard let data = token.data(using: .utf8) else {
@@ -101,7 +141,7 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
         case errSecItemNotFound:
             var addQuery = query
             addQuery[kSecValueData as String] = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            addQuery[kSecAttrAccessible as String] = Self.desiredAccessibility
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
                 throw TokenStoreError.keychainStatus(addStatus)
