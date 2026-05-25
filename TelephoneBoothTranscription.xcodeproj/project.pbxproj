@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		062B86C9E02B52BD6917A696 /* APIKeyStoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020BB961F3116444D91D359 /* APIKeyStoring.swift */; };
 		0E8C6E249E9E8FE917F9CCF7 /* OpenAIUpstream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */; };
 		1483338277245BE2BB02514A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6210AE9282C77F3A1B460D7 /* SettingsView.swift */; };
 		20064C1E3EE6440E2B9C4B7A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE434919A1E3F53ECD075137 /* AppDelegate.swift */; };
@@ -16,6 +17,7 @@
 		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
 		31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
 		387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
+		397F4078EFDF7865D64740B9 /* InMemoryAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */; };
 		3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */; };
 		3CAA088588C74F197B6B9EBC /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */; };
 		44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
@@ -43,6 +45,8 @@
 		C4C6CEA6FCF73DBC89384F39 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 3FFEFFD21A7B27E9C8860886 /* AsyncHTTPClient */; };
 		CE47268555219DA284ABB838 /* ModelsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */; };
 		E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */; };
+		E8E582AC2EFA517E1AC34B7F /* KeychainAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7F8DA580B19AD6FE7B14F4 /* KeychainAPIKeyStore.swift */; };
+		ECB85B37D13AEB2DCF835BFC /* APIKeyStoreError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146970223849E0E0570809D7 /* APIKeyStoreError.swift */; };
 		F3A64BBF3084E4FF12371096 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 727CA8D8C2312BC5490A8AC8 /* Logging */; };
 		F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */; };
 		FAEE4E2B26A75549FBCB1F9E /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = 9E7C0AD8BC115F2CB4C08F0E /* Hummingbird */; };
@@ -77,14 +81,18 @@
 		01682C9E143027DFBB660EBF /* TranscriptionCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyTranscriptionBackend.swift; sourceTree = "<group>"; };
 		0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBackend.swift; sourceTree = "<group>"; };
+		0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAPIKeyStore.swift; sourceTree = "<group>"; };
 		13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
+		146970223849E0E0570809D7 /* APIKeyStoreError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStoreError.swift; sourceTree = "<group>"; };
 		17F785B05537C247EAD138DA /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		2020BB961F3116444D91D359 /* APIKeyStoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStoring.swift; sourceTree = "<group>"; };
 		21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationClassifier.swift; sourceTree = "<group>"; };
 		257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTokenStore.swift; sourceTree = "<group>"; };
 		2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
 		3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRoute.swift; sourceTree = "<group>"; };
 		3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationRoute.swift; sourceTree = "<group>"; };
 		3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUpstream.swift; sourceTree = "<group>"; };
+		3E7F8DA580B19AD6FE7B14F4 /* KeychainAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainAPIKeyStore.swift; sourceTree = "<group>"; };
 		4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHost.swift; sourceTree = "<group>"; };
 		5115419BB0495CF787561459 /* RequestLogMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogMiddleware.swift; sourceTree = "<group>"; };
 		53EF607E80299C4B7F64F0DA /* HealthRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRoute.swift; sourceTree = "<group>"; };
@@ -107,7 +115,6 @@
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogWriter.swift; sourceTree = "<group>"; };
 		FE434919A1E3F53ECD075137 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,7 +144,11 @@
 		22A07E9C85F3FE26A212C047 /* Auth */ = {
 			isa = PBXGroup;
 			children = (
+				146970223849E0E0570809D7 /* APIKeyStoreError.swift */,
+				2020BB961F3116444D91D359 /* APIKeyStoring.swift */,
+				0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */,
 				257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */,
+				3E7F8DA580B19AD6FE7B14F4 /* KeychainAPIKeyStore.swift */,
 				13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */,
 				2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */,
 			);
@@ -383,12 +394,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ECB85B37D13AEB2DCF835BFC /* APIKeyStoreError.swift in Sources */,
+				062B86C9E02B52BD6917A696 /* APIKeyStoring.swift in Sources */,
 				97EAA1AE12C62E18721C3F75 /* AuthMiddleware.swift in Sources */,
 				2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */,
 				20B13A0E53299A203F188D96 /* Config.swift in Sources */,
 				C2E5578B378B0DA01E58BC6B /* HealthRoute.swift in Sources */,
+				397F4078EFDF7865D64740B9 /* InMemoryAPIKeyStore.swift in Sources */,
 				8379FD8BA09D9AE62D60454C /* InMemoryRequestLogStore.swift in Sources */,
 				8100ADE862B8A5C3F9F265E4 /* InMemoryTokenStore.swift in Sources */,
+				E8E582AC2EFA517E1AC34B7F /* KeychainAPIKeyStore.swift in Sources */,
 				4DF794AA0E36D51F5E57C346 /* KeychainTokenStore.swift in Sources */,
 				CE47268555219DA284ABB838 /* ModelsRoute.swift in Sources */,
 				3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */,
