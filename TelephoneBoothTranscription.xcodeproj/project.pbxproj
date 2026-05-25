@@ -33,6 +33,7 @@
 		A0549FECC22FFA3C3C214DF7 /* TranscriptionServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */; };
 		A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */; };
 		A50D8C6CB265D61B374DC0A4 /* RequestLogMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5115419BB0495CF787561459 /* RequestLogMiddleware.swift */; };
+		A83A6E3E2374B274D3019B14 /* RequestLogWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */; };
 		AC30D0FB747F41276C215796 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 2320F84D08B4C9BB1DE3109D /* Crypto */; };
 		BB3712EE81939BF730AA2D1E /* TranscriptionRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */; };
 		BF2D7FA7194F9A18AEB4E819 /* ModerationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */; };
@@ -101,6 +102,7 @@
 		DD7D772BF49912B0122CA505 /* RequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogStore.swift; sourceTree = "<group>"; };
 		DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsRoute.swift; sourceTree = "<group>"; };
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogWriter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +168,7 @@
 			children = (
 				5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */,
 				DD7D772BF49912B0122CA505 /* RequestLogStore.swift */,
+				EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */,
 			);
 			path = Logging;
 			sourceTree = "<group>";
@@ -387,6 +390,7 @@
 				44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */,
 				A50D8C6CB265D61B374DC0A4 /* RequestLogMiddleware.swift in Sources */,
 				71C45CC53AA5DF8D72FB0066 /* RequestLogStore.swift in Sources */,
+				A83A6E3E2374B274D3019B14 /* RequestLogWriter.swift in Sources */,
 				6E73BE5F12E29990DF28B5CE /* RequestsRoute.swift in Sources */,
 				31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */,
 				F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */,
