@@ -9,7 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var serverHost: ServerHost?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let host = serverHost, host.state.isRunning else {
+        guard let host = serverHost,
+              host.state.isRunning || host.state == .starting else {
             return .terminateNow
         }
         Task { @MainActor in

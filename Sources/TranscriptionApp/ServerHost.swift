@@ -97,6 +97,8 @@ final class ServerHost: ObservableObject {
                 try await app.runService()
             } catch {
                 await MainActor.run {
+                    // Skip error publication when cancellation was deliberate.
+                    guard self?.state != .stopping else { return }
                     self?.state = .errored(String(describing: error))
                 }
             }
