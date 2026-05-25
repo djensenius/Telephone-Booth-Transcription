@@ -4,7 +4,7 @@ import Security
 import Testing
 @testable import TranscriptionCore
 
-@Suite("KeychainTokenStore integration")
+@Suite(.serialized, "KeychainTokenStore integration")
 struct KeychainTokenStoreTests {
     /// Unique service per test run to avoid collisions.
     private static let testService = "dev.djensenius.tbt-test-\(UUID().uuidString)"
@@ -23,7 +23,25 @@ struct KeychainTokenStoreTests {
         SecItemDelete(query as CFDictionary)
     }
 
+    /// Returns true if the Keychain is available in this environment.
+    private func keychainAvailable() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "dev.djensenius.tbt-availability-probe",
+            kSecAttrAccount as String: "probe",
+            kSecValueData as String: Data("probe".utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status == errSecSuccess || status == errSecDuplicateItem {
+            SecItemDelete(query as CFDictionary)
+            return true
+        }
+        return false
+    }
+
     @Test func newItemUsesThisDeviceOnlyAccessibility() throws {
+        try #require(keychainAvailable(), "Keychain not available in this environment")
         defer { cleanup() }
         let store = makeStore()
         _ = try store.current()
@@ -44,6 +62,7 @@ struct KeychainTokenStoreTests {
     }
 
     @Test func migratesFromBroaderAccessibility() throws {
+        try #require(keychainAvailable(), "Keychain not available in this environment")
         defer { cleanup() }
 
         // Manually insert an item with the old (broader) accessibility
@@ -80,6 +99,7 @@ struct KeychainTokenStoreTests {
     }
 
     @Test func rotatePreservesCorrectAccessibility() throws {
+        try #require(keychainAvailable(), "Keychain not available in this environment")
         defer { cleanup() }
         let store = makeStore()
         _ = try store.current()

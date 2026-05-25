@@ -1,5 +1,6 @@
 #if canImport(Security)
 import Foundation
+import Logging
 import Security
 
 /// Stores the server's bearer token in the macOS login keychain.
@@ -15,6 +16,8 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
     private let lock = NSLock()
     private let service: String
     private let account: String
+
+    private let logger = Logger(label: "keychain-token-store")
 
     public init(
         service: String = KeychainTokenStore.defaultService,
@@ -82,10 +85,15 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
                 throw TokenStoreError.encodingFailed
             }
             // Migrate items stored with a broader accessibility level.
+            // Migration is best-effort; a failure still returns the token.
             let currentAccessibility = dict[kSecAttrAccessible as String] as? String
             let desired = Self.desiredAccessibility as String
             if currentAccessibility != desired {
-                try migrateAccessibility(token: str)
+                do {
+                    try migrateAccessibility(token: str)
+                } catch {
+                    logger.warning("Keychain accessibility migration failed, will retry next read: \(error)")
+                }
             }
             return str
         case errSecItemNotFound:
