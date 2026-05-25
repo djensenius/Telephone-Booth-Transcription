@@ -98,12 +98,8 @@ struct SettingsView: View {
                         }
                     ))
                     SecureField("API key (optional)", text: Binding(
-                        get: { proxyUpstream.apiKey ?? "" },
-                        set: { newValue in
-                            var cfg = proxyUpstream
-                            cfg.apiKey = newValue.isEmpty ? nil : newValue
-                            host.config.transcriptionBackend = .proxy(cfg)
-                        }
+                        get: { host.transcriptionAPIKey() },
+                        set: { newValue in host.setTranscriptionAPIKey(newValue) }
                     ))
                     if case .failure = proxyUpstream.validateSecurity() {
                         Label("HTTPS is required for remote upstreams with an API key. "
@@ -175,8 +171,8 @@ struct SettingsView: View {
                     set: { host.config.moderationUpstream.baseURL = $0 }
                 ))
                 SecureField("API key (optional)", text: Binding(
-                    get: { host.config.moderationUpstream.apiKey ?? "" },
-                    set: { host.config.moderationUpstream.apiKey = $0.isEmpty ? nil : $0 }
+                    get: { host.moderationAPIKey() },
+                    set: { newValue in host.setModerationAPIKey(newValue) }
                 ))
                 if case .failure = host.config.moderationUpstream.validateSecurity() {
                     Label("HTTPS is required for remote upstreams with an API key. "

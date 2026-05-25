@@ -46,7 +46,7 @@ final class ServerHost: ObservableObject {
 
     @Published private(set) var state: RunState = .stopped
     @Published var config: ServerConfig {
-        didSet { ConfigPersistence.save(config) }
+        didSet { ConfigPersistence.save(config, keyStore: apiKeyStore) }
     }
     @Published var preventSleep: Bool {
         didSet {
@@ -57,6 +57,7 @@ final class ServerHost: ObservableObject {
     @Published private(set) var sleepAssertionHeld: Bool = false
 
     let tokenStore: any TokenStore
+    let apiKeyStore: any APIKeyStoring
     let logStore: any RequestLogStoring
     private let powerAssertion = PowerAssertion()
     private let logger = Logger(label: "server-host")
@@ -68,13 +69,17 @@ final class ServerHost: ObservableObject {
     private var lifecycleGate: Task<Void, Never>?
 
     init() {
-        self.config = ConfigPersistence.load() ?? ServerConfig()
-        self.preventSleep = UserDefaults.standard.bool(forKey: "preventSleep")
         #if canImport(Security)
+        let keyStore = KeychainAPIKeyStore()
+        self.apiKeyStore = keyStore
         self.tokenStore = KeychainTokenStore()
         #else
+        let keyStore = InMemoryAPIKeyStore()
+        self.apiKeyStore = keyStore
         self.tokenStore = InMemoryTokenStore()
         #endif
+        self.config = ConfigPersistence.load(keyStore: keyStore) ?? ServerConfig()
+        self.preventSleep = UserDefaults.standard.bool(forKey: "preventSleep")
         do {
             self.logStore = try RequestLogStore()
         } catch {
@@ -230,6 +235,30 @@ final class ServerHost: ObservableObject {
         (try? tokenStore.current()) ?? ""
     }
 
+    /// Returns the transcription upstream API key from Keychain, or empty string.
+    func transcriptionAPIKey() -> String {
+        (try? apiKeyStore.read(account: APIKeyAccount.transcription)) ?? ""
+    }
+
+    /// Returns the moderation upstream API key from Keychain, or empty string.
+    func moderationAPIKey() -> String {
+        (try? apiKeyStore.read(account: APIKeyAccount.moderation)) ?? ""
+    }
+
+    /// Persists the transcription API key to Keychain and updates the in-memory config.
+    func setTranscriptionAPIKey(_ value: String) {
+        let key = value.isEmpty ? nil : value
+        if case .proxy(var up) = config.transcriptionBackend {
+            up.apiKey = key
+            config.transcriptionBackend = .proxy(up)
+        }
+    }
+
+    /// Persists the moderation API key to Keychain and updates the in-memory config.
+    func setModerationAPIKey(_ value: String) {
+        config.moderationUpstream.apiKey = value.isEmpty ? nil : value
+    }
+
     /// Fetches `/v1/models` from one of the user's configured upstreams (or
     /// from this server itself once it's running) so the UI can populate
     /// model pickers. Returns an empty list on any failure.
@@ -273,20 +302,65 @@ final class ServerHost: ObservableObject {
 }
 
 /// Persists `ServerConfig` to `UserDefaults` as JSON.
+///
+/// API keys are stored in the macOS Keychain (via `APIKeyStoring`), **not** in
+/// UserDefaults. A one-time migration moves any keys that were previously
+/// serialized in the DTO into Keychain.
 enum ConfigPersistence {
     private static let key = "serverConfig.v1"
 
-    static func save(_ config: ServerConfig) {
+    static func save(_ config: ServerConfig, keyStore: any APIKeyStoring) {
         let dto = ConfigDTO(config)
         if let data = try? JSONEncoder().encode(dto) {
             UserDefaults.standard.set(data, forKey: key)
         }
+        // Persist API keys in Keychain
+        if case .proxy(let up) = config.transcriptionBackend {
+            persistKey(up.apiKey, account: APIKeyAccount.transcription, store: keyStore)
+        } else {
+            persistKey(nil, account: APIKeyAccount.transcription, store: keyStore)
+        }
+        persistKey(config.moderationUpstream.apiKey, account: APIKeyAccount.moderation, store: keyStore)
     }
 
-    static func load() -> ServerConfig? {
+    static func load(keyStore: any APIKeyStoring) -> ServerConfig? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        guard let dto = try? JSONDecoder().decode(ConfigDTO.self, from: data) else { return nil }
-        return dto.asConfig.validated()
+        guard var dto = try? JSONDecoder().decode(ConfigDTO.self, from: data) else { return nil }
+
+        // One-time migration: move keys from DTO into Keychain
+        var migrated = false
+        if let tKey = dto.transcriptionKey, !tKey.isEmpty {
+            try? keyStore.write(account: APIKeyAccount.transcription, value: tKey)
+            dto.transcriptionKey = nil
+            migrated = true
+        }
+        if let mKey = dto.moderationKey, !mKey.isEmpty {
+            try? keyStore.write(account: APIKeyAccount.moderation, value: mKey)
+            dto.moderationKey = nil
+            migrated = true
+        }
+        if migrated, let cleaned = try? JSONEncoder().encode(dto) {
+            UserDefaults.standard.set(cleaned, forKey: key)
+        }
+
+        // Inject keys from Keychain into the config
+        var config = dto.asConfig
+        let transcriptionKey = try? keyStore.read(account: APIKeyAccount.transcription)
+        let moderationKey = try? keyStore.read(account: APIKeyAccount.moderation)
+        if case .proxy(var up) = config.transcriptionBackend {
+            up.apiKey = transcriptionKey
+            config.transcriptionBackend = .proxy(up)
+        }
+        config.moderationUpstream.apiKey = moderationKey
+        return config.validated()
+    }
+
+    private static func persistKey(_ value: String?, account: String, store: any APIKeyStoring) {
+        if let key = value, !key.isEmpty {
+            try? store.write(account: account, value: key)
+        } else {
+            try? store.delete(account: account)
+        }
     }
 
     private struct ConfigDTO: Codable {
@@ -294,8 +368,10 @@ enum ConfigPersistence {
         var bindPort: Int
         var transcriptionBackendKind: String       // "proxy" | "nativeMacOS" | "appleSpeechAnalyzer"
         var transcriptionBase: String
+        // Retained for migration decoding only — never written to new saves.
         var transcriptionKey: String?
         var moderationBase: String
+        // Retained for migration decoding only — never written to new saves.
         var moderationKey: String?
         var maxRequestBytes: Int
         var upstreamTimeoutSeconds: Double
@@ -314,18 +390,17 @@ enum ConfigPersistence {
             case .proxy(let up):
                 transcriptionBackendKind = "proxy"
                 transcriptionBase = up.baseURL
-                transcriptionKey = up.apiKey
             case .nativeMacOS:
                 transcriptionBackendKind = "nativeMacOS"
                 transcriptionBase = UpstreamConfig.defaultTranscription.baseURL
-                transcriptionKey = nil
             case .appleSpeechAnalyzer:
                 transcriptionBackendKind = "appleSpeechAnalyzer"
                 transcriptionBase = UpstreamConfig.defaultTranscription.baseURL
-                transcriptionKey = nil
             }
+            // Keys are never serialized to UserDefaults
+            transcriptionKey = nil
             moderationBase = c.moderationUpstream.baseURL
-            moderationKey = c.moderationUpstream.apiKey
+            moderationKey = nil
             maxRequestBytes = c.maxRequestBytes
             upstreamTimeoutSeconds = c.upstreamTimeout.seconds
             maxConcurrentRequests = c.maxConcurrentRequests
@@ -345,13 +420,13 @@ enum ConfigPersistence {
             case "appleSpeechAnalyzer":
                 backend = .appleSpeechAnalyzer
             default:
-                backend = .proxy(.init(baseURL: transcriptionBase, apiKey: transcriptionKey))
+                backend = .proxy(.init(baseURL: transcriptionBase, apiKey: nil))
             }
             return ServerConfig(
                 bindHost: bindHost,
                 bindPort: bindPort,
                 transcriptionBackend: backend,
-                moderationUpstream: .init(baseURL: moderationBase, apiKey: moderationKey),
+                moderationUpstream: .init(baseURL: moderationBase, apiKey: nil),
                 maxRequestBytes: maxRequestBytes,
                 upstreamTimeout: .seconds(upstreamTimeoutSeconds),
                 maxConcurrentRequests: maxConcurrentRequests,
