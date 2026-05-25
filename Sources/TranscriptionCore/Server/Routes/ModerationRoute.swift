@@ -43,7 +43,8 @@ public struct ModerationRoute<Context: RequestContext>: Sendable {
                 method: .POST,
                 pathSuffix: "/moderations",
                 contentType: request.headers[.contentType] ?? "application/json",
-                body: body
+                body: body,
+                maxResponseBytes: OpenAIUpstream.moderationMaxResponseBytes
             )
         } catch {
             proxyAttempt = nil
@@ -94,6 +95,12 @@ public struct ModerationRoute<Context: RequestContext>: Sendable {
         } catch ModerationClassifier.ClassifierError.extractedJSONInvalid(let why) {
             return Self.errorResponse(status: .badGateway, code: "classifier_invalid_json",
                                       message: "local classifier JSON invalid: \(why)")
+        } catch UpstreamError.responseTooLarge(let maxBytes) {
+            return Self.errorResponse(status: .badGateway, code: "upstream_response_too_large",
+                                      message: "upstream response exceeded \(maxBytes) byte limit")
+        } catch UpstreamError.deadlineExceeded {
+            return Self.errorResponse(status: .gatewayTimeout, code: "upstream_timeout",
+                                      message: "upstream response timed out")
         } catch {
             return Self.errorResponse(status: .badGateway, code: "classifier_error",
                                       message: "local classifier error: \(error)")

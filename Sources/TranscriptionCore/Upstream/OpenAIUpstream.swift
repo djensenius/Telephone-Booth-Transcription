@@ -33,6 +33,15 @@ public final class OpenAIUpstream: Sendable {
         self.logger = logger
     }
 
+    // MARK: - Endpoint-specific body caps
+
+    /// Default cap for transcription responses (SRT/VTT/JSON — typically small).
+    public static let transcriptionMaxResponseBytes = 10 * 1024 * 1024  // 10 MB
+    /// Default cap for moderation/chat JSON responses.
+    public static let moderationMaxResponseBytes = 1 * 1024 * 1024      // 1 MB
+    /// Default cap for model-listing responses.
+    public static let modelsMaxResponseBytes = 256 * 1024               // 256 KB
+
     /// Proxies a request to `<upstream.baseURL>/<pathSuffix>`.
     /// - Parameters:
     ///   - upstream: target upstream config.
@@ -41,13 +50,16 @@ public final class OpenAIUpstream: Sendable {
     ///   - contentType: forwarded `Content-Type` header (preserves multipart boundary).
     ///   - body: raw request body to forward verbatim.
     ///   - extraHeaders: additional headers to attach (e.g. `Accept`).
+    ///   - maxResponseBytes: maximum response body size to collect before
+    ///     throwing `UpstreamError.responseTooLarge`. Defaults to 10 MB.
     public func proxy(
         upstream: UpstreamConfig,
         method: HTTPMethod,
         pathSuffix: String,
         contentType: String?,
         body: ByteBuffer?,
-        extraHeaders: [(String, String)] = []
+        extraHeaders: [(String, String)] = [],
+        maxResponseBytes: Int = transcriptionMaxResponseBytes
     ) async throws -> ProxyResult {
         let url = joinURL(base: upstream.baseURL, path: pathSuffix)
         var request = HTTPClientRequest(url: url)
@@ -66,11 +78,21 @@ public final class OpenAIUpstream: Sendable {
         }
 
         let deadline = NIODeadline.now() + .nanoseconds(timeout.asNanoseconds)
-        let response = try await httpClient.execute(request, deadline: deadline)
+        let response: HTTPClientResponse
+        do {
+            response = try await httpClient.execute(request, deadline: deadline)
+        } catch let error as HTTPClientError where error == .deadlineExceeded {
+            throw UpstreamError.deadlineExceeded
+        }
 
-        // Collect the response body. We cap at 256 MB to bound memory; the
-        // moderation/transcription responses we expect are well under this.
-        let buffer = try await response.body.collect(upTo: 256 * 1024 * 1024)
+        let buffer: ByteBuffer
+        do {
+            buffer = try await response.body.collect(upTo: maxResponseBytes)
+        } catch is NIOTooManyBytesError {
+            throw UpstreamError.responseTooLarge(maxBytes: maxResponseBytes)
+        } catch let error as HTTPClientError where error == .deadlineExceeded {
+            throw UpstreamError.deadlineExceeded
+        }
         let headers: [(String, String)] = response.headers.map { ($0.name, $0.value) }
         return ProxyResult(
             status: Int(response.status.code),

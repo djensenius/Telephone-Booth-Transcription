@@ -11,6 +11,7 @@
 		1483338277245BE2BB02514A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6210AE9282C77F3A1B460D7 /* SettingsView.swift */; };
 		20064C1E3EE6440E2B9C4B7A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE434919A1E3F53ECD075137 /* AppDelegate.swift */; };
 		20B13A0E53299A203F188D96 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
+		27AD87406A5096156C9071A9 /* UpstreamError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B30141AD55720B8046CEC7 /* UpstreamError.swift */; };
 		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
 		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
 		31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
@@ -94,6 +95,7 @@
 		9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServer.swift; sourceTree = "<group>"; };
 		AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogView.swift; sourceTree = "<group>"; };
 		AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrencyLimitMiddleware.swift; sourceTree = "<group>"; };
+		B5B30141AD55720B8046CEC7 /* UpstreamError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpstreamError.swift; sourceTree = "<group>"; };
 		C6210AE9282C77F3A1B460D7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 		CB96230C24FF2DCCC9CF7753 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */,
 				07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */,
 				0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */,
+				B5B30141AD55720B8046CEC7 /* UpstreamError.swift */,
 			);
 			path = Upstream;
 			sourceTree = "<group>";
@@ -401,6 +404,7 @@
 				F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */,
 				BB3712EE81939BF730AA2D1E /* TranscriptionRoute.swift in Sources */,
 				A0549FECC22FFA3C3C214DF7 /* TranscriptionServer.swift in Sources */,
+				27AD87406A5096156C9071A9 /* UpstreamError.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
