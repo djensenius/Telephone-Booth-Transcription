@@ -33,7 +33,9 @@ public struct SpeechAnalyzerBackend: TranscriptionBackendImpl {
         let ext = AudioExtension.from(mimeType: part.mimeType) ?? "wav"
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("transcription-\(UUID().uuidString).\(ext)")
-        try part.data.write(to: tmp)
+        var buf = part.data
+        let fileData = buf.readData(length: buf.readableBytes) ?? Data()
+        try fileData.write(to: tmp)
         defer { try? FileManager.default.removeItem(at: tmp) }
 
         guard SpeechTranscriber.isAvailable else {
