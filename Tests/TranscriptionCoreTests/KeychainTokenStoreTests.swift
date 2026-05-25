@@ -4,7 +4,7 @@ import Security
 import Testing
 @testable import TranscriptionCore
 
-@Suite(.serialized, "KeychainTokenStore integration")
+@Suite("KeychainTokenStore integration", .serialized)
 struct KeychainTokenStoreTests {
     /// Unique service per test run to avoid collisions.
     private static let testService = "dev.djensenius.tbt-test-\(UUID().uuidString)"
