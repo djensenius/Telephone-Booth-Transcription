@@ -47,6 +47,67 @@ public struct ServerConfig: Sendable, Equatable {
     /// BCP-47 locale used by the native macOS transcriber (e.g. "en-US").
     public var nativeTranscriptionLocale: String
 
+    // MARK: - Validation constants
+
+    public static let portRange = 1...65535
+    public static let defaultPort = 8089
+    public static let maxRequestBytesRange = (1 * 1024 * 1024)...(500 * 1024 * 1024)
+    public static let defaultMaxRequestBytes = 100 * 1024 * 1024
+    public static let upstreamTimeoutRange = 1.0...600.0
+    public static let defaultUpstreamTimeout: Double = 300
+    public static let maxConcurrentRequestsRange = 0...256
+    public static let defaultMaxConcurrentRequests = 8
+
+    /// Returns a copy with all fields clamped to safe ranges.
+    /// Invalid strings fall back to their respective defaults.
+    public func validated() -> ServerConfig {
+        var copy = self
+
+        // Port
+        if !Self.portRange.contains(copy.bindPort) {
+            copy.bindPort = Self.defaultPort
+        }
+
+        // Bind host
+        let trimmedHost = copy.bindHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedHost.isEmpty {
+            copy.bindHost = "127.0.0.1"
+        } else {
+            copy.bindHost = trimmedHost
+        }
+
+        // Body limit
+        copy.maxRequestBytes = copy.maxRequestBytes.clamped(to: Self.maxRequestBytesRange)
+
+        // Timeout
+        copy.upstreamTimeout = .seconds(
+            copy.upstreamTimeout.seconds.clamped(to: Self.upstreamTimeoutRange)
+        )
+
+        // Concurrency
+        copy.maxConcurrentRequests = copy.maxConcurrentRequests.clamped(to: Self.maxConcurrentRequestsRange)
+
+        // Moderation model
+        if copy.moderationModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            copy.moderationModel = "omni-moderation-latest"
+        }
+
+        // Native locale
+        if copy.nativeTranscriptionLocale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            copy.nativeTranscriptionLocale = "en-US"
+        }
+
+        // Upstream URLs
+        copy.moderationUpstream = copy.moderationUpstream.validatedOrDefault(.defaultModeration)
+        if case .proxy(let upstream) = copy.transcriptionBackend {
+            copy.transcriptionBackend = .proxy(
+                upstream.validatedOrDefault(.defaultTranscription)
+            )
+        }
+
+        return copy
+    }
+
     public init(
         bindHost: String = "127.0.0.1",
         bindPort: Int = 8089,
@@ -120,6 +181,15 @@ public struct UpstreamConfig: Sendable, Equatable {
     public static let defaultModeration = UpstreamConfig(
         baseURL: "http://127.0.0.1:1234/v1"
     )
+
+    /// Returns self if baseURL is non-empty and parseable, otherwise `fallback`.
+    public func validatedOrDefault(_ fallback: UpstreamConfig) -> UpstreamConfig {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, URL(string: trimmed) != nil else {
+            return fallback
+        }
+        return UpstreamConfig(baseURL: trimmed, apiKey: apiKey)
+    }
 }
 
 /// Small Sendable wrapper around a TimeInterval-in-seconds.
@@ -128,4 +198,10 @@ public struct TimeAmount: Sendable, Equatable {
     public init(seconds: Double) { self.seconds = seconds }
     public static func seconds(_ s: Double) -> TimeAmount { .init(seconds: s) }
     public var asNanoseconds: Int64 { Int64(seconds * 1_000_000_000) }
+}
+
+extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
+    }
 }

@@ -188,7 +188,7 @@ enum ConfigPersistence {
     static func load() -> ServerConfig? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         guard let dto = try? JSONDecoder().decode(ConfigDTO.self, from: data) else { return nil }
-        return dto.asConfig
+        return dto.asConfig.validated()
     }
 
     private struct ConfigDTO: Codable {
