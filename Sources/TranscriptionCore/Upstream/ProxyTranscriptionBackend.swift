@@ -81,14 +81,32 @@ public enum MultipartHelpers {
     /// Returns a new buffer with a `model` part inserted just before the
     /// closing `--boundary--` delimiter. Returns nil if the closing delimiter
     /// can't be located (in which case the caller forwards the body unchanged).
+    ///
+    /// Operates on raw bytes so binary audio payloads are never decoded as text.
     public static func injectModelPart(body: ByteBuffer, boundary: String, model: String) -> ByteBuffer? {
-        let close = "--\(boundary)--"
-        let bytes = body.getBytes(at: body.readerIndex, length: body.readableBytes) ?? []
-        guard let bodyStr = String(data: Data(bytes), encoding: .utf8) else { return nil }
-        guard let closeRange = bodyStr.range(of: close) else { return nil }
-        let part = "--\(boundary)\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n\(model)\r\n"
-        let new = bodyStr.replacingCharacters(in: closeRange.lowerBound..<closeRange.lowerBound, with: part)
-        guard let data = new.data(using: .utf8) else { return nil }
-        return ByteBuffer(bytes: Array(data))
+        let closeMarker = Array("--\(boundary)--".utf8)
+        let bodyBytes = body.getBytes(at: body.readerIndex, length: body.readableBytes) ?? []
+        guard let closeIndex = findSubsequence(closeMarker, in: bodyBytes) else { return nil }
+
+        let part = Array("--\(boundary)\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n\(model)\r\n".utf8)
+
+        var result = ByteBuffer()
+        result.reserveCapacity(bodyBytes.count + part.count)
+        result.writeBytes(bodyBytes[..<closeIndex])
+        result.writeBytes(part)
+        result.writeBytes(bodyBytes[closeIndex...])
+        return result
+    }
+
+    /// Finds the first occurrence of `needle` in `haystack`, returning the start index.
+    private static func findSubsequence(_ needle: [UInt8], in haystack: [UInt8]) -> Int? {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return nil }
+        let end = haystack.count - needle.count
+        for i in 0...end {
+            if haystack[i..<(i + needle.count)].elementsEqual(needle) {
+                return i
+            }
+        }
+        return nil
     }
 }
