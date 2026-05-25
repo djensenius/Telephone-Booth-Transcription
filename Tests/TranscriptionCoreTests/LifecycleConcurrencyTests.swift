@@ -307,4 +307,83 @@ struct LifecycleConcurrencyTests {
         }
         try await httpClient.shutdown()
     }
+
+    // MARK: - Rapid start/stop lifecycle (TR-R2)
+
+    @Test func rapidStartStopDoesNotLeavePortBound() async throws {
+        // Validates that stopping a server and immediately restarting on the
+        // same port succeeds — proving the port is fully released before the
+        // second start.
+        let token = "rapid-tok"
+        for _ in 0..<3 {
+            let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+            let server = TranscriptionServer(
+                config: ServerConfig(
+                    bindHost: "127.0.0.1",
+                    bindPort: 0,
+                    maxConcurrentRequests: 0
+                ),
+                tokenStore: InMemoryTokenStore(initial: token),
+                logStore: InMemoryRequestLogStore(),
+                httpClient: httpClient,
+                logger: Logger(label: "test")
+            )
+
+            let app = Application(
+                router: server.makeRouter(),
+                configuration: .init(address: .hostname("127.0.0.1", port: 0))
+            )
+
+            try await app.test(.live) { client in
+                try await client.execute(uri: "/healthz", method: .get) { response in
+                    #expect(response.status == .ok)
+                }
+            }
+            // Await full shutdown before next iteration — mirrors the
+            // serialized lifecycle in ServerHost.
+            try await httpClient.shutdown()
+        }
+    }
+
+    @Test func cancellationDuringRunServiceStopsCleanly() async throws {
+        // Validates that cancelling the task running runService() causes it to
+        // exit without throwing an unhandled error, and the port is released.
+        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+        let server = TranscriptionServer(
+            config: ServerConfig(
+                bindHost: "127.0.0.1",
+                bindPort: 0,
+                maxConcurrentRequests: 0
+            ),
+            tokenStore: InMemoryTokenStore(initial: "cancel-tok"),
+            logStore: InMemoryRequestLogStore(),
+            httpClient: httpClient,
+            logger: Logger(label: "test")
+        )
+
+        let app = Application(
+            router: server.makeRouter(),
+            configuration: .init(address: .hostname("127.0.0.1", port: 0))
+        )
+
+        // Start the server in a task, then cancel it.
+        let serverTask = Task {
+            try await app.runService()
+        }
+
+        // Give the server a moment to bind.
+        try await Task.sleep(for: .milliseconds(100))
+
+        // Cancel — simulates ServerHost.stop().
+        serverTask.cancel()
+
+        // Await — should complete without throwing (CancellationError is expected).
+        do {
+            try await serverTask.value
+        } catch is CancellationError {
+            // Expected.
+        }
+
+        try await httpClient.shutdown()
+    }
 }

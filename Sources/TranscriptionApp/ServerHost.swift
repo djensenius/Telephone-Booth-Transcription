@@ -8,6 +8,10 @@ import TranscriptionCore
 
 /// Owns the lifecycle of the embedded HTTP server, the power assertion, and
 /// the shared `HTTPClient`. All UI mutations go through this actor.
+///
+/// Lifecycle transitions are serialized: each call to `start()` or `stop()`
+/// awaits any in-flight transition before proceeding, preventing races when the
+/// user taps Start/Stop rapidly or the app is exiting.
 @MainActor
 final class ServerHost: ObservableObject {
     enum RunState: Equatable {
@@ -31,6 +35,13 @@ final class ServerHost: ObservableObject {
             if case .running = self { return true }
             return false
         }
+
+        var isActive: Bool {
+            switch self {
+            case .starting, .running: return true
+            default: return false
+            }
+        }
     }
 
     @Published private(set) var state: RunState = .stopped
@@ -53,6 +64,9 @@ final class ServerHost: ObservableObject {
     private var httpClient: HTTPClient?
     private var serverTask: Task<Void, Never>?
 
+    /// Serialization gate: each lifecycle operation awaits the previous one.
+    private var lifecycleGate: Task<Void, Never>?
+
     init() {
         self.config = ConfigPersistence.load() ?? ServerConfig()
         self.preventSleep = UserDefaults.standard.bool(forKey: "preventSleep")
@@ -69,9 +83,13 @@ final class ServerHost: ObservableObject {
         }
     }
 
-    func start() {
+    func start() async {
+        // Wait for any prior lifecycle transition to complete.
+        await lifecycleGate?.value
+
         guard case .stopped = state else { return }
         state = .starting
+
         let cfg = config
         let tokenStore = self.tokenStore
         let logStore = self.logStore
@@ -80,7 +98,7 @@ final class ServerHost: ObservableObject {
         let client = HTTPClient(eventLoopGroupProvider: .singleton)
         self.httpClient = client
 
-        serverTask = Task.detached { [weak self] in
+        let task = Task<Void, Never> { [weak self] in
             let server = TranscriptionServer(
                 config: cfg,
                 tokenStore: tokenStore,
@@ -89,35 +107,64 @@ final class ServerHost: ObservableObject {
                 logger: logger
             )
             let app = server.makeApplication()
+
+            // Check for early cancellation before entering runService.
+            guard !Task.isCancelled else {
+                await MainActor.run {
+                    guard let self else { return }
+                    self.state = .stopped
+                    self.applyPowerAssertion()
+                }
+                return
+            }
+
             await MainActor.run {
                 self?.state = .running(host: cfg.bindHost, port: cfg.bindPort)
                 self?.applyPowerAssertion()
             }
+
             do {
                 try await app.runService()
+            } catch is CancellationError {
+                // Expected on stop — not an error.
             } catch {
                 await MainActor.run {
                     self?.state = .errored(String(describing: error))
                 }
             }
-            await MainActor.run {
-                self?.state = .stopped
-                self?.applyPowerAssertion()
-            }
         }
+        self.serverTask = task
+
+        // The lifecycle gate for this start includes the server running.
+        // stop() will cancel the task and await it.
+        lifecycleGate = task
     }
 
-    func stop() {
-        guard state.isRunning else { return }
+    func stop() async {
+        // Wait for any prior lifecycle transition to complete.
+        await lifecycleGate?.value
+
+        guard state.isActive else { return }
         state = .stopping
+
+        // Cancel the server task (triggers CancellationError in runService).
         serverTask?.cancel()
+
+        // Await the server task so runService() fully winds down.
+        await serverTask?.value
         serverTask = nil
+
+        // Shut down the HTTP client after the server is done using it.
         if let client = httpClient {
-            Task.detached { try? await client.shutdown() }
+            try? await client.shutdown()
         }
         httpClient = nil
+
         state = .stopped
         applyPowerAssertion()
+
+        // Update the gate so the next start() can proceed immediately.
+        lifecycleGate = nil
     }
 
     func rotateToken() {
