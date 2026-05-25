@@ -61,6 +61,12 @@ public final class OpenAIUpstream: Sendable {
         extraHeaders: [(String, String)] = [],
         maxResponseBytes: Int = transcriptionMaxResponseBytes
     ) async throws -> ProxyResult {
+        // Defence-in-depth: refuse to send an API key over an insecure remote connection.
+        if case .failure = upstream.validateSecurity() {
+            let url = joinURL(base: upstream.baseURL, path: pathSuffix)
+            throw UpstreamError.insecureUpstream(url: url)
+        }
+
         let url = joinURL(base: upstream.baseURL, path: pathSuffix)
         var request = HTTPClientRequest(url: url)
         request.method = method
