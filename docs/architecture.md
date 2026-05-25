@@ -142,11 +142,22 @@ The `ServerConfig.validated()` method enforces this: any non-loopback
 "Allow non-loopback bind (insecure without TLS)" to persist a non-loopback
 address.
 
+### Serving a remote operator Mac
+
+The supported direct-LAN setup for a Telephone-Booth Operator running on a
+different Mac is to persist both a network-reachable `bindHost` and
+`nonLoopbackBindAcknowledged=true`. After `ServerConfig.validated()`, the
+default bind is `127.0.0.1`; without that acknowledgement, any non-loopback
+`bindHost` silently reverts to loopback and the remote operator cannot connect.
+
+This direct bind is plain HTTP, so use it only on a trusted network. If the
+operator traffic crosses an untrusted network, keep the app bound to loopback
+and put a TLS-terminating proxy in front.
+
 ### Deploying with remote clients (TLS reverse proxy)
 
-If the server must accept connections from other machines (e.g. the
-Telephone-Booth Rust client on the same LAN), place a TLS-terminating
-reverse proxy in front:
+If the server must accept connections from other machines through a protected
+endpoint, place a TLS-terminating reverse proxy in front:
 
 ```text
 [Remote client] ──TLS──► [nginx / Caddy / stunnel] ──HTTP──► localhost:8089

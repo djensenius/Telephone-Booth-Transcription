@@ -13,6 +13,13 @@ lives in the macOS login Keychain under
 - duplicate `Authorization` headers (`code: "multiple_authorization_headers"`)
 - token mismatch (`code: "bad_token"`)
 
+The validated server config binds to `127.0.0.1` by default. To serve a
+Telephone-Booth Operator running on another Mac, persist a non-loopback
+`bindHost` and set `nonLoopbackBindAcknowledged=true`; otherwise validation
+silently reverts the bind to loopback. See
+[`architecture.md`](./architecture.md#serving-a-remote-operator-mac) for the
+networking trade-offs.
+
 `503 Service Unavailable` is returned when the server has reached its configured
 maximum concurrent request limit (`maxConcurrentRequests` in Settings, default
 8). The response uses the standard error envelope:
