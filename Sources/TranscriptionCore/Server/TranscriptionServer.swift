@@ -60,6 +60,12 @@ public struct TranscriptionServer: Sendable {
 
         router.add(middleware: RequestLogMiddleware(store: logStore, logger: logger))
         router.add(middleware: AuthMiddleware(tokenStore: tokenStore, logger: logger))
+        if config.maxConcurrentRequests > 0 {
+            router.add(middleware: ConcurrencyLimitMiddleware<BasicRequestContext>(
+                maxConcurrent: config.maxConcurrentRequests,
+                logger: logger
+            ))
+        }
 
         let backendImpl: any TranscriptionBackendImpl
         switch config.transcriptionBackend {

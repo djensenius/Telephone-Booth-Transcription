@@ -13,14 +13,13 @@ struct TranscriptionServerTests {
     @Test func healthEndpointIsUnauthenticated() async throws {
         let tokenStore = InMemoryTokenStore()
         let logStore = InMemoryRequestLogStore()
-        let client = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { Task.detached { try? await client.shutdown() } }
+        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
 
         let server = TranscriptionServer(
             config: ServerConfig(),
             tokenStore: tokenStore,
             logStore: logStore,
-            httpClient: client,
+            httpClient: httpClient,
             logger: Logger(label: "test")
         )
 
@@ -33,13 +32,13 @@ struct TranscriptionServerTests {
                 #expect(response.status == .ok)
             }
         }
+        try await httpClient.shutdown()
     }
 
     @Test func protectedRouteRejectsMissingToken() async throws {
         let tokenStore = InMemoryTokenStore()
         let logStore = InMemoryRequestLogStore()
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { Task.detached { try? await httpClient.shutdown() } }
 
         let server = TranscriptionServer(
             config: ServerConfig(),
@@ -58,13 +57,13 @@ struct TranscriptionServerTests {
                 #expect(response.status == .unauthorized)
             }
         }
+        try await httpClient.shutdown()
     }
 
     @Test func protectedRouteRejectsBadToken() async throws {
         let tokenStore = InMemoryTokenStore(initial: "real-token")
         let logStore = InMemoryRequestLogStore()
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { Task.detached { try? await httpClient.shutdown() } }
 
         let server = TranscriptionServer(
             config: ServerConfig(),
@@ -84,6 +83,7 @@ struct TranscriptionServerTests {
                 #expect(response.status == .unauthorized)
             }
         }
+        try await httpClient.shutdown()
     }
 
     @Test func protectedRouteAcceptsValidToken() async throws {
@@ -91,7 +91,6 @@ struct TranscriptionServerTests {
         let tokenStore = InMemoryTokenStore(initial: token)
         let logStore = InMemoryRequestLogStore()
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { Task.detached { try? await httpClient.shutdown() } }
 
         let server = TranscriptionServer(
             config: ServerConfig(),
@@ -111,5 +110,6 @@ struct TranscriptionServerTests {
                 #expect(response.status == .ok)
             }
         }
+        try await httpClient.shutdown()
     }
 }
