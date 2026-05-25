@@ -66,7 +66,8 @@ public struct ModelsRoute<Context: RequestContext>: Sendable {
                 method: .GET,
                 pathSuffix: "/models",
                 contentType: nil,
-                body: nil
+                body: nil,
+                maxResponseBytes: OpenAIUpstream.modelsMaxResponseBytes
             )
             guard (200..<300).contains(res.status) else { return [] }
             let bytes = res.body.getBytes(at: res.body.readerIndex, length: res.body.readableBytes) ?? []

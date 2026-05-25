@@ -174,7 +174,13 @@ public final class ModerationClassifier: Sendable {
         guard response.status.code == 200 else {
             throw ClassifierError.upstreamHTTP(Int(response.status.code))
         }
-        let buffer = try await response.body.collect(upTo: 4 * 1024 * 1024)
+        let maxResponseBytes = OpenAIUpstream.moderationMaxResponseBytes
+        let buffer: ByteBuffer
+        do {
+            buffer = try await response.body.collect(upTo: maxResponseBytes)
+        } catch is NIOTooManyBytesError {
+            throw UpstreamError.responseTooLarge(maxBytes: maxResponseBytes)
+        }
         let bodyBytes = buffer.getBytes(at: buffer.readerIndex, length: buffer.readableBytes) ?? []
         let bodyData2 = Data(bodyBytes)
 
