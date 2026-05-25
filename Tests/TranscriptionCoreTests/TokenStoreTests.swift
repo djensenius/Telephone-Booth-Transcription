@@ -58,4 +58,37 @@ struct TokenStoreTests {
     @Test func constantTimeEqualsFalseWhenDifferentLength() {
         #expect(!constantTimeEquals("abc", "abcd"))
     }
+
+    @Test func concurrentFirstAccessReturnsSameToken() async throws {
+        let store = InMemoryTokenStore()
+        let results = try await withThrowingTaskGroup(of: String.self) { group in
+            for _ in 0..<100 {
+                group.addTask { try store.current() }
+            }
+            var tokens: [String] = []
+            for try await token in group {
+                tokens.append(token)
+            }
+            return tokens
+        }
+        let first = results[0]
+        for token in results {
+            #expect(token == first, "All concurrent callers must observe the same token")
+        }
+    }
+
+    @Test func concurrentRotateAndCurrentDoNotCrash() async throws {
+        let store = InMemoryTokenStore()
+        _ = try store.current()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<50 {
+                group.addTask { _ = try store.current() }
+                group.addTask { _ = try store.rotate(to: nil) }
+            }
+            try await group.waitForAll()
+        }
+        // After all rotations, current() must still return a valid token
+        let final_ = try store.current()
+        #expect(final_.count >= 32)
+    }
 }

@@ -8,10 +8,11 @@ import Security
 /// service identifier ("dev.djensenius.telephone-booth-transcription") and the
 /// account "server-token". The Keychain ACL inherits the app's code-signing
 /// identity so other apps can't read the item.
-public final class KeychainTokenStore: TokenStore {
+public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
     public static let defaultService = "dev.djensenius.telephone-booth-transcription"
     public static let defaultAccount = "server-token"
 
+    private let lock = NSLock()
     private let service: String
     private let account: String
 
@@ -24,24 +25,35 @@ public final class KeychainTokenStore: TokenStore {
     }
 
     public func current() throws -> String {
-        if let existing = try read() {
-            return existing
-        }
-        let fresh = Self.generateToken()
-        try write(fresh)
-        return fresh
+        lock.lock(); defer { lock.unlock() }
+        return try _currentUnlocked()
     }
 
     @discardableResult
     public func rotate(to newToken: String?) throws -> String {
+        lock.lock(); defer { lock.unlock() }
         let token = newToken ?? Self.generateToken()
         try write(token)
         return token
     }
 
     public func verify(_ presented: String) throws -> Bool {
-        let stored = try current()
+        lock.lock(); defer { lock.unlock() }
+        let stored = try _currentUnlocked()
         return constantTimeEquals(stored, presented)
+    }
+
+    // MARK: - Internal helpers
+
+    /// Returns the current token, creating one if necessary.
+    /// Caller must already hold `lock`.
+    private func _currentUnlocked() throws -> String {
+        if let existing = try read() {
+            return existing
+        }
+        let fresh = Self.generateToken()
+        try write(fresh)
+        return fresh
     }
 
     // MARK: - Keychain primitives
