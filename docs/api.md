@@ -13,6 +13,23 @@ lives in the macOS login Keychain under
 - duplicate `Authorization` headers (`code: "multiple_authorization_headers"`)
 - token mismatch (`code: "bad_token"`)
 
+`503 Service Unavailable` is returned when the server has reached its configured
+maximum concurrent request limit (`maxConcurrentRequests` in Settings, default
+8). The response uses the standard error envelope:
+
+```json
+{
+  "error": {
+    "type": "server_error",
+    "code": "overloaded",
+    "message": "server is at maximum capacity, please retry later"
+  }
+}
+```
+
+Clients should back off and retry. `/healthz` is never subject to the
+concurrency limit -- it always responds even when the server is at capacity.
+
 ## `GET /healthz`
 
 Unauthenticated liveness probe.

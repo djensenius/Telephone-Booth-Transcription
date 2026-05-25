@@ -111,58 +111,52 @@ struct LifecycleConcurrencyTests {
     // MARK: Concurrency limiting
 
     @Test func concurrencyLimitRejectsExcessRequests() async throws {
-        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        let token = "conc-test-token"
-        let logStore = InMemoryRequestLogStore()
+        // Deterministic test: use a signal so the slow handler notifies us
+        // it has acquired the semaphore before we fire the second request.
+        // Uses .router test mode to allow true concurrent request processing
+        // (unlike .live which uses a single HTTP connection).
+        let enteredSignal = AsyncStream<Void>.makeStream()
 
-        // Config with max 2 concurrent requests; use a slow backend
-        let config = ServerConfig(
-            maxConcurrentRequests: 2
-        )
-        let server = TranscriptionServer(
-            config: config,
-            tokenStore: InMemoryTokenStore(initial: token),
-            logStore: logStore,
-            httpClient: httpClient,
-            logger: Logger(label: "test")
-        )
+        let router = Router(context: BasicRequestContext.self)
+        router.add(middleware: ConcurrencyLimitMiddleware<BasicRequestContext>(
+            maxConcurrent: 1,
+            excludedPaths: ["/healthz"]
+        ))
+        router.get("/slow") { _, _ in
+            enteredSignal.continuation.yield()
+            try await Task.sleep(for: .milliseconds(500))
+            return Response(status: .ok)
+        }
 
-        let router = server.makeRouter()
         let app = Application(
             router: router,
             configuration: .init(address: .hostname("127.0.0.1", port: 0))
         )
 
-        try await app.test(.live) { client in
-            // Fire 4 concurrent requests to /v1/requests (which is fast)
-            // The concurrency limit is 2, so at least some should get 503
-            let results = await withTaskGroup(of: HTTPResponse.Status.self) { group in
-                for _ in 0..<4 {
-                    group.addTask {
-                        var headers = HTTPFields()
-                        headers[.authorization] = "Bearer \(token)"
-                        var status: HTTPResponse.Status = .internalServerError
-                        // Small delay between request initiation to ensure overlap
-                        try? await Task.sleep(for: .milliseconds(5))
-                        try? await client.execute(uri: "/v1/requests", method: .get, headers: headers) { response in
-                            status = response.status
-                        }
-                        return status
-                    }
+        try await app.test(.router) { client in
+            // Fire a request that will hold the single concurrency slot
+            async let slowResult: HTTPResponse.Status = {
+                var status: HTTPResponse.Status = .internalServerError
+                try await client.execute(uri: "/slow", method: .get) { response in
+                    status = response.status
                 }
-                var statuses: [HTTPResponse.Status] = []
-                for await s in group { statuses.append(s) }
-                return statuses
+                return status
+            }()
+
+            // Wait for the handler to signal it's inside (holding the permit)
+            var iterator = enteredSignal.stream.makeAsyncIterator()
+            _ = await iterator.next()
+
+            // Second request must be rejected — slot is full
+            try await client.execute(uri: "/slow", method: .get) { response in
+                #expect(response.status == .serviceUnavailable,
+                        "over-limit request must receive 503")
             }
 
-            let okCount = results.filter { $0 == .ok }.count
-            let unavailableCount = results.filter { $0 == .serviceUnavailable }.count
-            // With maxConcurrent=2, we expect some 503s when requests overlap
-            // But since /v1/requests is very fast, all 4 may succeed sequentially.
-            // The important thing: total responses = 4, and any 503s use the right status.
-            #expect(okCount + unavailableCount == 4)
+            // Original request completes successfully
+            let finalStatus = try await slowResult
+            #expect(finalStatus == .ok)
         }
-        try await httpClient.shutdown()
     }
 
     @Test func concurrencyLimitSemaphoreBasicBehavior() async throws {
@@ -330,6 +324,9 @@ struct LifecycleConcurrencyTests {
         // semaphore slot for a controlled duration. With maxConcurrent=1 and
         // excludedPaths=["/healthz"], /healthz must still return 200 while
         // the single permit is occupied.
+        // Uses .router test mode for true concurrent request processing.
+        let enteredSignal = AsyncStream<Void>.makeStream()
+
         let router = Router(context: BasicRequestContext.self)
         router.add(middleware: ConcurrencyLimitMiddleware<BasicRequestContext>(
             maxConcurrent: 1,
@@ -337,6 +334,7 @@ struct LifecycleConcurrencyTests {
         ))
         router.get("/healthz") { _, _ in Response(status: .ok) }
         router.get("/slow") { _, _ in
+            enteredSignal.continuation.yield()
             try await Task.sleep(for: .milliseconds(500))
             return Response(status: .ok)
         }
@@ -346,7 +344,7 @@ struct LifecycleConcurrencyTests {
             configuration: .init(address: .hostname("127.0.0.1", port: 0))
         )
 
-        try await app.test(.live) { client in
+        try await app.test(.router) { client in
             // Fire a slow request to occupy the single concurrency slot
             async let slowResult: HTTPResponse.Status = {
                 var status: HTTPResponse.Status = .internalServerError
@@ -356,8 +354,9 @@ struct LifecycleConcurrencyTests {
                 return status
             }()
 
-            // Give the slow request time to acquire the permit
-            try await Task.sleep(for: .milliseconds(50))
+            // Wait for the handler to signal it's inside (holding the permit)
+            var iterator = enteredSignal.stream.makeAsyncIterator()
+            _ = await iterator.next()
 
             // /healthz must succeed even though the slot is occupied
             try await client.execute(uri: "/healthz", method: .get) { response in
