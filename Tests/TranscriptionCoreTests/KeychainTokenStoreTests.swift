@@ -4,46 +4,46 @@ import Security
 import Testing
 @testable import TranscriptionCore
 
-@Suite("KeychainTokenStore integration", .serialized, .enabled(if: KeychainTokenStoreTests.keychainAvailable))
+/// Returns true if the Keychain is fully available in this environment
+/// (supports add, attribute retrieval, and delete).
+private let isKeychainAvailable: Bool = {
+    let probeService = "dev.djensenius.tbt-availability-probe"
+    let probeAccount = "probe"
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: probeService,
+        kSecAttrAccount as String: probeAccount,
+        kSecValueData as String: Data("probe".utf8),
+        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    ]
+    SecItemDelete(query as CFDictionary)
+
+    let addStatus = SecItemAdd(query as CFDictionary, nil)
+    guard addStatus == errSecSuccess else { return false }
+    defer { SecItemDelete(query as CFDictionary) }
+
+    var readQuery: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: probeService,
+        kSecAttrAccount as String: probeAccount,
+        kSecReturnAttributes as String: true,
+        kSecMatchLimit as String: kSecMatchLimitOne
+    ]
+    var item: CFTypeRef?
+    let readStatus = SecItemCopyMatching(readQuery as CFDictionary, &item)
+    guard readStatus == errSecSuccess,
+          let dict = item as? [String: Any],
+          dict[kSecAttrAccessible as String] as? String != nil else {
+        return false
+    }
+    return true
+}()
+
+@Suite("KeychainTokenStore integration", .serialized, .enabled(if: isKeychainAvailable))
 struct KeychainTokenStoreTests {
     /// Unique service per test run to avoid collisions.
     private static let testService = "dev.djensenius.tbt-test-\(UUID().uuidString)"
     private static let testAccount = "test-token"
-
-    /// Returns true if the Keychain is fully available in this environment
-    /// (supports add, attribute retrieval, and delete).
-    static let keychainAvailable: Bool = {
-        let probeService = "dev.djensenius.tbt-availability-probe"
-        let probeAccount = "probe"
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: probeService,
-            kSecAttrAccount as String: probeAccount,
-            kSecValueData as String: Data("probe".utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        ]
-        SecItemDelete(query as CFDictionary)
-
-        let addStatus = SecItemAdd(query as CFDictionary, nil)
-        guard addStatus == errSecSuccess else { return false }
-        defer { SecItemDelete(query as CFDictionary) }
-
-        var readQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: probeService,
-            kSecAttrAccount as String: probeAccount,
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let readStatus = SecItemCopyMatching(readQuery as CFDictionary, &item)
-        guard readStatus == errSecSuccess,
-              let dict = item as? [String: Any],
-              dict[kSecAttrAccessible as String] as? String != nil else {
-            return false
-        }
-        return true
-    }()
 
     private func makeStore() -> KeychainTokenStore {
         KeychainTokenStore(service: Self.testService, account: Self.testAccount)
