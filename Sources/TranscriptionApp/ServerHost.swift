@@ -120,6 +120,23 @@ final class ServerHost: ObservableObject {
         applyPowerAssertion()
     }
 
+    /// Gracefully shuts down the server, awaiting in-flight work and HTTP client
+    /// cleanup. Use this from app termination handlers that can defer exit.
+    func shutdown() async {
+        guard state.isRunning || state == .starting else { return }
+        state = .stopping
+        serverTask?.cancel()
+        // Await the server task to allow in-flight requests to drain.
+        await serverTask?.value
+        serverTask = nil
+        if let client = httpClient {
+            try? await client.shutdown()
+        }
+        httpClient = nil
+        state = .stopped
+        applyPowerAssertion()
+    }
+
     func rotateToken() {
         do {
             _ = try tokenStore.rotate(to: nil)
