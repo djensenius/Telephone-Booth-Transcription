@@ -122,3 +122,52 @@ markdown-fence stripping and unknown-category resilience.
 
 CI runs `swift test` on `macos-26` (and the same workflow can be promoted to
 older macOS images by lowering `Package.swift`'s minimum platform if needed).
+
+---
+
+## Network Security & Non-Loopback Binds
+
+The server speaks **plain HTTP** only. By default, it binds to `127.0.0.1`
+(loopback), which ensures traffic never leaves the machine.
+
+### Why non-loopback is restricted
+
+If bound to `0.0.0.0` or a LAN IP, the bearer token and all audio/text
+payloads traverse the network unencrypted. A LAN attacker can passively
+sniff the token and impersonate an authorised client.
+
+The `ServerConfig.validated()` method enforces this: any non-loopback
+`bindHost` is silently reset to `127.0.0.1` **unless**
+`nonLoopbackBindAcknowledged` is `true`. In the GUI, the user must toggle
+"Allow non-loopback bind (insecure without TLS)" to persist a non-loopback
+address.
+
+### Deploying with remote clients (TLS reverse proxy)
+
+If the server must accept connections from other machines (e.g. the
+Telephone-Booth Rust client on the same LAN), place a TLS-terminating
+reverse proxy in front:
+
+```text
+[Remote client] ──TLS──► [nginx / Caddy / stunnel] ──HTTP──► localhost:8089
+```
+
+Example Caddy snippet:
+
+```caddyfile
+transcription.local {
+    reverse_proxy 127.0.0.1:8089
+    tls internal      # auto-provisions a self-signed cert for .local
+}
+```
+
+With this setup the app remains bound to loopback and the proxy handles
+encryption. Pass the same bearer token in the `Authorization` header from
+the remote client through the proxy.
+
+### mTLS (mutual TLS)
+
+For stronger authentication, configure your reverse proxy with client
+certificate verification (mTLS). This ensures only devices with a trusted
+certificate can reach the API — even if the bearer token is compromised,
+connections from untrusted machines are rejected at the TLS layer.
