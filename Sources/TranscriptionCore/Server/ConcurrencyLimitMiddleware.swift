@@ -32,8 +32,14 @@ public struct ConcurrencyLimitMiddleware<Context: RequestContext>: RouterMiddlew
             return Self.overloadResponse()
         }
 
-        defer { Task { await semaphore.signal() } }
-        return try await next(request, context)
+        do {
+            let response = try await next(request, context)
+            await semaphore.signal()
+            return response
+        } catch {
+            await semaphore.signal()
+            throw error
+        }
     }
 
     private static func overloadResponse() -> Response {

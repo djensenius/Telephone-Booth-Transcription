@@ -8,32 +8,6 @@ import NIOCore
 import Testing
 @testable import TranscriptionCore
 
-// MARK: - Stub backend with configurable delay
-
-/// A stub transcription backend that introduces artificial delay, useful for
-/// testing concurrency limiting and cancellation.
-struct DelayedStubBackend: TranscriptionBackendImpl, Sendable {
-    let delay: Duration
-    let response: @Sendable () -> Response
-
-    init(delay: Duration = .milliseconds(200), response: @escaping @Sendable () -> Response = {
-        var headers = HTTPFields()
-        headers[.contentType] = "application/json"
-        let body = Data("""
-        {"text":"hello"}
-        """.utf8)
-        return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(bytes: body)))
-    }) {
-        self.delay = delay
-        self.response = response
-    }
-
-    func handle(body: ByteBuffer, contentType: String) async throws -> Response {
-        try await Task.sleep(for: delay)
-        return response()
-    }
-}
-
 // MARK: - Tests
 
 @Suite("Lifecycle & concurrency")
@@ -304,13 +278,12 @@ struct LifecycleConcurrencyTests {
         #expect(c == false)
     }
 
-    @Test func healthzBypassesConcurrencyLimit() async throws {
+    @Test func healthzWorksUnderSequentialConcurrencyLimit() async throws {
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
 
-        // Even with max 1, /healthz should work because auth middleware rejects
-        // before concurrency limit for unauthenticated paths... but actually
-        // middleware order means concurrency limit runs after auth. Let's verify
-        // /healthz still works.
+        // /healthz passes through auth (excluded path) but still goes through
+        // the concurrency limit middleware. With limit=1 and sequential requests
+        // this works fine; under concurrent load it would be subject to the limit.
         let server = TranscriptionServer(
             config: ServerConfig(maxConcurrentRequests: 1),
             tokenStore: InMemoryTokenStore(initial: "tok"),
