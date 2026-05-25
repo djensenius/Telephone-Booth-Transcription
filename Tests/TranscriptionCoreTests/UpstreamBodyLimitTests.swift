@@ -11,20 +11,15 @@ import Testing
 struct UpstreamBodyLimitTests {
     /// Upstream returning a body larger than the cap throws `.responseTooLarge`.
     @Test func oversizedResponseThrowsResponseTooLarge() async throws {
-        // Start a stub HTTP server that returns a body larger than the cap.
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        defer { try? group.syncShutdownGracefully() }
 
         let server = try await startStubServer(group: group) { _, _ in
-            // Return 200 with a 2 MB body (exceeds 1 MB cap we'll use)
             let body = ByteBuffer(repeating: 0x41, count: 2 * 1024 * 1024)
             return StubResponse(status: .ok, body: body)
         }
-        defer { try? server.close().wait() }
 
         let port = server.localAddress!.port!
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { try? httpClient.syncShutdown() }
 
         let upstream = OpenAIUpstream(
             httpClient: httpClient,
@@ -46,22 +41,23 @@ struct UpstreamBodyLimitTests {
         } catch let error as UpstreamError {
             #expect(error == .responseTooLarge(maxBytes: 1 * 1024 * 1024))
         }
+
+        try await server.close()
+        try await httpClient.shutdown()
+        try await group.shutdownGracefully()
     }
 
     /// Upstream that responds within the cap succeeds normally.
     @Test func responseWithinCapSucceeds() async throws {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        defer { try? group.syncShutdownGracefully() }
 
         let server = try await startStubServer(group: group) { _, _ in
             let body = ByteBuffer(string: "{\"ok\":true}")
             return StubResponse(status: .ok, body: body)
         }
-        defer { try? server.close().wait() }
 
         let port = server.localAddress!.port!
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { try? httpClient.syncShutdown() }
 
         let upstream = OpenAIUpstream(
             httpClient: httpClient,
@@ -81,30 +77,28 @@ struct UpstreamBodyLimitTests {
         #expect(result.status == 200)
         let bodyStr = String(buffer: result.body)
         #expect(bodyStr == "{\"ok\":true}")
+
+        try await server.close()
+        try await httpClient.shutdown()
+        try await group.shutdownGracefully()
     }
 
     /// Upstream that exceeds the deadline throws a timeout error (connection timeout).
     @Test func stalledResponseThrowsTimeout() async throws {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        defer { try? group.syncShutdownGracefully() }
 
         // Server that never sends a response (stalls indefinitely).
         let server = try await startStubServer(group: group) { ctx, _ in
-            // Schedule response after a long delay (longer than our timeout)
-            _ = ctx.eventLoop.scheduleTask(in: .seconds(30)) {
-                // This will never execute within the test timeout
-            }
+            _ = ctx.eventLoop.scheduleTask(in: .seconds(30)) {}
             return nil // signal: don't respond immediately
         }
-        defer { try? server.close().wait() }
 
         let port = server.localAddress!.port!
         let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        defer { try? httpClient.syncShutdown() }
 
         let upstream = OpenAIUpstream(
             httpClient: httpClient,
-            timeout: .milliseconds(200),
+            timeout: .nanoseconds(200_000_000),
             logger: Logger(label: "test")
         )
         let config = UpstreamConfig(baseURL: "http://127.0.0.1:\(port)", apiKey: nil)
@@ -122,6 +116,10 @@ struct UpstreamBodyLimitTests {
         } catch let error as UpstreamError {
             #expect(error == .deadlineExceeded)
         }
+
+        try await server.close()
+        try await httpClient.shutdown()
+        try await group.shutdownGracefully()
     }
 
     /// The endpoint-specific constants have the expected values.
@@ -170,7 +168,6 @@ private final class StubHTTPHandler: ChannelInboundHandler, @unchecked Sendable 
         switch part {
         case .head(let head):
             guard let response = handler(context, head) else {
-                // nil means "don't respond" (stall test)
                 return
             }
             let responseHead = HTTPResponseHead(
