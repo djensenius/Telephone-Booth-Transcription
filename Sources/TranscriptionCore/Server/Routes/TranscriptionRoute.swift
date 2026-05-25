@@ -39,6 +39,8 @@ public struct TranscriptionRoute<Context: RequestContext>: Sendable {
             return Self.errorResponse(status: .badRequest, code: "bad_request", message: message)
         } catch let TranscriptionBackendError.unauthorized(message) {
             return Self.errorResponse(status: .forbidden, code: "permission_denied", message: message)
+        } catch let TranscriptionBackendError.timeout(message) {
+            return Self.errorResponse(status: .gatewayTimeout, code: "timeout", message: message)
         } catch let TranscriptionBackendError.upstream(status, body) {
             return Self.passthroughError(status: status, body: body)
         } catch {
@@ -71,6 +73,7 @@ public struct TranscriptionRoute<Context: RequestContext>: Sendable {
 public enum TranscriptionBackendError: Error, Sendable {
     case badRequest(String)
     case unauthorized(String)
+    case timeout(String)
     case upstream(status: Int, body: ByteBuffer)
 }
 
