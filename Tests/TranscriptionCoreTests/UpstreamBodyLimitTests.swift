@@ -98,7 +98,7 @@ struct UpstreamBodyLimitTests {
 
         let upstream = OpenAIUpstream(
             httpClient: httpClient,
-            timeout: .nanoseconds(200_000_000),
+            timeout: .seconds(0.2),
             logger: Logger(label: "test")
         )
         let config = UpstreamConfig(baseURL: "http://127.0.0.1:\(port)", apiKey: nil)
