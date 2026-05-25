@@ -143,6 +143,12 @@ public final class ModerationClassifier: Sendable {
     }
 
     private func classifyOne(_ input: String) async throws -> ModerationResult {
+        // Defence-in-depth: refuse to send an API key over an insecure remote connection.
+        if case .failure = upstream.validateSecurity() {
+            let url = joinURL(base: upstream.baseURL, path: "/chat/completions")
+            throw UpstreamError.insecureUpstream(url: url)
+        }
+
         let systemPrompt = Self.systemPrompt
         // We isolate the user-supplied text into a dedicated user message and
         // tell the model to treat it as data, not instructions. Local LLMs can

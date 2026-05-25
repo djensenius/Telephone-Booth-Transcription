@@ -66,7 +66,10 @@ struct UpstreamURLSecurityTests {
     @Test("HTTPS remote with key passes validation")
     func httpsRemoteWithKey() {
         let cfg = UpstreamConfig(baseURL: "https://api.openai.com/v1", apiKey: "sk-123")
-        #expect(cfg.validateSecurity() == .success(()))
+        guard case .success = cfg.validateSecurity() else {
+            Issue.record("Expected success for HTTPS remote with key")
+            return
+        }
     }
 
     @Test("HTTP remote with key fails validation")
@@ -82,13 +85,19 @@ struct UpstreamURLSecurityTests {
     @Test("HTTP loopback with key passes validation")
     func httpLoopbackWithKey() {
         let cfg = UpstreamConfig(baseURL: "http://127.0.0.1:8000/v1", apiKey: "sk-123")
-        #expect(cfg.validateSecurity() == .success(()))
+        guard case .success = cfg.validateSecurity() else {
+            Issue.record("Expected success for HTTP loopback with key")
+            return
+        }
     }
 
     @Test("HTTP remote without key passes validation")
     func httpRemoteNoKey() {
         let cfg = UpstreamConfig(baseURL: "http://api.openai.com/v1")
-        #expect(cfg.validateSecurity() == .success(()))
+        guard case .success = cfg.validateSecurity() else {
+            Issue.record("Expected success for HTTP remote without key")
+            return
+        }
     }
 
     // MARK: - strippingKeyIfInsecure
