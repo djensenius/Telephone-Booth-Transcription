@@ -47,6 +47,18 @@ struct SettingsView: View {
                     get: { host.config.bindHost },
                     set: { host.config.bindHost = $0 }
                 ))
+                if !host.config.isLoopbackHost
+                    && !host.config.bindHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Toggle("Allow non-loopback bind (insecure without TLS)", isOn: Binding(
+                        get: { host.config.nonLoopbackBindAcknowledged },
+                        set: { host.config.nonLoopbackBindAcknowledged = $0 }
+                    ))
+                    Text("⚠️ Binding to a network address exposes bearer tokens and "
+                         + "audio/text payloads in plaintext. Use a TLS reverse proxy "
+                         + "if remote clients need access.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 Stepper(value: Binding(
                     get: { host.config.bindPort },
                     set: { host.config.bindPort = $0 }

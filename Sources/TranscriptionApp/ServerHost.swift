@@ -105,10 +105,16 @@ final class ServerHost: ObservableObject {
             httpClient = nil
         }
 
-        let cfg = config
+        let cfg = config.validated()
         let tokenStore = self.tokenStore
         let logStore = self.logStore
         let logger = self.logger
+
+        if !cfg.isLoopbackHost {
+            logger.warning(
+                "Server binding to non-loopback address \(cfg.bindHost). Traffic (including bearer tokens) is unencrypted. Use a TLS reverse proxy for production deployments."
+            )
+        }
 
         let client = HTTPClient(eventLoopGroupProvider: .singleton)
         self.httpClient = client
@@ -299,6 +305,7 @@ enum ConfigPersistence {
         var moderationModel: String
         var defaultTranscriptionModel: String?
         var nativeTranscriptionLocale: String?
+        var nonLoopbackBindAcknowledged: Bool?
 
         init(_ c: ServerConfig) {
             bindHost = c.bindHost
@@ -327,6 +334,7 @@ enum ConfigPersistence {
             moderationModel = c.moderationModel
             defaultTranscriptionModel = c.defaultTranscriptionModel
             nativeTranscriptionLocale = c.nativeTranscriptionLocale
+            nonLoopbackBindAcknowledged = c.nonLoopbackBindAcknowledged
         }
 
         var asConfig: ServerConfig {
@@ -351,7 +359,8 @@ enum ConfigPersistence {
                 moderationFallbackEnabled: moderationFallbackEnabled,
                 moderationModel: moderationModel,
                 defaultTranscriptionModel: defaultTranscriptionModel ?? "",
-                nativeTranscriptionLocale: nativeTranscriptionLocale ?? "en-US"
+                nativeTranscriptionLocale: nativeTranscriptionLocale ?? "en-US",
+                nonLoopbackBindAcknowledged: nonLoopbackBindAcknowledged ?? false
             )
         }
     }

@@ -47,6 +47,12 @@ public struct ServerConfig: Sendable, Equatable {
     /// BCP-47 locale used by the native macOS transcriber (e.g. "en-US").
     public var nativeTranscriptionLocale: String
 
+    /// When true, the server is allowed to bind to non-loopback addresses.
+    /// **Off by default** — binding to a LAN/public IP without TLS exposes
+    /// bearer tokens and payloads in plaintext. Users must explicitly
+    /// acknowledge the risk in Settings before non-loopback binds take effect.
+    public var nonLoopbackBindAcknowledged: Bool
+
     // MARK: - Validation constants
 
     public static let portRange = 1...65535
@@ -57,6 +63,14 @@ public struct ServerConfig: Sendable, Equatable {
     public static let defaultUpstreamTimeout: Double = 300
     public static let maxConcurrentRequestsRange = 0...256
     public static let defaultMaxConcurrentRequests = 8
+
+    /// Loopback addresses that are considered safe for plaintext HTTP.
+    public static let loopbackHosts: Set<String> = ["127.0.0.1", "::1", "localhost"]
+
+    /// Whether `bindHost` resolves to a loopback-only address.
+    public var isLoopbackHost: Bool {
+        Self.loopbackHosts.contains(bindHost.lowercased())
+    }
 
     /// Returns a copy with all fields clamped to safe ranges.
     /// Invalid strings fall back to their respective defaults.
@@ -74,6 +88,12 @@ public struct ServerConfig: Sendable, Equatable {
             copy.bindHost = "127.0.0.1"
         } else {
             copy.bindHost = trimmedHost
+        }
+
+        // Enforce loopback-only unless the user has explicitly acknowledged
+        // the security implications of binding to a network-reachable address.
+        if !copy.isLoopbackHost && !copy.nonLoopbackBindAcknowledged {
+            copy.bindHost = "127.0.0.1"
         }
 
         // Body limit
@@ -120,7 +140,8 @@ public struct ServerConfig: Sendable, Equatable {
         moderationFallbackEnabled: Bool = true,
         moderationModel: String = "omni-moderation-latest",
         defaultTranscriptionModel: String = "",
-        nativeTranscriptionLocale: String = "en-US"
+        nativeTranscriptionLocale: String = "en-US",
+        nonLoopbackBindAcknowledged: Bool = false
     ) {
         self.bindHost = bindHost
         self.bindPort = bindPort
@@ -134,6 +155,7 @@ public struct ServerConfig: Sendable, Equatable {
         self.moderationModel = moderationModel
         self.defaultTranscriptionModel = defaultTranscriptionModel
         self.nativeTranscriptionLocale = nativeTranscriptionLocale
+        self.nonLoopbackBindAcknowledged = nonLoopbackBindAcknowledged
     }
 
     /// The transcription upstream config, when the backend is a proxy. Returns

@@ -46,8 +46,51 @@ struct ConfigValidationTests {
     func bindHostTrimmed() {
         var config = ServerConfig()
         config.bindHost = "  0.0.0.0  "
+        config.nonLoopbackBindAcknowledged = true
         let validated = config.validated()
         #expect(validated.bindHost == "0.0.0.0")
+    }
+
+    @Test("Non-loopback bindHost is rejected when not acknowledged")
+    func nonLoopbackRejected() {
+        var config = ServerConfig()
+        config.bindHost = "0.0.0.0"
+        let validated = config.validated()
+        #expect(validated.bindHost == "127.0.0.1")
+    }
+
+    @Test("Non-loopback bindHost is allowed when acknowledged")
+    func nonLoopbackAllowed() {
+        var config = ServerConfig()
+        config.bindHost = "192.168.1.50"
+        config.nonLoopbackBindAcknowledged = true
+        let validated = config.validated()
+        #expect(validated.bindHost == "192.168.1.50")
+    }
+
+    @Test("Loopback addresses pass without acknowledgement")
+    func loopbackAlwaysAllowed() {
+        for host in ["127.0.0.1", "::1", "localhost"] {
+            var config = ServerConfig()
+            config.bindHost = host
+            let validated = config.validated()
+            #expect(validated.bindHost == host)
+        }
+    }
+
+    @Test("isLoopbackHost returns correct values")
+    func isLoopbackHostCheck() {
+        var config = ServerConfig()
+        config.bindHost = "127.0.0.1"
+        #expect(config.isLoopbackHost == true)
+        config.bindHost = "::1"
+        #expect(config.isLoopbackHost == true)
+        config.bindHost = "localhost"
+        #expect(config.isLoopbackHost == true)
+        config.bindHost = "0.0.0.0"
+        #expect(config.isLoopbackHost == false)
+        config.bindHost = "192.168.1.1"
+        #expect(config.isLoopbackHost == false)
     }
 
     @Test("maxRequestBytes below 1 MB is clamped")
