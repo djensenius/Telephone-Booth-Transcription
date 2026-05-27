@@ -279,6 +279,8 @@ struct SettingsView: View {
                                    value: "\(host.config.maxConcurrentRequests)")
                 }
             }
+
+            operatorPullSection
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -340,5 +342,97 @@ struct SettingsView: View {
         let loc = Locale(identifier: identifier)
         let name = Locale.current.localizedString(forIdentifier: identifier) ?? identifier
         return "\(name) (\(loc.identifier))"
+    }
+
+    // MARK: - Operator pull worker
+
+    @ViewBuilder
+    private var operatorPullSection: some View {
+        Section("Operator pull worker") {
+            Toggle("Enable polling", isOn: Binding(
+                get: { host.config.operatorPolling.enabled },
+                set: { host.config.operatorPolling.enabled = $0 }
+            ))
+            Text("When on, this app periodically asks the configured Operator " +
+                 "for transcription, translation, and moderation jobs and posts " +
+                 "results back. Use this when the Operator can't reach the Mac " +
+                 "directly.")
+                .font(.caption)
+                .foregroundStyle(Theme.Colors.textSecondary)
+
+            TextField("Operator base URL", text: Binding(
+                get: { host.config.operatorPolling.baseURL },
+                set: { host.config.operatorPolling.baseURL = $0 }
+            ))
+                .textFieldStyle(.roundedBorder)
+
+            SecureField("Operator API token", text: Binding(
+                get: { host.operatorAPIToken() },
+                set: { host.setOperatorAPIToken($0) }
+            ))
+                .textFieldStyle(.roundedBorder)
+            Text("Token is stored in the macOS Keychain (account: \(APIKeyAccount.operatorPull)).")
+                .font(.caption)
+                .foregroundStyle(Theme.Colors.textSecondary)
+
+            Stepper(value: Binding(
+                get: { host.config.operatorPolling.pollIntervalSeconds },
+                set: { host.config.operatorPolling.pollIntervalSeconds = $0 }
+            ), in: OperatorPollingConfig.minPollInterval...OperatorPollingConfig.maxPollInterval) {
+                LabeledContent("Poll interval",
+                               value: "\(host.config.operatorPolling.pollIntervalSeconds) s")
+            }
+
+            Stepper(value: Binding(
+                get: { host.config.operatorPolling.leaseSeconds },
+                set: { host.config.operatorPolling.leaseSeconds = $0 }
+            ), in: OperatorPollingConfig.minLease...OperatorPollingConfig.maxLease, step: 10) {
+                LabeledContent("Lease window",
+                               value: "\(host.config.operatorPolling.leaseSeconds) s")
+            }
+
+            Toggle("Handle transcription jobs", isOn: Binding(
+                get: { host.config.operatorPolling.transcriptionEnabled },
+                set: { host.config.operatorPolling.transcriptionEnabled = $0 }
+            ))
+            Toggle("Handle translation jobs", isOn: Binding(
+                get: { host.config.operatorPolling.translationEnabled },
+                set: { host.config.operatorPolling.translationEnabled = $0 }
+            ))
+            Toggle("Handle moderation jobs", isOn: Binding(
+                get: { host.config.operatorPolling.moderationEnabled },
+                set: { host.config.operatorPolling.moderationEnabled = $0 }
+            ))
+
+            workerStatusRow
+        }
+    }
+
+    @ViewBuilder
+    private var workerStatusRow: some View {
+        if let status = host.operatorWorkerStatus {
+            LabeledContent("Worker status", value: statusDescription(status))
+            if let code = status.lastErrorCode {
+                LabeledContent("Last error", value: code)
+                    .foregroundStyle(.red)
+            }
+            if let jobID = status.lastJobID {
+                LabeledContent("Last job",
+                               value: "\(status.lastJobKind?.rawValue ?? "?") · \(jobID)")
+            }
+        } else {
+            LabeledContent("Worker status", value: "stopped")
+                .foregroundStyle(Theme.Colors.textSecondary)
+        }
+    }
+
+    private func statusDescription(_ status: OperatorWorker.Status) -> String {
+        switch status.phase {
+        case .stopped: return "stopped"
+        case .idle: return "idle"
+        case .polling: return "polling"
+        case .running: return "running"
+        case .error: return "error"
+        }
     }
 }

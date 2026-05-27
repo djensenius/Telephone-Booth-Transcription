@@ -137,6 +137,19 @@ markdown-fence stripping and unknown-category resilience.
 CI runs `swift test` on `macos-26` (and the same workflow can be promoted to
 older macOS images by lowering `Package.swift`'s minimum platform if needed).
 
+### Operator pull worker (optional)
+
+In addition to the push-in HTTP server, this app can also run a long-lived
+**Operator pull worker** that polls a remote Operator for queued
+transcription, translation, and moderation jobs and posts results back. The
+worker dispatches each leased job back through this app's own loopback HTTP
+server, so all routing, middleware, and backend selection apply identically.
+This makes inbound reachability to the Mac optional: only outbound HTTPS to
+the Operator is required.
+
+See [`operator-pull.md`](operator-pull.md) for setup, wire format, and
+status semantics.
+
 ---
 
 ## Network Security & Non-Loopback Binds
