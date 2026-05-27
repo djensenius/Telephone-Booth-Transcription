@@ -39,12 +39,9 @@ public final class LoopbackOperatorJobDispatcher: OperatorJobDispatcher {
         case .transcription(let payload):
             return try await runAudio(payload: payload, isTranslation: false)
         case .translation(let payload):
-            switch payload {
-            // No audio in translation jobs handed by the Operator (the
-            // Operator already has the transcript); use the text route.
-            default:
-                return try await runTextTranslation(payload: payload)
-            }
+            // The Operator already has the transcript when it enqueues a
+            // translation job, so dispatch goes through the text route.
+            return try await runTextTranslation(payload: payload)
         case .moderation(let payload):
             return try await runModeration(payload: payload)
         }
@@ -56,10 +53,10 @@ public final class LoopbackOperatorJobDispatcher: OperatorJobDispatcher {
         let audio = try await downloadAudio(url: payload.audioURL)
         let boundary = "----TBT\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         var body = Data()
-        let filename = "\(payload.sha256).flac"
+        let (filename, contentType) = audioFileMetadata(for: payload)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/flac\r\n\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
         body.append(audio)
         body.append("\r\n".data(using: .utf8)!)
         if let model = payload.model, !model.isEmpty {
@@ -216,6 +213,39 @@ public final class LoopbackOperatorJobDispatcher: OperatorJobDispatcher {
                                 message: "local \(kind) returned HTTP \(status)")
     }
 
+    /// Returns `(filename, contentType)` for the multipart audio part.
+    /// Order of precedence:
+    /// 1. Explicit `payload.filename` / `payload.contentType` from the
+    ///    Operator (best signal — the Operator stored the file).
+    /// 2. The file extension parsed from `payload.audioURL`, mapped to a
+    ///    well-known MIME type.
+    /// 3. Default: `<sha256>.flac` + `audio/flac`.
+    private func audioFileMetadata(for payload: OperatorJob.TranscriptionPayload) -> (String, String) {
+        let ext = (URL(string: payload.audioURL)?.pathExtension ?? "").lowercased()
+
+        let derivedContentType: String? = {
+            switch ext {
+            case "flac": return "audio/flac"
+            case "mp3":  return "audio/mpeg"
+            case "wav":  return "audio/wav"
+            case "m4a":  return "audio/mp4"
+            case "mp4":  return "audio/mp4"
+            case "ogg":  return "audio/ogg"
+            case "opus": return "audio/opus"
+            case "webm": return "audio/webm"
+            case "aac":  return "audio/aac"
+            default:     return nil
+            }
+        }()
+
+        let contentType = payload.contentType?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty ?? derivedContentType ?? "audio/flac"
+        let resolvedExt = ext.isEmpty ? "flac" : ext
+        let filename = payload.filename?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty ?? "\(payload.sha256).\(resolvedExt)"
+        return (filename, contentType)
+    }
+
     private func multipartField(boundary: String, name: String, value: String) -> Data {
         var part = Data()
         part.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -224,4 +254,8 @@ public final class LoopbackOperatorJobDispatcher: OperatorJobDispatcher {
         part.append("\r\n".data(using: .utf8)!)
         return part
     }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

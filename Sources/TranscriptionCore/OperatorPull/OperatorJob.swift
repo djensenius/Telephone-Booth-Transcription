@@ -35,13 +35,25 @@ public struct OperatorJob: Sendable, Equatable {
         public var durationMs: Int?
         public var model: String?
         public var language: String?
+        /// Optional MIME type for the audio at `audioURL`. The Operator
+        /// should set this whenever it knows; the dispatcher falls back to
+        /// `audio/flac` when nil.
+        public var contentType: String?
+        /// Optional original filename or extension hint. The dispatcher
+        /// uses this when constructing the multipart `filename=` parameter
+        /// so the upstream (whisper, OpenAI, …) can content-sniff
+        /// correctly. Defaults to `<sha256>.flac` when nil.
+        public var filename: String?
         public init(audioURL: String, sha256: String, durationMs: Int? = nil,
-                    model: String? = nil, language: String? = nil) {
+                    model: String? = nil, language: String? = nil,
+                    contentType: String? = nil, filename: String? = nil) {
             self.audioURL = audioURL
             self.sha256 = sha256
             self.durationMs = durationMs
             self.model = model
             self.language = language
+            self.contentType = contentType
+            self.filename = filename
         }
     }
 
@@ -122,7 +134,9 @@ extension OperatorJob {
                     sha256: sha256,
                     durationMs: payload["durationMs"] as? Int,
                     model: payload["model"] as? String,
-                    language: payload["language"] as? String
+                    language: payload["language"] as? String,
+                    contentType: payload["contentType"] as? String,
+                    filename: payload["filename"] as? String
                 ))
             )
         case .translation:

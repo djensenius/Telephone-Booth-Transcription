@@ -80,12 +80,15 @@ public actor OperatorWorker {
     }
 
     /// Signals the loop to stop after the current iteration and awaits it.
+    /// Cancels the task so any in-flight `Task.sleep` returns immediately
+    /// rather than blocking for the rest of the poll interval (or backoff).
     /// Idempotent.
     public func stop() async {
         stopRequested = true
         let t = task
         task = nil
         if let t {
+            t.cancel()
             await t.value
         }
         setPhase(.stopped)

@@ -8,7 +8,8 @@ struct OperatorJobTests {
         let json = """
         {"id":"job-1","leaseToken":"L1","kind":"transcription",
          "transcription":{"audioUrl":"https://x/a.flac","sha256":"abc",
-                          "durationMs":1500,"model":"whisper","language":"en"}}
+                          "durationMs":1500,"model":"whisper","language":"en",
+                          "contentType":"audio/flac","filename":"recording.flac"}}
         """.data(using: .utf8)!
         let job = try OperatorJob.decode(from: json)
         #expect(job.id == "job-1")
@@ -18,6 +19,8 @@ struct OperatorJobTests {
             #expect(p.audioURL == "https://x/a.flac")
             #expect(p.sha256 == "abc")
             #expect(p.durationMs == 1500)
+            #expect(p.contentType == "audio/flac")
+            #expect(p.filename == "recording.flac")
         } else {
             Issue.record("expected transcription payload")
         }

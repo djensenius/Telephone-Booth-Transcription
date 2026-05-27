@@ -40,11 +40,27 @@ Job JSON shape (`GET /v1/jobs/next` 200 response):
   "id": "<opaque>",
   "leaseToken": "<opaque>",
   "kind": "transcription" | "translation" | "moderation",
-  "transcription": { "audioUrl": "...", "sha256": "...", "durationMs": 1234, "model": "...", "language": "..." },
+  "transcription": {
+    "audioUrl": "...",
+    "sha256": "...",
+    "durationMs": 1234,
+    "model": "...",
+    "language": "...",
+    "contentType": "audio/mpeg",
+    "filename": "original.mp3"
+  },
   "translation":   { "input": "...", "sourceLanguage": "es" },
   "moderation":    { "input": "..." }
 }
 ```
+
+`contentType` and `filename` are optional. The dispatcher picks the
+multipart `Content-Type` and `filename=` in this order: (1) explicit
+fields above, (2) extension parsed from `audioUrl` mapped to a known MIME
+type, (3) default `audio/flac` with `<sha256>.flac`. Set them whenever
+the Operator stores audio that isn't FLAC so upstreams that key on the
+filename extension or content type (faster-whisper-server, OpenAI) accept
+the request.
 
 Per-kind result bodies posted to `/v1/jobs/{id}/succeed`:
 
