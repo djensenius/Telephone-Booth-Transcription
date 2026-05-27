@@ -39,10 +39,24 @@
 │                                                                         │
 │  Upstream/                                                              │
 │    OpenAIUpstream (AsyncHTTPClient proxy)                               │
+│    ProxyTranslationBackend (audio→English passthrough)                  │
+│    TextTranslator (text→English via chat-completions)                   │
 │    ModerationClassifier (chat-completion fallback)                      │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+This app exposes three OpenAI-compatible upstream realms:
+
+- **Transcription** — `POST /v1/audio/transcriptions`, proxied to a
+  Whisper-compatible server (faster-whisper-server, OpenAI, or the native
+  macOS Speech engines).
+- **Translation** — `POST /v1/audio/translations` (audio → English) and the
+  custom `POST /v1/translations` (text → English). Proxied to an
+  independently-configured upstream because a deployment may want a larger
+  translation model than its transcription model.
+- **Moderation** — `POST /v1/moderations`, proxied to LM Studio (or any
+  chat-completions server) with a best-effort local classifier fallback.
 
 ## Key decisions
 

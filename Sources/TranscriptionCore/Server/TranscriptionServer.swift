@@ -59,6 +59,13 @@ public struct TranscriptionServer: Sendable {
             timeout: config.upstreamTimeout,
             logger: logger
         )
+        let textTranslator = TextTranslator(
+            upstream: config.translationUpstream,
+            httpClient: httpClient,
+            model: config.defaultTranslationModel,
+            timeout: config.upstreamTimeout,
+            logger: logger
+        )
 
         router.add(middleware: RequestLogMiddleware(writer: logWriter, logger: logger))
         router.add(middleware: AuthMiddleware(tokenStore: tokenStore, logger: logger))
@@ -109,6 +116,19 @@ public struct TranscriptionServer: Sendable {
             backend: backendImpl,
             maxRequestBytes: config.maxRequestBytes
         )
+        let translationBackend = ProxyTranslationBackend(
+            upstream: upstream,
+            upstreamConfig: config.translationUpstream,
+            defaultModel: config.defaultTranslationModel
+        )
+        let translation = TranslationRoute<BasicRequestContext>(
+            backend: translationBackend,
+            maxRequestBytes: config.maxRequestBytes
+        )
+        let textTranslation = TextTranslationRoute<BasicRequestContext>(
+            translator: textTranslator,
+            maxRequestBytes: config.maxRequestBytes
+        )
         let moderation = ModerationRoute<BasicRequestContext>(
             upstream: upstream,
             upstreamConfig: config.moderationUpstream,
@@ -120,6 +140,7 @@ public struct TranscriptionServer: Sendable {
         let models = ModelsRoute<BasicRequestContext>(
             upstream: upstream,
             transcriptionUpstream: config.transcriptionUpstream,
+            translationUpstream: config.translationUpstream,
             moderationUpstream: config.moderationUpstream,
             includeNativeMacOS: {
                 switch config.transcriptionBackend {
@@ -132,6 +153,8 @@ public struct TranscriptionServer: Sendable {
 
         router.get("/healthz", use: health.handle)
         router.post("/v1/audio/transcriptions", use: transcription.handle)
+        router.post("/v1/audio/translations", use: translation.handle)
+        router.post("/v1/translations", use: textTranslation.handle)
         router.post("/v1/moderations", use: moderation.handle)
         router.get("/v1/requests", use: requests.handle)
         router.get("/v1/models", use: models.handle)

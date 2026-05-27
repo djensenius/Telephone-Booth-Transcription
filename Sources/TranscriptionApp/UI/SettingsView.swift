@@ -10,8 +10,10 @@ struct SettingsView: View {
 
     @State private var transcriptionModels: [String] = []
     @State private var moderationModels: [String] = []
+    @State private var translationModels: [String] = []
     @State private var isLoadingTranscriptionModels = false
     @State private var isLoadingModerationModels = false
+    @State private var isLoadingTranslationModels = false
 
     private enum BackendKind: String, CaseIterable, Identifiable {
         case proxy
@@ -165,6 +167,54 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Translation upstream") {
+                TextField("Base URL", text: Binding(
+                    get: { host.config.translationUpstream.baseURL },
+                    set: { host.config.translationUpstream.baseURL = $0 }
+                ))
+                SecureField("API key (optional)", text: Binding(
+                    get: { host.translationAPIKey() },
+                    set: { newValue in host.setTranslationAPIKey(newValue) }
+                ))
+                if case .failure = host.config.translationUpstream.validateSecurity() {
+                    Label("HTTPS is required for remote upstreams with an API key. "
+                          + "The key will not be sent over this connection.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                }
+                HStack {
+                    Picker("Default model", selection: Binding(
+                        get: { host.config.defaultTranslationModel },
+                        set: { host.config.defaultTranslationModel = $0 }
+                    )) {
+                        Text("(none — pass `model` per request)").tag("")
+                        ForEach(translationModels, id: \.self) { Text($0).tag($0) }
+                        if !host.config.defaultTranslationModel.isEmpty,
+                           !translationModels.contains(host.config.defaultTranslationModel) {
+                            Text(host.config.defaultTranslationModel)
+                                .tag(host.config.defaultTranslationModel)
+                        }
+                    }
+                    Button {
+                        Task { await reloadTranslationModels() }
+                    } label: {
+                        if isLoadingTranslationModels {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .help("Refresh model list from upstream")
+                }
+                Text("Audio→English translation (OpenAI `/v1/audio/translations`). " +
+                     "Independent from transcription so you can run, e.g., a larger " +
+                     "Whisper model on a different host. Default points at the same " +
+                     "faster-whisper-server (`:8000`) as transcription.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+
             Section("Moderation upstream") {
                 TextField("Base URL", text: Binding(
                     get: { host.config.moderationUpstream.baseURL },
@@ -235,8 +285,18 @@ struct SettingsView: View {
         .foregroundStyle(Theme.Colors.textPrimary)
         .task {
             await reloadTranscriptionModels()
+            await reloadTranslationModels()
             await reloadModerationModels()
         }
+    }
+
+    private func reloadTranslationModels() async {
+        isLoadingTranslationModels = true
+        defer { isLoadingTranslationModels = false }
+        translationModels = await host.fetchModels(
+            from: host.config.translationUpstream.baseURL,
+            apiKey: host.config.translationUpstream.apiKey
+        )
     }
 
     private func reloadTranscriptionModels() async {

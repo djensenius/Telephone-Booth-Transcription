@@ -85,6 +85,62 @@ Common fields:
 Response body and status code are passed through from the upstream unchanged
 (minus hop-by-hop headers).
 
+## `POST /v1/audio/translations`
+
+OpenAI-compatible multipart upload that translates non-English audio into
+English text. Always proxied to the configured **translation** upstream (the
+macOS Speech framework does not natively translate). The translation upstream
+is configured independently from the transcription upstream in Settings so a
+deployment may, for example, run faster-whisper-server `:8000` for
+transcription and a larger Whisper model on a different host for translation.
+
+The multipart fields mirror OpenAI's `/v1/audio/translations`:
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `file` | yes | Audio in any format the upstream Whisper model accepts. |
+| `model` | yes / injected | If omitted and a default translation model is set in Settings, it is injected before forwarding. |
+| `prompt` | no | Optional prompt to bias the decoder. |
+| `temperature` | no | 0..1 |
+| `response_format` | no | `json` (default), `text`, `srt`, `vtt`, `verbose_json` |
+
+Response body and status code are passed through from the upstream unchanged
+(minus hop-by-hop headers). `language` is **not** accepted — translation
+always targets English by design.
+
+## `POST /v1/translations`
+
+Custom JSON endpoint (not part of OpenAI's surface) that translates
+already-transcribed text into English. Useful when you have a transcript and
+want English without re-uploading audio. Routed through the translation
+upstream's `/chat/completions`; returns `502 translation_upstream_no_chat`
+when the upstream doesn't implement chat completions (faster-whisper-server
+alone does not).
+
+Request:
+
+```json
+{ "input": "Bonjour, comment ça va ?", "source_language": "fr" }
+```
+
+`source_language` is optional — when omitted the model auto-detects.
+
+Response (HTTP 200):
+
+```json
+{
+  "translated_text": "Hello, how are you?",
+  "source_language": "fr",
+  "target_language": "en",
+  "model": "llama-3.1-8b-instruct"
+}
+```
+
+The prompt instructs the model to treat the input strictly as data and
+return a single JSON object. As with the moderation fallback, this is
+best-effort: local LLMs vary in quality and can occasionally be coerced.
+Bodies are **not** logged.
+
 ## `POST /v1/moderations`
 
 OpenAI-compatible moderation. JSON body:
@@ -164,13 +220,15 @@ matches OpenAI's `/v1/models`:
   "data": [
     { "id": "macos-speech", "object": "model", "owned_by": "transcription", "created": 0 },
     { "id": "Systran/faster-whisper-medium.en", "object": "model", "owned_by": "transcription" },
+    { "id": "Systran/faster-whisper-large-v3", "object": "model", "owned_by": "translation" },
     { "id": "llama-3.1-8b-instruct", "object": "model", "owned_by": "moderation" }
   ]
 }
 ```
 
-`owned_by` indicates which of the local app's two upstreams reported the
-model: `transcription` (the Whisper-compatible server) or `moderation` (the
+`owned_by` indicates which of the local app's three upstreams reported the
+model: `transcription` (the Whisper-compatible server), `translation` (the
+audio→English upstream, often the same Whisper server), or `moderation` (the
 LM Studio / chat-completions server). When the macOS native transcription
 backend is selected, a synthetic `macos-speech` entry is prepended so clients
 can pick it through the same picker.

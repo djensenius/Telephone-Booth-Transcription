@@ -6,16 +6,20 @@ A native macOS app that exposes an **OpenAI-compatible HTTP API** for:
 
 - **Audio transcription** — `POST /v1/audio/transcriptions` (multipart, same wire format
   as `https://api.openai.com/v1/audio/transcriptions`).
+- **Audio translation** — `POST /v1/audio/translations` (multipart, same wire format
+  as `https://api.openai.com/v1/audio/translations`) for audio → English. Plus a
+  custom `POST /v1/translations` (JSON) for text → English when you already have a
+  transcript.
 - **Text moderation** — `POST /v1/moderations` (JSON, same wire format as
   `https://api.openai.com/v1/moderations`), with hate / harassment / violence /
   self-harm / illicit categories.
 
 …backed by **local LLMs served by [LM Studio][lmstudio]** for moderation and any
 OpenAI-compatible Whisper server (e.g. [`faster-whisper-server`][fws]) for transcription
-— or **macOS's built-in [Speech][speech] framework** for fully on-device transcription
-with no separate server. Every request is logged to a local SQLite database, every
-endpoint is protected by a bearer token stored in the macOS Keychain, and the app can
-optionally keep the Mac awake while the server is running.
+and translation — or **macOS's built-in [Speech][speech] framework** for fully
+on-device transcription with no separate server. Every request is logged to a local
+SQLite database, every endpoint is protected by a bearer token stored in the macOS
+Keychain, and the app can optionally keep the Mac awake while the server is running.
 
 Lives next to the rest of the [Telephone-Booth][tb] family:
 
@@ -44,6 +48,8 @@ Lives next to the rest of the [Telephone-Booth][tb] family:
 │    AuthMiddleware (Bearer)                        │
 │    RequestLogMiddleware (SQLite)                  │
 │    /v1/audio/transcriptions  ──► transcription    │
+│    /v1/audio/translations    ──► translation      │
+│    /v1/translations          ──► translation      │
 │    /v1/moderations           ──► moderation       │
 │    /v1/requests              ──► local            │
 │    /healthz                  ──► local            │

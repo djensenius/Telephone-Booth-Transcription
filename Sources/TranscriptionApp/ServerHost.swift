@@ -245,6 +245,11 @@ final class ServerHost: ObservableObject {
         (try? apiKeyStore.read(account: APIKeyAccount.moderation)) ?? ""
     }
 
+    /// Returns the translation upstream API key from Keychain, or empty string.
+    func translationAPIKey() -> String {
+        (try? apiKeyStore.read(account: APIKeyAccount.translation)) ?? ""
+    }
+
     /// Persists the transcription API key to Keychain and updates the in-memory config.
     func setTranscriptionAPIKey(_ value: String) {
         let key = value.isEmpty ? nil : value
@@ -257,6 +262,11 @@ final class ServerHost: ObservableObject {
     /// Persists the moderation API key to Keychain and updates the in-memory config.
     func setModerationAPIKey(_ value: String) {
         config.moderationUpstream.apiKey = value.isEmpty ? nil : value
+    }
+
+    /// Persists the translation API key to Keychain and updates the in-memory config.
+    func setTranslationAPIKey(_ value: String) {
+        config.translationUpstream.apiKey = value.isEmpty ? nil : value
     }
 
     /// Fetches `/v1/models` from one of the user's configured upstreams (or
@@ -321,6 +331,7 @@ enum ConfigPersistence {
         } else {
             persistKey(nil, account: APIKeyAccount.transcription, store: keyStore)
         }
+        persistKey(config.translationUpstream.apiKey, account: APIKeyAccount.translation, store: keyStore)
         persistKey(config.moderationUpstream.apiKey, account: APIKeyAccount.moderation, store: keyStore)
     }
 
@@ -350,6 +361,15 @@ enum ConfigPersistence {
                 // Leave in DTO for retry on next launch
             }
         }
+        if let trKey = dto.translationKey, !trKey.isEmpty {
+            do {
+                try keyStore.write(account: APIKeyAccount.translation, value: trKey)
+                dto.translationKey = nil
+                migrated = true
+            } catch {
+                // Leave in DTO for retry on next launch
+            }
+        }
         if migrated, let cleaned = try? JSONEncoder().encode(dto) {
             UserDefaults.standard.set(cleaned, forKey: key)
         }
@@ -360,11 +380,13 @@ enum ConfigPersistence {
         // keys before forwarding to insecure upstreams.
         var config = dto.asConfig
         let transcriptionKey = try? keyStore.read(account: APIKeyAccount.transcription)
+        let translationKey = try? keyStore.read(account: APIKeyAccount.translation)
         let moderationKey = try? keyStore.read(account: APIKeyAccount.moderation)
         if case .proxy(var upstream) = config.transcriptionBackend {
             upstream.apiKey = transcriptionKey
             config.transcriptionBackend = .proxy(upstream)
         }
+        config.translationUpstream.apiKey = translationKey
         config.moderationUpstream.apiKey = moderationKey
 
         var validated = config.validated()
@@ -372,6 +394,7 @@ enum ConfigPersistence {
             upstream.apiKey = transcriptionKey
             validated.transcriptionBackend = .proxy(upstream)
         }
+        validated.translationUpstream.apiKey = translationKey
         validated.moderationUpstream.apiKey = moderationKey
         return validated
     }
@@ -394,6 +417,8 @@ enum ConfigPersistence {
         var moderationBase: String
         // Retained for migration decoding only — never written to new saves.
         var moderationKey: String?
+        var translationBase: String?
+        var translationKey: String?
         var maxRequestBytes: Int
         var upstreamTimeoutSeconds: Double
         var maxConcurrentRequests: Int
@@ -401,6 +426,7 @@ enum ConfigPersistence {
         var moderationFallbackEnabled: Bool
         var moderationModel: String
         var defaultTranscriptionModel: String?
+        var defaultTranslationModel: String?
         var nativeTranscriptionLocale: String?
         var nonLoopbackBindAcknowledged: Bool?
 
@@ -422,6 +448,9 @@ enum ConfigPersistence {
             transcriptionKey = nil
             moderationBase = c.moderationUpstream.baseURL
             moderationKey = nil
+            translationBase = c.translationUpstream.baseURL
+            // Keys are never serialized to UserDefaults
+            translationKey = nil
             maxRequestBytes = c.maxRequestBytes
             upstreamTimeoutSeconds = c.upstreamTimeout.seconds
             maxConcurrentRequests = c.maxConcurrentRequests
@@ -429,6 +458,7 @@ enum ConfigPersistence {
             moderationFallbackEnabled = c.moderationFallbackEnabled
             moderationModel = c.moderationModel
             defaultTranscriptionModel = c.defaultTranscriptionModel
+            defaultTranslationModel = c.defaultTranslationModel
             nativeTranscriptionLocale = c.nativeTranscriptionLocale
             nonLoopbackBindAcknowledged = c.nonLoopbackBindAcknowledged
         }
@@ -443,11 +473,18 @@ enum ConfigPersistence {
             default:
                 backend = .proxy(.init(baseURL: transcriptionBase, apiKey: nil))
             }
+            let translationUpstream: UpstreamConfig
+            if let translationBase, !translationBase.isEmpty {
+                translationUpstream = .init(baseURL: translationBase, apiKey: nil)
+            } else {
+                translationUpstream = .defaultTranslation
+            }
             return ServerConfig(
                 bindHost: bindHost,
                 bindPort: bindPort,
                 transcriptionBackend: backend,
                 moderationUpstream: .init(baseURL: moderationBase, apiKey: nil),
+                translationUpstream: translationUpstream,
                 maxRequestBytes: maxRequestBytes,
                 upstreamTimeout: .seconds(upstreamTimeoutSeconds),
                 maxConcurrentRequests: maxConcurrentRequests,
@@ -455,6 +492,7 @@ enum ConfigPersistence {
                 moderationFallbackEnabled: moderationFallbackEnabled,
                 moderationModel: moderationModel,
                 defaultTranscriptionModel: defaultTranscriptionModel ?? "",
+                defaultTranslationModel: defaultTranslationModel ?? "",
                 nativeTranscriptionLocale: nativeTranscriptionLocale ?? "en-US",
                 nonLoopbackBindAcknowledged: nonLoopbackBindAcknowledged ?? false
             )
