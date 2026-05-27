@@ -165,6 +165,36 @@ struct ConfigValidationTests {
         #expect(validated.moderationUpstream == .defaultModeration)
     }
 
+    @Test("Invalid translation upstream URL falls back to default")
+    func invalidTranslationURL() {
+        var config = ServerConfig()
+        config.translationUpstream = .init(baseURL: "   ")
+        let validated = config.validated()
+        #expect(validated.translationUpstream == .defaultTranslation)
+    }
+
+    @Test("Translation upstream strips API key over insecure remote")
+    func translationStripsInsecureKey() {
+        var config = ServerConfig()
+        config.translationUpstream = .init(
+            baseURL: "http://translation.example.com/v1",
+            apiKey: "sk-secret"
+        )
+        let validated = config.validated()
+        #expect(validated.translationUpstream.apiKey == nil)
+    }
+
+    @Test("Translation upstream preserves API key over HTTPS remote")
+    func translationKeepsSecureKey() {
+        var config = ServerConfig()
+        config.translationUpstream = .init(
+            baseURL: "https://translation.example.com/v1",
+            apiKey: "sk-secret"
+        )
+        let validated = config.validated()
+        #expect(validated.translationUpstream.apiKey == "sk-secret")
+    }
+
     @Test("Invalid transcription upstream URL falls back to default")
     func invalidTranscriptionURL() {
         var config = ServerConfig()

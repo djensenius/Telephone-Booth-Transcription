@@ -16,6 +16,13 @@ public struct ServerConfig: Sendable, Equatable {
     /// Moderation upstream. Always a proxy — moderation classification needs
     /// an LLM, which the macOS Speech framework does not provide.
     public var moderationUpstream: UpstreamConfig
+    /// Translation upstream. Always a proxy — translation is audio→English
+    /// (OpenAI `/v1/audio/translations` semantics), which the macOS Speech
+    /// framework does not natively provide. Kept independent from the
+    /// transcription upstream because a deployment may want, say,
+    /// faster-whisper-server for transcription and a larger model on a
+    /// different host for translation.
+    public var translationUpstream: UpstreamConfig
 
     /// Maximum request body the server will accept (bytes). Default 100 MB.
     public var maxRequestBytes: Int
@@ -43,6 +50,11 @@ public struct ServerConfig: Sendable, Equatable {
     /// user's Settings picker (filled from `<transcriptionUpstream>/v1/models`
     /// for the proxy backend; ignored for the native macOS backend).
     public var defaultTranscriptionModel: String
+
+    /// Default `model` to inject into translation requests that don't
+    /// specify one. Empty string disables injection. Populated from the
+    /// user's Settings picker (filled from `<translationUpstream>/v1/models`).
+    public var defaultTranslationModel: String
 
     /// BCP-47 locale used by the native macOS transcriber (e.g. "en-US").
     public var nativeTranscriptionLocale: String
@@ -119,6 +131,7 @@ public struct ServerConfig: Sendable, Equatable {
 
         // Upstream URLs
         copy.moderationUpstream = copy.moderationUpstream.validatedOrDefault(.defaultModeration)
+        copy.translationUpstream = copy.translationUpstream.validatedOrDefault(.defaultTranslation)
         if case .proxy(let upstream) = copy.transcriptionBackend {
             copy.transcriptionBackend = .proxy(
                 upstream.validatedOrDefault(.defaultTranscription)
@@ -127,6 +140,7 @@ public struct ServerConfig: Sendable, Equatable {
 
         // Security: strip API keys from insecure non-loopback upstreams
         copy.moderationUpstream = copy.moderationUpstream.strippingKeyIfInsecure()
+        copy.translationUpstream = copy.translationUpstream.strippingKeyIfInsecure()
         if case .proxy(let upstream) = copy.transcriptionBackend {
             copy.transcriptionBackend = .proxy(upstream.strippingKeyIfInsecure())
         }
@@ -139,6 +153,7 @@ public struct ServerConfig: Sendable, Equatable {
         bindPort: Int = 8089,
         transcriptionBackend: TranscriptionBackend = .proxy(.defaultTranscription),
         moderationUpstream: UpstreamConfig = .defaultModeration,
+        translationUpstream: UpstreamConfig = .defaultTranslation,
         maxRequestBytes: Int = 100 * 1024 * 1024,
         upstreamTimeout: TimeAmount = .seconds(300),
         maxConcurrentRequests: Int = 8,
@@ -146,6 +161,7 @@ public struct ServerConfig: Sendable, Equatable {
         moderationFallbackEnabled: Bool = true,
         moderationModel: String = "omni-moderation-latest",
         defaultTranscriptionModel: String = "",
+        defaultTranslationModel: String = "",
         nativeTranscriptionLocale: String = "en-US",
         nonLoopbackBindAcknowledged: Bool = false
     ) {
@@ -153,6 +169,7 @@ public struct ServerConfig: Sendable, Equatable {
         self.bindPort = bindPort
         self.transcriptionBackend = transcriptionBackend
         self.moderationUpstream = moderationUpstream
+        self.translationUpstream = translationUpstream
         self.maxRequestBytes = maxRequestBytes
         self.upstreamTimeout = upstreamTimeout
         self.maxConcurrentRequests = maxConcurrentRequests
@@ -160,6 +177,7 @@ public struct ServerConfig: Sendable, Equatable {
         self.moderationFallbackEnabled = moderationFallbackEnabled
         self.moderationModel = moderationModel
         self.defaultTranscriptionModel = defaultTranscriptionModel
+        self.defaultTranslationModel = defaultTranslationModel
         self.nativeTranscriptionLocale = nativeTranscriptionLocale
         self.nonLoopbackBindAcknowledged = nonLoopbackBindAcknowledged
     }
@@ -208,6 +226,14 @@ public struct UpstreamConfig: Sendable, Equatable {
 
     public static let defaultModeration = UpstreamConfig(
         baseURL: "http://127.0.0.1:1234/v1"
+    )
+
+    /// Default translation upstream. Same shape as the transcription upstream
+    /// because faster-whisper-server (and OpenAI) implement both endpoints.
+    /// Users who want a different translation model can point this at a
+    /// distinct host.
+    public static let defaultTranslation = UpstreamConfig(
+        baseURL: "http://127.0.0.1:8000/v1"
     )
 
     /// Returns self if baseURL is non-empty and parseable, otherwise `fallback`.

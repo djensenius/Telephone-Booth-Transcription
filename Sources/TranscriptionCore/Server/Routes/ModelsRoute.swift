@@ -11,32 +11,37 @@ import NIOCore
 /// { "object": "list", "data": [ { "id": "whisper-1", "object": "model", "owned_by": "transcription" }, ... ] }
 /// ```
 ///
-/// `owned_by` is overloaded to indicate which of the local app's two
-/// upstreams reported the model: `transcription` or `moderation`. Native
-/// macOS transcription is reported as `"id": "macos-speech", "owned_by":
-/// "transcription"` so the picker UI can include it in the same list.
+/// `owned_by` is overloaded to indicate which of the local app's three
+/// upstreams reported the model: `transcription`, `translation`, or
+/// `moderation`. Native macOS transcription is reported as `"id":
+/// "macos-speech", "owned_by": "transcription"` so the picker UI can include
+/// it in the same list.
 public struct ModelsRoute<Context: RequestContext>: Sendable {
     public let upstream: OpenAIUpstream
     public let transcriptionUpstream: UpstreamConfig?
+    public let translationUpstream: UpstreamConfig
     public let moderationUpstream: UpstreamConfig
     public let includeNativeMacOS: Bool
 
     public init(
         upstream: OpenAIUpstream,
         transcriptionUpstream: UpstreamConfig?,
+        translationUpstream: UpstreamConfig,
         moderationUpstream: UpstreamConfig,
         includeNativeMacOS: Bool
     ) {
         self.upstream = upstream
         self.transcriptionUpstream = transcriptionUpstream
+        self.translationUpstream = translationUpstream
         self.moderationUpstream = moderationUpstream
         self.includeNativeMacOS = includeNativeMacOS
     }
 
     public func handle(_ request: Request, context: Context) async throws -> Response {
         async let transcription: [[String: Any]] = fetchModels(from: transcriptionUpstream, owner: "transcription")
+        async let translation:   [[String: Any]] = fetchModels(from: translationUpstream, owner: "translation")
         async let moderation:    [[String: Any]] = fetchModels(from: moderationUpstream, owner: "moderation")
-        var combined = await transcription + (await moderation)
+        var combined = await transcription + (await translation) + (await moderation)
         if includeNativeMacOS {
             combined.insert([
                 "id": "macos-speech-analyzer",

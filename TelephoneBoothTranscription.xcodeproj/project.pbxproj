@@ -19,11 +19,14 @@
 		387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
 		397F4078EFDF7865D64740B9 /* InMemoryAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */; };
 		3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */; };
+		3C9BBBA01B621ACE8C4D4F75 /* TranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */; };
 		3CAA088588C74F197B6B9EBC /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */; };
 		44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
 		4758D59FEA3ADCFDD42B7C29 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 17F785B05537C247EAD138DA /* AppIcon.icns */; };
 		4DF794AA0E36D51F5E57C346 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */; };
 		555EF6F474CF6859E392B1EC /* TranscriptionCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5FA41A058F1F0620DFAC1D24 /* ProxyTranslationBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE1EBCFCE9F040A147E5F25 /* ProxyTranslationBackend.swift */; };
+		5FE81543AA164152798869AD /* TextTranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8986C8DF2BB2972833D94E10 /* TextTranslationRoute.swift */; };
 		6E73BE5F12E29990DF28B5CE /* RequestsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F093D733703A349373FC072 /* RequestsRoute.swift */; };
 		71C0578ACA40218655461456 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3907F4CA5B6A5DEE723037D /* Theme.swift */; };
 		71C45CC53AA5DF8D72FB0066 /* RequestLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7D772BF49912B0122CA505 /* RequestLogStore.swift */; };
@@ -31,6 +34,7 @@
 		8100ADE862B8A5C3F9F265E4 /* InMemoryTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */; };
 		8125148F00BC05AB11D5B7E8 /* TranscriptionCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */; };
 		8379FD8BA09D9AE62D60454C /* InMemoryRequestLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */; };
+		87ED0AAB436FA65E0EB28DBE /* TextTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B41180B457AF420AC1D90 /* TextTranslator.swift */; };
 		97EAA1AE12C62E18721C3F75 /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8544DD720CB364126F1627E3 /* AuthMiddleware.swift */; };
 		9CBE58E58CE7518C2A5290D8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D45EC1EC5F8BFB4925DB38 /* ContentView.swift */; };
 		9D09F129BECBBF985E7D3FB0 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB96230C24FF2DCCC9CF7753 /* App.swift */; };
@@ -88,7 +92,9 @@
 		2020BB961F3116444D91D359 /* APIKeyStoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStoring.swift; sourceTree = "<group>"; };
 		21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationClassifier.swift; sourceTree = "<group>"; };
 		257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTokenStore.swift; sourceTree = "<group>"; };
+		257B41180B457AF420AC1D90 /* TextTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextTranslator.swift; sourceTree = "<group>"; };
 		2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
+		2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRoute.swift; sourceTree = "<group>"; };
 		3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRoute.swift; sourceTree = "<group>"; };
 		3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationRoute.swift; sourceTree = "<group>"; };
 		3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUpstream.swift; sourceTree = "<group>"; };
@@ -99,8 +105,10 @@
 		5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryRequestLogStore.swift; sourceTree = "<group>"; };
 		6F093D733703A349373FC072 /* RequestsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsRoute.swift; sourceTree = "<group>"; };
 		8544DD720CB364126F1627E3 /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
+		8986C8DF2BB2972833D94E10 /* TextTranslationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextTranslationRoute.swift; sourceTree = "<group>"; };
 		9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TranscriptionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServer.swift; sourceTree = "<group>"; };
+		ADE1EBCFCE9F040A147E5F25 /* ProxyTranslationBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyTranslationBackend.swift; sourceTree = "<group>"; };
 		AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogView.swift; sourceTree = "<group>"; };
 		AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrencyLimitMiddleware.swift; sourceTree = "<group>"; };
 		B5B30141AD55720B8046CEC7 /* UpstreamError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpstreamError.swift; sourceTree = "<group>"; };
@@ -162,7 +170,9 @@
 				DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */,
 				3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */,
 				6F093D733703A349373FC072 /* RequestsRoute.swift */,
+				8986C8DF2BB2972833D94E10 /* TextTranslationRoute.swift */,
 				3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */,
+				2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */,
 			);
 			path = Routes;
 			sourceTree = "<group>";
@@ -196,7 +206,9 @@
 				D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */,
 				3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */,
 				07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */,
+				ADE1EBCFCE9F040A147E5F25 /* ProxyTranslationBackend.swift */,
 				0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */,
+				257B41180B457AF420AC1D90 /* TextTranslator.swift */,
 				B5B30141AD55720B8046CEC7 /* UpstreamError.swift */,
 			);
 			path = Upstream;
@@ -411,14 +423,18 @@
 				387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */,
 				0E8C6E249E9E8FE917F9CCF7 /* OpenAIUpstream.swift in Sources */,
 				44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */,
+				5FA41A058F1F0620DFAC1D24 /* ProxyTranslationBackend.swift in Sources */,
 				A50D8C6CB265D61B374DC0A4 /* RequestLogMiddleware.swift in Sources */,
 				71C45CC53AA5DF8D72FB0066 /* RequestLogStore.swift in Sources */,
 				A83A6E3E2374B274D3019B14 /* RequestLogWriter.swift in Sources */,
 				6E73BE5F12E29990DF28B5CE /* RequestsRoute.swift in Sources */,
 				31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */,
+				5FE81543AA164152798869AD /* TextTranslationRoute.swift in Sources */,
+				87ED0AAB436FA65E0EB28DBE /* TextTranslator.swift in Sources */,
 				F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */,
 				BB3712EE81939BF730AA2D1E /* TranscriptionRoute.swift in Sources */,
 				A0549FECC22FFA3C3C214DF7 /* TranscriptionServer.swift in Sources */,
+				3C9BBBA01B621ACE8C4D4F75 /* TranslationRoute.swift in Sources */,
 				27AD87406A5096156C9071A9 /* UpstreamError.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
