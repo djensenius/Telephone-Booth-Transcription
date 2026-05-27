@@ -74,6 +74,7 @@ All settings live in the **Operator pull worker** section of Settings:
 - **Per-realm toggles** — transcription, translation, moderation.
 
 The worker only starts when:
+
 - the master toggle is on,
 - `baseURL` is a valid http(s) URL,
 - a non-empty API token is present in the Keychain,
@@ -83,7 +84,7 @@ The worker only starts when:
 
 ## Internal architecture
 
-```
+```text
 ┌────────────┐    poll (5s)      ┌──────────────┐
 │ Operator   │ ◄────────────────│ OperatorWorker│
 │ /v1/jobs/* │                   └──────┬───────┘
