@@ -48,6 +48,17 @@ public struct TextTranslationRoute<Context: RequestContext>: Sendable {
         }
         let sourceLanguage = obj["source_language"] as? String
 
+        // Reject early when the translation model is not configured. Without it,
+        // we'd send `"model": ""` to the upstream and surface a confusing
+        // 400 as `translation_upstream_http_400`.
+        if translator.model.trimmingCharacters(in: .whitespaces).isEmpty {
+            return Self.errorResponse(
+                status: .badRequest,
+                code: "missing_translation_model",
+                message: "translation model is not configured; set `defaultTranslationModel`"
+            )
+        }
+
         do {
             let translation = try await translator.translateToEnglish(
                 input: input,

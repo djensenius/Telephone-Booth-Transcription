@@ -157,6 +157,47 @@ struct TranslationRouteTests {
         }
         try await httpClient.shutdown()
     }
+
+    /// `POST /v1/translations` with a valid request body but no
+    /// `defaultTranslationModel` configured returns 400 missing_translation_model.
+    @Test func textTranslationsRejectsMissingModel() async throws {
+        let token = "tok"
+        let tokenStore = InMemoryTokenStore(initial: token)
+        let logStore = InMemoryRequestLogStore()
+        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
+
+        // Default ServerConfig leaves `defaultTranslationModel` empty.
+        let server = TranscriptionServer(
+            config: ServerConfig(),
+            tokenStore: tokenStore,
+            logStore: logStore,
+            httpClient: httpClient,
+            logger: Logger(label: "test")
+        )
+        let app = Application(
+            router: server.makeRouter(),
+            configuration: .init(address: .hostname("127.0.0.1", port: 0))
+        )
+        try await app.test(.live) { client in
+            var headers = HTTPFields()
+            headers[.authorization] = "Bearer \(token)"
+            headers[.contentType] = "application/json"
+            try await client.execute(
+                uri: "/v1/translations",
+                method: .post,
+                headers: headers,
+                body: ByteBuffer(string: #"{"input":"hola"}"#)
+            ) { response in
+                #expect(response.status == .badRequest)
+                let bodyBytes = response.body.getBytes(at: response.body.readerIndex,
+                                                      length: response.body.readableBytes) ?? []
+                let json = try? JSONSerialization.jsonObject(with: Data(bodyBytes)) as? [String: Any]
+                let err = json?["error"] as? [String: Any]
+                #expect(err?["code"] as? String == "missing_translation_model")
+            }
+        }
+        try await httpClient.shutdown()
+    }
 }
 
 @Suite("TextTranslator response parsing")
