@@ -62,6 +62,12 @@ Lives next to the rest of the [Telephone-Booth][tb] family:
   on :8000)                 on :1234
 ```
 
+Optionally, the app can also run an **Operator pull worker** that polls a
+remote Operator backend every few seconds, leases queued jobs, runs them
+locally through the same routes, and posts results back — handy when the
+Operator can't reach the Mac directly. See
+[`docs/operator-pull.md`](docs/operator-pull.md).
+
 ## Quickstart
 
 You'll need:

@@ -46,7 +46,10 @@ final class ServerHost: ObservableObject {
 
     @Published private(set) var state: RunState = .stopped
     @Published var config: ServerConfig {
-        didSet { ConfigPersistence.save(config, keyStore: apiKeyStore) }
+        didSet {
+            ConfigPersistence.save(config, keyStore: apiKeyStore)
+            Task { await self.reconcileOperatorWorker() }
+        }
     }
     @Published var preventSleep: Bool {
         didSet {
@@ -56,6 +59,10 @@ final class ServerHost: ObservableObject {
     }
     @Published private(set) var sleepAssertionHeld: Bool = false
 
+    /// Snapshot of the Operator pull worker's status, updated whenever the
+    /// worker transitions phase. `nil` when the worker has never started.
+    @Published private(set) var operatorWorkerStatus: OperatorWorker.Status?
+
     let tokenStore: any TokenStore
     let apiKeyStore: any APIKeyStoring
     let logStore: any RequestLogStoring
@@ -64,6 +71,11 @@ final class ServerHost: ObservableObject {
 
     private var httpClient: HTTPClient?
     private var serverTask: Task<Void, Never>?
+
+    /// Active Operator pull worker, when enabled. Lives alongside (and
+    /// depends on) the HTTP server because the worker dispatches via
+    /// loopback.
+    private var operatorWorker: OperatorWorker?
 
     /// Serialization gate: each lifecycle operation awaits the previous one.
     private var lifecycleGate: Task<Void, Never>?
@@ -150,6 +162,12 @@ final class ServerHost: ObservableObject {
                 self?.applyPowerAssertion()
             }
 
+            // Start the Operator pull worker once the HTTP server is up, since
+            // the worker dispatches jobs via loopback.
+            Task { @MainActor [weak self] in
+                await self?.reconcileOperatorWorker()
+            }
+
             do {
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     group.addTask { await writer.run() }
@@ -184,6 +202,9 @@ final class ServerHost: ObservableObject {
         let stopTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
+            // Stop the worker before tearing down the loopback target.
+            await self.stopOperatorWorker()
+
             // Cancel the server task (triggers CancellationError in runService).
             self.serverTask?.cancel()
 
@@ -211,6 +232,7 @@ final class ServerHost: ObservableObject {
     func shutdown() async {
         guard state.isRunning || state == .starting else { return }
         state = .stopping
+        await stopOperatorWorker()
         serverTask?.cancel()
         // Await the server task to allow in-flight requests to drain.
         await serverTask?.value
@@ -269,6 +291,27 @@ final class ServerHost: ObservableObject {
         config.translationUpstream.apiKey = value.isEmpty ? nil : value
     }
 
+    /// Returns the Operator API token from Keychain, or empty string.
+    func operatorAPIToken() -> String {
+        (try? apiKeyStore.read(account: APIKeyAccount.operatorPull)) ?? ""
+    }
+
+    /// Persists the Operator API token to Keychain. Saved immediately because
+    /// the token is not part of `config`/UserDefaults.
+    func setOperatorAPIToken(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if trimmed.isEmpty {
+                try apiKeyStore.delete(account: APIKeyAccount.operatorPull)
+            } else {
+                try apiKeyStore.write(account: APIKeyAccount.operatorPull, value: trimmed)
+            }
+        } catch {
+            logger.error("operator token persist failed: \(error)")
+        }
+        Task { await self.reconcileOperatorWorker() }
+    }
+
     /// Fetches `/v1/models` from one of the user's configured upstreams (or
     /// from this server itself once it's running) so the UI can populate
     /// model pickers. Returns an empty list on any failure.
@@ -309,6 +352,57 @@ final class ServerHost: ObservableObject {
             powerAssertion.release()
         }
         sleepAssertionHeld = powerAssertion.isHeld
+    }
+
+    /// Starts, stops, or restarts the Operator pull worker based on the
+    /// current configuration, token presence, and server state. Idempotent
+    /// — safe to call from `didSet` observers and lifecycle transitions.
+    func reconcileOperatorWorker() async {
+        guard case .running(let host, let port) = state else {
+            await stopOperatorWorker()
+            return
+        }
+        let cfg = config.operatorPolling.validated()
+        let token = operatorAPIToken()
+        let shouldRun = cfg.enabled && cfg.isRunnableWithToken && !token.isEmpty
+        guard shouldRun else {
+            await stopOperatorWorker()
+            return
+        }
+        // Restart on any meaningful change. Cheap to teardown+rebuild.
+        await stopOperatorWorker()
+        guard let client = httpClient else { return }
+        let opClient = HTTPOperatorClient(httpClient: client, config: cfg, token: token, logger: logger)
+        let bearer = (try? tokenStore.current()) ?? ""
+        let dispatcher = LoopbackOperatorJobDispatcher(
+            httpClient: client,
+            bindHost: host,
+            bindPort: port,
+            bearerToken: bearer,
+            timeout: .seconds(config.upstreamTimeout.seconds),
+            maxAudioBytes: config.maxRequestBytes,
+            logger: logger
+        )
+        let worker = OperatorWorker(
+            client: opClient,
+            dispatcher: dispatcher,
+            pollIntervalSeconds: cfg.pollIntervalSeconds,
+            logger: logger,
+            onStatusChange: { [weak self] status in
+                Task { @MainActor [weak self] in
+                    self?.operatorWorkerStatus = status
+                }
+            }
+        )
+        self.operatorWorker = worker
+        await worker.start()
+    }
+
+    private func stopOperatorWorker() async {
+        guard let worker = operatorWorker else { return }
+        operatorWorker = nil
+        await worker.stop()
+        operatorWorkerStatus = nil
     }
 }
 
@@ -429,6 +523,13 @@ enum ConfigPersistence {
         var defaultTranslationModel: String?
         var nativeTranscriptionLocale: String?
         var nonLoopbackBindAcknowledged: Bool?
+        var operatorPollingEnabled: Bool?
+        var operatorPollingBaseURL: String?
+        var operatorPollingIntervalSeconds: Int?
+        var operatorPollingLeaseSeconds: Int?
+        var operatorPollingTranscription: Bool?
+        var operatorPollingTranslation: Bool?
+        var operatorPollingModeration: Bool?
 
         init(_ c: ServerConfig) {
             bindHost = c.bindHost
@@ -461,6 +562,13 @@ enum ConfigPersistence {
             defaultTranslationModel = c.defaultTranslationModel
             nativeTranscriptionLocale = c.nativeTranscriptionLocale
             nonLoopbackBindAcknowledged = c.nonLoopbackBindAcknowledged
+            operatorPollingEnabled = c.operatorPolling.enabled
+            operatorPollingBaseURL = c.operatorPolling.baseURL
+            operatorPollingIntervalSeconds = c.operatorPolling.pollIntervalSeconds
+            operatorPollingLeaseSeconds = c.operatorPolling.leaseSeconds
+            operatorPollingTranscription = c.operatorPolling.transcriptionEnabled
+            operatorPollingTranslation = c.operatorPolling.translationEnabled
+            operatorPollingModeration = c.operatorPolling.moderationEnabled
         }
 
         var asConfig: ServerConfig {
@@ -494,7 +602,16 @@ enum ConfigPersistence {
                 defaultTranscriptionModel: defaultTranscriptionModel ?? "",
                 defaultTranslationModel: defaultTranslationModel ?? "",
                 nativeTranscriptionLocale: nativeTranscriptionLocale ?? "en-US",
-                nonLoopbackBindAcknowledged: nonLoopbackBindAcknowledged ?? false
+                nonLoopbackBindAcknowledged: nonLoopbackBindAcknowledged ?? false,
+                operatorPolling: OperatorPollingConfig(
+                    enabled: operatorPollingEnabled ?? false,
+                    baseURL: operatorPollingBaseURL ?? "",
+                    pollIntervalSeconds: operatorPollingIntervalSeconds ?? 5,
+                    leaseSeconds: operatorPollingLeaseSeconds ?? 60,
+                    transcriptionEnabled: operatorPollingTranscription ?? true,
+                    translationEnabled: operatorPollingTranslation ?? true,
+                    moderationEnabled: operatorPollingModeration ?? true
+                )
             )
         }
     }

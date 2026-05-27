@@ -65,6 +65,12 @@ public struct ServerConfig: Sendable, Equatable {
     /// acknowledge the risk in Settings before non-loopback binds take effect.
     public var nonLoopbackBindAcknowledged: Bool
 
+    /// Configuration for the Operator-pull worker. When enabled and valid,
+    /// the app polls a remote Operator for queued jobs and runs them
+    /// locally via loopback HTTP. The Operator's API token is stored
+    /// separately in Keychain (see `APIKeyAccount.operatorPull`).
+    public var operatorPolling: OperatorPollingConfig
+
     // MARK: - Validation constants
 
     public static let portRange = 1...65535
@@ -145,6 +151,9 @@ public struct ServerConfig: Sendable, Equatable {
             copy.transcriptionBackend = .proxy(upstream.strippingKeyIfInsecure())
         }
 
+        // Operator polling clamp
+        copy.operatorPolling = copy.operatorPolling.validated()
+
         return copy
     }
 
@@ -163,7 +172,8 @@ public struct ServerConfig: Sendable, Equatable {
         defaultTranscriptionModel: String = "",
         defaultTranslationModel: String = "",
         nativeTranscriptionLocale: String = "en-US",
-        nonLoopbackBindAcknowledged: Bool = false
+        nonLoopbackBindAcknowledged: Bool = false,
+        operatorPolling: OperatorPollingConfig = OperatorPollingConfig()
     ) {
         self.bindHost = bindHost
         self.bindPort = bindPort
@@ -180,6 +190,7 @@ public struct ServerConfig: Sendable, Equatable {
         self.defaultTranslationModel = defaultTranslationModel
         self.nativeTranscriptionLocale = nativeTranscriptionLocale
         self.nonLoopbackBindAcknowledged = nonLoopbackBindAcknowledged
+        self.operatorPolling = operatorPolling
     }
 
     /// The transcription upstream config, when the backend is a proxy. Returns

@@ -16,4 +16,5 @@ public enum APIKeyAccount {
     public static let transcription = "upstream-transcription-api-key"
     public static let translation = "upstream-translation-api-key"
     public static let moderation = "upstream-moderation-api-key"
+    public static let operatorPull = "operator-pull-api-token"
 }
