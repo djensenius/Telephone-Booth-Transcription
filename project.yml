@@ -1,6 +1,6 @@
 name: TelephoneBoothTranscription
 options:
-  bundleIdPrefix: dev.djensenius
+  bundleIdPrefix: org.davidjensenius
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
@@ -53,7 +53,7 @@ targets:
         CFBundleVersion: "1"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.shared
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.shared
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
   TranscriptionOnDevice:
@@ -79,7 +79,7 @@ targets:
         product: Logging
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.ondevice
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.ondevice
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
   TranscriptionOperator:
@@ -113,7 +113,7 @@ targets:
         product: Crypto
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.operator
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.operator
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
   TranscriptionCore:
@@ -151,7 +151,7 @@ targets:
         product: GRDB
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.core
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.core
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
   TranscriptionApp:
@@ -195,7 +195,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Transcription Booth uses on-device speech recognition to convert audio to text when the built-in macOS transcription backend is selected."
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription
         PRODUCT_NAME: "Telephone Booth Transcription"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
