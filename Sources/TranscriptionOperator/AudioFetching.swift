@@ -1,0 +1,201 @@
+import AsyncHTTPClient
+import Crypto
+import Foundation
+import Logging
+import NIOCore
+import TranscriptionShared
+
+/// Errors raised while fetching and verifying job audio. Messages are fixed
+/// and content-free; the dispatcher maps these onto sanitized
+/// `OperatorJobError`s. None of these values ever carry the audio URL, bytes,
+/// filename, or hash.
+public enum AudioFetchError: Error, Sendable, Equatable {
+    /// `expectedSHA256` was not a 64-character hex string.
+    case invalidExpectedHash
+    /// The download exceeded `maxBytes` before completing.
+    case tooLarge
+    /// The fully-downloaded bytes did not hash to `expectedSHA256`.
+    case hashMismatch
+    /// The audio URL was not an `https` URL (and insecure URLs are disallowed).
+    case insecureURL
+    /// The transport failed (DNS/connect/TLS/HTTP status). Detail is the
+    /// sanitized error *type*, never the URL or response body.
+    case fetchFailed
+}
+
+/// Downloads job audio to a private, short-lived temp file and hands the file
+/// URL to a closure. The file (and its containing directory) are always removed
+/// before the call returns, on every path including cancellation and throws.
+public protocol AudioFetching: Sendable {
+    /// Streams the audio at `url` to a temp file, enforcing `maxBytes` and
+    /// verifying it hashes to `expectedSHA256`, then invokes `body` with the
+    /// on-disk URL and returns its result.
+    func withFetchedAudioFile<T: Sendable>(
+        url: String,
+        expectedSHA256: String,
+        maxBytes: Int,
+        suggestedExtension: String?,
+        _ body: @Sendable (URL) async throws -> T
+    ) async throws -> T
+}
+
+/// Reusable staging core shared by the HTTP fetcher and tests. Given any
+/// `AsyncSequence` of `ByteBuffer` chunks (real network body or a synthetic
+/// test stream), it writes to a private temp file while hashing and enforcing a
+/// byte cap, verifies the digest, runs `body`, and always cleans up.
+public enum AudioFileStaging {
+    /// Normalizes a sha256 hex string to lowercase, or returns nil if it is not
+    /// exactly 64 hexadecimal characters.
+    public static func normalizedSHA256(_ value: String) -> String? {
+        guard value.count == 64 else { return nil }
+        var lowered = ""
+        lowered.reserveCapacity(64)
+        for character in value {
+            switch character {
+            case "0"..."9", "a"..."f":
+                lowered.append(character)
+            case "A"..."F":
+                lowered.append(Character(character.lowercased()))
+            default:
+                return nil
+            }
+        }
+        return lowered
+    }
+
+    public static func stage<S: AsyncSequence & Sendable, T: Sendable>(
+        chunks: S,
+        expectedSHA256: String,
+        maxBytes: Int,
+        suggestedExtension: String?,
+        _ body: @Sendable (URL) async throws -> T
+    ) async throws -> T where S.Element == ByteBuffer {
+        guard let expected = normalizedSHA256(expectedSHA256) else {
+            throw AudioFetchError.invalidExpectedHash
+        }
+
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("tbt-audio-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        defer { try? fileManager.removeItem(at: directory) }
+
+        let ext = Self.sanitizedExtension(suggestedExtension)
+        let fileURL = directory.appendingPathComponent("audio\(ext)")
+        guard fileManager.createFile(atPath: fileURL.path, contents: nil) else {
+            throw AudioFetchError.fetchFailed
+        }
+        let handle = try FileHandle(forWritingTo: fileURL)
+        var handleClosed = false
+        func closeHandle() {
+            guard !handleClosed else { return }
+            handleClosed = true
+            try? handle.close()
+        }
+        defer { closeHandle() }
+
+        var hasher = SHA256()
+        var total = 0
+        do {
+            for try await chunk in chunks {
+                let readable = chunk.readableBytes
+                guard readable > 0 else { continue }
+                total += readable
+                if total > maxBytes {
+                    throw AudioFetchError.tooLarge
+                }
+                let bytes = chunk.getBytes(at: chunk.readerIndex, length: readable) ?? []
+                let data = Data(bytes)
+                hasher.update(data: data)
+                try handle.write(contentsOf: data)
+            }
+        } catch let error as AudioFetchError {
+            throw error
+        } catch {
+            throw AudioFetchError.fetchFailed
+        }
+        closeHandle()
+
+        let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        guard digest == expected else {
+            throw AudioFetchError.hashMismatch
+        }
+
+        return try await body(fileURL)
+    }
+
+    private static func sanitizedExtension(_ suggested: String?) -> String {
+        guard let suggested, !suggested.isEmpty else { return ".flac" }
+        // Accept only an alphanumeric extension; ignore full filenames or
+        // anything with path separators to avoid traversal or odd names.
+        let raw = suggested.hasPrefix(".") ? String(suggested.dropFirst()) : suggested
+        guard !raw.isEmpty, raw.count <= 8, raw.allSatisfy({ $0.isLetter || $0.isNumber }) else {
+            return ".flac"
+        }
+        return "." + raw.lowercased()
+    }
+}
+
+/// `AsyncHTTPClient`-backed `AudioFetching`. Requires `https` URLs unless
+/// explicitly configured to allow insecure URLs (used only for loopback tests).
+public final class HTTPClientAudioFetcher: AudioFetching {
+    private let httpClient: HTTPClient
+    private let timeout: TimeAmount
+    private let allowInsecureURLs: Bool
+    private let logger: Logger
+
+    public init(
+        httpClient: HTTPClient,
+        timeout: TimeAmount = .seconds(120),
+        allowInsecureURLs: Bool = false,
+        logger: Logger = Logger(label: "audio-fetcher")
+    ) {
+        self.httpClient = httpClient
+        self.timeout = timeout
+        self.allowInsecureURLs = allowInsecureURLs
+        self.logger = logger
+    }
+
+    public func withFetchedAudioFile<T: Sendable>(
+        url: String,
+        expectedSHA256: String,
+        maxBytes: Int,
+        suggestedExtension: String?,
+        _ body: @Sendable (URL) async throws -> T
+    ) async throws -> T {
+        // Validate the hash before opening any connection.
+        guard AudioFileStaging.normalizedSHA256(expectedSHA256) != nil else {
+            throw AudioFetchError.invalidExpectedHash
+        }
+        if !allowInsecureURLs {
+            guard url.lowercased().hasPrefix("https://") else {
+                throw AudioFetchError.insecureURL
+            }
+        }
+
+        var request = HTTPClientRequest(url: url)
+        request.method = .GET
+        let response: HTTPClientResponse
+        do {
+            response = try await httpClient.execute(request, deadline: NIODeadline.now() + timeout)
+        } catch {
+            logger.debug("audio fetch transport failed: \(type(of: error))")
+            throw AudioFetchError.fetchFailed
+        }
+        guard (200..<300).contains(Int(response.status.code)) else {
+            throw AudioFetchError.fetchFailed
+        }
+
+        return try await AudioFileStaging.stage(
+            chunks: response.body,
+            expectedSHA256: expectedSHA256,
+            maxBytes: maxBytes,
+            suggestedExtension: suggestedExtension,
+            body
+        )
+    }
+}

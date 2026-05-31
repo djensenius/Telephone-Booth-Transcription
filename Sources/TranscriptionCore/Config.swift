@@ -1,4 +1,5 @@
 import Foundation
+import TranscriptionShared
 
 /// Runtime configuration for the transcription server.
 ///

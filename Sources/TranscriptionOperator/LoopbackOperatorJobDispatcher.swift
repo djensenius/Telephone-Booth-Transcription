@@ -2,6 +2,7 @@ import AsyncHTTPClient
 import Foundation
 import Logging
 import NIOCore
+import TranscriptionShared
 
 /// Default `OperatorJobDispatcher` that executes jobs by hitting this
 /// app's own HTTP server over loopback. Reuses all routing, middleware,
@@ -168,7 +169,7 @@ public final class LoopbackOperatorJobDispatcher: OperatorJobDispatcher {
         request.headers.add(name: "Content-Type", value: contentType)
         request.headers.add(name: "Authorization", value: "Bearer \(bearerToken)")
         request.body = .bytes(ByteBuffer(bytes: body))
-        let deadline = NIODeadline.now() + .nanoseconds(timeout.asNanoseconds)
+        let deadline = NIODeadline.now() + timeout
         let response = try await httpClient.execute(request, deadline: deadline)
         let buffer = try await response.body.collect(upTo: 32 * 1024 * 1024)
         let bytes = buffer.getBytes(at: buffer.readerIndex, length: buffer.readableBytes) ?? []
@@ -178,7 +179,7 @@ public final class LoopbackOperatorJobDispatcher: OperatorJobDispatcher {
     private func downloadAudio(url: String) async throws -> Data {
         var request = HTTPClientRequest(url: url)
         request.method = .GET
-        let deadline = NIODeadline.now() + .nanoseconds(timeout.asNanoseconds)
+        let deadline = NIODeadline.now() + timeout
         let response: HTTPClientResponse
         do {
             response = try await httpClient.execute(request, deadline: deadline)

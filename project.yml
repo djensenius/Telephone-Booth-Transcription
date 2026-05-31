@@ -11,12 +11,21 @@ packages:
   async-http-client:
     url: https://github.com/swift-server/async-http-client.git
     from: 1.21.0
+  swift-nio:
+    url: https://github.com/apple/swift-nio.git
+    from: 2.65.0
   swift-log:
     url: https://github.com/apple/swift-log.git
     from: 1.5.0
   swift-crypto:
     url: https://github.com/apple/swift-crypto.git
     from: 3.0.0
+  swift-service-context:
+    url: https://github.com/apple/swift-service-context.git
+    from: 1.3.0
+  swift-nio-transport-services:
+    url: https://github.com/apple/swift-nio-transport-services.git
+    from: 1.28.0
   grdb-swift:
     url: https://github.com/groue/GRDB.swift.git
     from: 6.29.0
@@ -25,6 +34,88 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     SWIFT_VERSION: "6.0"
 targets:
+  TranscriptionShared:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionShared
+    info:
+      path: Resources/TranscriptionShared-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionShared
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.shared
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionOnDevice:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionOnDevice
+    info:
+      path: Resources/TranscriptionOnDevice-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionOnDevice
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared
+      - package: swift-log
+        product: Logging
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.ondevice
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionOperator:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionOperator
+    info:
+      path: Resources/TranscriptionOperator-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionOperator
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared
+      - package: async-http-client
+        product: AsyncHTTPClient
+      - package: swift-nio
+        product: NIOCore
+      - package: swift-nio
+        product: NIOHTTP1
+      - package: swift-log
+        product: Logging
+      - package: swift-crypto
+        product: Crypto
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.djensenius.telephone-booth-transcription.operator
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionCore:
     type: framework
     platform: macOS
@@ -43,8 +134,13 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
     dependencies:
+      - target: TranscriptionShared
+      - target: TranscriptionOnDevice
+      - target: TranscriptionOperator
       - package: hummingbird
         product: Hummingbird
+      - package: swift-service-context
+        product: ServiceContextModule
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-log
@@ -68,6 +164,17 @@ targets:
         buildPhase: resources
     dependencies:
       - target: TranscriptionCore
+      - target: TranscriptionShared
+      - target: TranscriptionOnDevice
+      - target: TranscriptionOperator
+      - package: async-http-client
+        product: AsyncHTTPClient
+      - package: swift-nio-transport-services
+        product: NIOTransportServices
+      - package: swift-crypto
+        product: Crypto
+      - package: swift-log
+        product: Logging
     info:
       path: Resources/TranscriptionApp-Info.plist
       properties:
@@ -107,3 +214,15 @@ schemes:
     build:
       targets:
         TranscriptionCore: all
+  TranscriptionShared:
+    build:
+      targets:
+        TranscriptionShared: all
+  TranscriptionOnDevice:
+    build:
+      targets:
+        TranscriptionOnDevice: all
+  TranscriptionOperator:
+    build:
+      targets:
+        TranscriptionOperator: all

@@ -28,7 +28,7 @@ The worker speaks four endpoints on the Operator:
 | `GET` | `/v1/jobs/next?leaseSeconds=N&kinds=transcription,translation,moderation` | Returns `204 No Content` when nothing is queued. |
 | `POST` | `/v1/jobs/{id}/succeed` | Body: `{ "leaseToken": "...", ...kind-specific result fields }`. |
 | `POST` | `/v1/jobs/{id}/fail` | Body: `{ "leaseToken": "...", "errorCode": "...", "errorMessage": "..." }`. |
-| `POST` | `/v1/jobs/{id}/heartbeat` | Body: `{ "leaseToken": "..." }`. Reserved; not issued by the default worker. |
+| `POST` | `/v1/jobs/{id}/heartbeat` | Body: `{ "leaseToken": "..." }`. Extends the lease while a long job runs. |
 
 All requests carry `Authorization: Bearer <operator-api-token>` and a
 `User-Agent: Telephone-Booth-Transcription/<version>` header.
@@ -118,6 +118,27 @@ The dispatcher (`LoopbackOperatorJobDispatcher`) re-uses the local HTTP
 server so all routing, request logging, concurrency limiting, and backend
 selection behave identically whether the request came from a push client
 or from the worker.
+
+### In-process dispatcher
+
+Pull/sync clients that have no local HTTP server (and the worker on devices
+that run models on-device) use `InProcessOperatorJobDispatcher` instead. It
+calls the on-device services directly: for transcription it streams the
+job's `audioUrl` to a private temp file that is **size-capped** and
+**sha256-verified** before handing the file to the transcriber, then deletes
+it. Translation and moderation run on the inline payload text. Every failure
+is mapped to a fixed, content-free error code (e.g. `audio_sha256_mismatch`,
+`transcription_failed`); no audio bytes, transcript, URL, filename, or hash
+is ever logged or returned.
+
+### Heartbeat
+
+While a leased job runs, the worker periodically POSTs
+`/v1/jobs/{id}/heartbeat` to keep the lease from lapsing during slow audio
+downloads or long on-device runs. The heartbeat task is always cancelled and
+awaited **before** the worker submits `succeed`/`fail`, so a heartbeat can
+never race the final result. Heartbeat failures are logged and never fail the
+job. The interval defaults to one third of the requested lease (minimum 1 s).
 
 ## Privacy & logging
 

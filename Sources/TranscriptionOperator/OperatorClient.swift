@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import NIOCore
 import NIOHTTP1
+import TranscriptionShared
 
 /// Minimal HTTP client for the Operator's `/v1/jobs/*` API. Abstracted
 /// behind a protocol so the worker can be unit-tested without a real
@@ -36,27 +37,40 @@ public final class HTTPOperatorClient: OperatorClient {
     private let token: String
     private let logger: Logger
     private let timeout: TimeAmount
+    private let capabilities: Set<OperatorJob.Kind>?
 
     public init(
         httpClient: HTTPClient,
         config: OperatorPollingConfig,
         token: String,
         timeout: TimeAmount = .seconds(30),
+        capabilities: Set<OperatorJob.Kind>? = nil,
         logger: Logger = Logger(label: "operator-client")
     ) {
         self.httpClient = httpClient
         self.config = config
         self.token = token
         self.timeout = timeout
+        self.capabilities = capabilities
         self.logger = logger
     }
 
+    /// The kinds we are willing to lease: the configured kinds, optionally
+    /// intersected with what this device can actually run. Order is stable.
+    private var effectiveKinds: [OperatorJob.Kind] {
+        let requested = config.requestedKindList
+        guard let capabilities else { return requested }
+        return requested.filter(capabilities.contains)
+    }
+
     public func leaseNextJob() async throws -> OperatorJob? {
-        let kinds = config.requestedKinds
-        var path = "/v1/jobs/next?leaseSeconds=\(config.leaseSeconds)"
-        if !kinds.isEmpty {
-            path += "&kinds=\(kinds)"
-        }
+        let kinds = effectiveKinds
+        // No leasable kinds means there is nothing we could run; never call
+        // `/jobs/next` with an empty `kinds` (the Operator treats that as
+        // "all kinds" and we'd lease work we can't perform).
+        guard !kinds.isEmpty else { return nil }
+        let kindsValue = kinds.map(\.rawValue).joined(separator: ",")
+        let path = "/v1/jobs/next?leaseSeconds=\(config.leaseSeconds)&kinds=\(kindsValue)"
         var request = try makeRequest(method: .GET, path: path)
         request.headers.add(name: "Accept", value: "application/json")
         let response = try await execute(request)
@@ -125,7 +139,7 @@ public final class HTTPOperatorClient: OperatorClient {
     }
 
     private func execute(_ request: HTTPClientRequest) async throws -> HTTPClientResponse {
-        let deadline = NIODeadline.now() + .nanoseconds(timeout.asNanoseconds)
+        let deadline = NIODeadline.now() + timeout
         return try await httpClient.execute(request, deadline: deadline)
     }
 

@@ -8,7 +8,10 @@ let package = Package(
     ],
     products: [
         .executable(name: "telephone-booth-transcription", targets: ["TranscriptionApp"]),
-        .library(name: "TranscriptionCore", targets: ["TranscriptionCore"])
+        .library(name: "TranscriptionCore", targets: ["TranscriptionCore"]),
+        .library(name: "TranscriptionShared", targets: ["TranscriptionShared"]),
+        .library(name: "TranscriptionOnDevice", targets: ["TranscriptionOnDevice"]),
+        .library(name: "TranscriptionOperator", targets: ["TranscriptionOperator"])
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.5.0"),
@@ -19,8 +22,42 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "TranscriptionShared",
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny"),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
+            name: "TranscriptionOnDevice",
+            dependencies: [
+                "TranscriptionShared",
+                .product(name: "Logging", package: "swift-log")
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny"),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
+            name: "TranscriptionOperator",
+            dependencies: [
+                "TranscriptionShared",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny"),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
             name: "TranscriptionCore",
             dependencies: [
+                "TranscriptionShared",
+                "TranscriptionOnDevice",
+                "TranscriptionOperator",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "Logging", package: "swift-log"),
@@ -43,6 +80,8 @@ let package = Package(
             name: "TranscriptionCoreTests",
             dependencies: [
                 "TranscriptionCore",
+                "TranscriptionOnDevice",
+                "TranscriptionOperator",
                 .product(name: "HummingbirdTesting", package: "hummingbird")
             ]
         )
