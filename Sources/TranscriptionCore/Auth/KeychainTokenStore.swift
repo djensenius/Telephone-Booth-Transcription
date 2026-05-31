@@ -6,11 +6,11 @@ import Security
 /// Stores the server's bearer token in the macOS login keychain.
 ///
 /// One generic-password entry per (service, account) tuple. We use a constant
-/// service identifier ("dev.djensenius.telephone-booth-transcription") and the
+/// service identifier ("org.davidjensenius.TelephoneBoothTranscription") and the
 /// account "server-token". The Keychain ACL inherits the app's code-signing
 /// identity so other apps can't read the item.
 public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
-    public static let defaultService = "dev.djensenius.telephone-booth-transcription"
+    public static let defaultService = "org.davidjensenius.TelephoneBoothTranscription"
     public static let defaultAccount = "server-token"
 
     private let lock = NSLock()

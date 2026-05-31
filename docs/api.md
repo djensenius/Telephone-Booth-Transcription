@@ -3,7 +3,7 @@
 Every endpoint except `/healthz` requires `Authorization: Bearer <token>`. The
 token is shown in the app's **Status** tab and rotates from the same screen; it
 lives in the macOS login Keychain under
-`dev.djensenius.telephone-booth-transcription / server-token`.
+`org.davidjensenius.TelephoneBoothTranscription / server-token`.
 
 `401 Unauthorized` is returned for:
 

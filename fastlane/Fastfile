@@ -9,7 +9,7 @@ API_KEY = {
 APP_NAME           = "Telephone Booth Transcription"
 APP_SKU            = "tb-transcription"
 APP_VERSION        = "0.1.0"
-PRIMARY_BUNDLE_ID  = "dev.djensenius.telephone-booth-transcription"
+PRIMARY_BUNDLE_ID  = "org.davidjensenius.TelephoneBoothTranscription"
 PRIMARY_LANGUAGE   = "en-CA"
 TEAM_ID            = "9JALHNGRBQ"
 

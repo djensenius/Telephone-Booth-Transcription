@@ -7,7 +7,7 @@ import Testing
 /// Returns true if the Keychain is fully available in this environment
 /// (supports add, attribute retrieval, and delete).
 private let isKeychainAvailable: Bool = {
-    let probeService = "dev.djensenius.tbt-availability-probe"
+    let probeService = "org.davidjensenius.tbt-availability-probe"
     let probeAccount = "probe"
     let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
@@ -42,7 +42,7 @@ private let isKeychainAvailable: Bool = {
 @Suite("KeychainTokenStore integration", .serialized, .enabled(if: isKeychainAvailable))
 struct KeychainTokenStoreTests {
     /// Unique service per test run to avoid collisions.
-    private static let testService = "dev.djensenius.tbt-test-\(UUID().uuidString)"
+    private static let testService = "org.davidjensenius.tbt-test-\(UUID().uuidString)"
     private static let testAccount = "test-token"
 
     private func makeStore() -> KeychainTokenStore {

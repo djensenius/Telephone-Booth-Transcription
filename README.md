@@ -106,7 +106,7 @@ shows it in the **Status** tab — copy it before you make your first request.
 
 ```sh
 TOKEN="$(security find-generic-password \
-  -s dev.djensenius.telephone-booth-transcription \
+  -s org.davidjensenius.TelephoneBoothTranscription \
   -a server-token -w)"
 
 # Transcribe an audio file
