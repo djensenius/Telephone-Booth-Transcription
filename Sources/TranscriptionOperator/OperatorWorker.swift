@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import NIOCore
 import NIOHTTP1
+import TranscriptionShared
 
 /// Long-running background worker that polls the Operator's `/v1/jobs/next`
 /// endpoint, runs leased jobs locally against this app's HTTP server, and
@@ -41,6 +42,7 @@ public actor OperatorWorker {
     private let client: any OperatorClient
     private let dispatcher: any OperatorJobDispatcher
     private let pollIntervalSeconds: Int
+    private let heartbeatIntervalSeconds: Int?
     private let logger: Logger
     private let clock: @Sendable () -> Date
     private let onStatusChange: (@Sendable (Status) -> Void)?
@@ -53,6 +55,7 @@ public actor OperatorWorker {
         client: any OperatorClient,
         dispatcher: any OperatorJobDispatcher,
         pollIntervalSeconds: Int,
+        heartbeatIntervalSeconds: Int? = nil,
         logger: Logger = Logger(label: "operator-worker"),
         clock: @Sendable @escaping () -> Date = { Date() },
         onStatusChange: (@Sendable (Status) -> Void)? = nil
@@ -61,6 +64,7 @@ public actor OperatorWorker {
         self.dispatcher = dispatcher
         self.pollIntervalSeconds = max(OperatorPollingConfig.minPollInterval,
                                        min(OperatorPollingConfig.maxPollInterval, pollIntervalSeconds))
+        self.heartbeatIntervalSeconds = heartbeatIntervalSeconds.map { max(1, $0) }
         self.logger = logger
         self.clock = clock
         self.onStatusChange = onStatusChange
@@ -116,16 +120,63 @@ public actor OperatorWorker {
             return
         }
         setPhase(.running, jobID: job.id, kind: job.kind)
+        // Keep the lease alive while the (potentially slow) job runs, then stop
+        // and await the heartbeat task *before* submitting the outcome so no
+        // heartbeat can race a succeed/fail.
+        let heartbeat = startHeartbeat(for: job)
+        let outcome: Result<OperatorJobResult, any Error>
         do {
-            let result = try await dispatcher.execute(job: job)
-            try await client.submitSuccess(jobID: job.id, leaseToken: job.leaseToken, result: result)
-            recordSuccess()
-        } catch let dispatchError as OperatorJobError {
-            await submitFailure(job: job, error: dispatchError)
+            outcome = .success(try await dispatcher.execute(job: job))
         } catch {
+            outcome = .failure(error)
+        }
+        await stopHeartbeat(heartbeat)
+
+        switch outcome {
+        case .success(let result):
+            do {
+                try await client.submitSuccess(jobID: job.id, leaseToken: job.leaseToken, result: result)
+                recordSuccess()
+            } catch {
+                let code = errorCode(for: error)
+                await submitFailure(job: job, error: .init(code: code, message: "\(type(of: error))"))
+            }
+        case .failure(let dispatchError as OperatorJobError):
+            await submitFailure(job: job, error: dispatchError)
+        case .failure(let error):
             let code = errorCode(for: error)
             await submitFailure(job: job, error: .init(code: code, message: "\(type(of: error))"))
         }
+    }
+
+    /// Spawns a detached-from-actor task that periodically extends the lease.
+    /// Returns nil when heartbeating is disabled. The loop sleeps *before* its
+    /// first heartbeat, so short jobs never issue one. Failures are logged and
+    /// never surfaced to the job outcome.
+    private func startHeartbeat(for job: OperatorJob) -> Task<Void, Never>? {
+        guard let interval = heartbeatIntervalSeconds else { return nil }
+        let client = self.client
+        let logger = self.logger
+        let jobID = job.id
+        let leaseToken = job.leaseToken
+        let nanos = UInt64(interval) * 1_000_000_000
+        return Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: nanos)
+                if Task.isCancelled { return }
+                do {
+                    try await client.heartbeat(jobID: jobID, leaseToken: leaseToken)
+                } catch {
+                    logger.debug("heartbeat failed: \(type(of: error))")
+                }
+            }
+        }
+    }
+
+    private func stopHeartbeat(_ task: Task<Void, Never>?) async {
+        guard let task else { return }
+        task.cancel()
+        await task.value
     }
 
     private func submitFailure(job: OperatorJob, error: OperatorJobError) async {

@@ -379,7 +379,7 @@ final class ServerHost: ObservableObject {
             bindHost: host,
             bindPort: port,
             bearerToken: bearer,
-            timeout: .seconds(config.upstreamTimeout.seconds),
+            timeout: .seconds(Int64(config.upstreamTimeout.seconds)),
             maxAudioBytes: config.maxRequestBytes,
             logger: logger
         )
@@ -387,6 +387,7 @@ final class ServerHost: ObservableObject {
             client: opClient,
             dispatcher: dispatcher,
             pollIntervalSeconds: cfg.pollIntervalSeconds,
+            heartbeatIntervalSeconds: max(1, cfg.leaseSeconds / 3),
             logger: logger,
             onStatusChange: { [weak self] status in
                 Task { @MainActor [weak self] in

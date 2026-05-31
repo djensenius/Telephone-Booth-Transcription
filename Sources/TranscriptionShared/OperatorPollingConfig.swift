@@ -97,10 +97,15 @@ public struct OperatorPollingConfig: Sendable, Equatable {
 
     /// Comma-separated `kinds` query value derived from per-kind enables.
     public var requestedKinds: String {
-        var kinds: [String] = []
-        if transcriptionEnabled { kinds.append("transcription") }
-        if translationEnabled { kinds.append("translation") }
-        if moderationEnabled { kinds.append("moderation") }
-        return kinds.joined(separator: ",")
+        requestedKindList.map(\.rawValue).joined(separator: ",")
+    }
+
+    /// Typed list of job kinds the per-kind toggles enable, in a stable order.
+    public var requestedKindList: [OperatorJob.Kind] {
+        var kinds: [OperatorJob.Kind] = []
+        if transcriptionEnabled { kinds.append(.transcription) }
+        if translationEnabled { kinds.append(.translation) }
+        if moderationEnabled { kinds.append(.moderation) }
+        return kinds
     }
 }
