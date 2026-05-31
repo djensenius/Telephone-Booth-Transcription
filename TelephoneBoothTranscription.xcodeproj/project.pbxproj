@@ -858,6 +858,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -865,6 +866,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.djensenius.telephone-booth-transcription";
 				PRODUCT_NAME = "Telephone Booth Transcription";
@@ -1067,6 +1069,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1074,6 +1077,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.djensenius.telephone-booth-transcription";
 				PRODUCT_NAME = "Telephone Booth Transcription";
