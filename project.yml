@@ -164,10 +164,15 @@ targets:
         buildPhase: resources
     dependencies:
       - target: TranscriptionCore
+      - target: TranscriptionShared
+      - target: TranscriptionOnDevice
+      - target: TranscriptionOperator
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio-transport-services
         product: NIOTransportServices
+      - package: swift-crypto
+        product: Crypto
       - package: swift-log
         product: Logging
     info:

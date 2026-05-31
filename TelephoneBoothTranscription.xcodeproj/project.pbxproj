@@ -20,6 +20,7 @@
 		27D7D7AC69CAADC770207EE7 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = B8FFEE86D7CE513787BE73EC /* NIOCore */; };
 		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
 		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
+		302DDDBA20573513575140E2 /* TranscriptionOperator.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */; };
 		30D55CC04627EABF587DC4D8 /* FoundationModelsAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = AECF96A7E89218F19631C6F8 /* FoundationModelsAvailability.swift */; };
 		31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
 		36B6D480E8823FBD06A69251 /* OnDeviceTranscriptionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B07206E4A2FEF078EBF9972 /* OnDeviceTranscriptionAdapter.swift */; };
@@ -41,7 +42,7 @@
 		5DFC29EC812E6604795855EC /* FoundationModelsModerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11708B304E4FD14247DAD283 /* FoundationModelsModerationService.swift */; };
 		5FA41A058F1F0620DFAC1D24 /* ProxyTranslationBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE1EBCFCE9F040A147E5F25 /* ProxyTranslationBackend.swift */; };
 		5FE81543AA164152798869AD /* TextTranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8986C8DF2BB2972833D94E10 /* TextTranslationRoute.swift */; };
-		68F84D09B19F35052809FDB6 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = D8C3CDDD323E80F7CEA3FFDC /* Logging */; };
+		68F84D09B19F35052809FDB6 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 99D0B70DA725802797315DFA /* Crypto */; };
 		691222315974E097FCE36D91 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 4B95E851355068797D44848C /* Logging */; };
 		69881C5CCA191DCD73AF5F06 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0F4DB9F011E7A015E5C998 /* Crypto */; };
 		6E73BE5F12E29990DF28B5CE /* RequestsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F093D733703A349373FC072 /* RequestsRoute.swift */; };
@@ -49,6 +50,7 @@
 		71C45CC53AA5DF8D72FB0066 /* RequestLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7D772BF49912B0122CA505 /* RequestLogStore.swift */; };
 		78C6A3CBCF8BC646DA5C95AD /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 738160645144C35DE16BC1C4 /* Logging */; };
 		7B07E25FA5845D36518A09C5 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 2320F84D08B4C9BB1DE3109D /* Crypto */; };
+		7DC2570C0093E6EF9954478E /* TranscriptionShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DEE2ACB1AEBBF2A3B7B763BC /* TranscriptionShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8100ADE862B8A5C3F9F265E4 /* InMemoryTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */; };
 		8125148F00BC05AB11D5B7E8 /* TranscriptionCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */; };
 		8379FD8BA09D9AE62D60454C /* InMemoryRequestLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */; };
@@ -60,11 +62,14 @@
 		9D09F129BECBBF985E7D3FB0 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB96230C24FF2DCCC9CF7753 /* App.swift */; };
 		A0549FECC22FFA3C3C214DF7 /* TranscriptionServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */; };
 		A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */; };
+		A46E961F441D94C61EA3A33A /* TranscriptionShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DEE2ACB1AEBBF2A3B7B763BC /* TranscriptionShared.framework */; };
 		A50D8C6CB265D61B374DC0A4 /* RequestLogMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5115419BB0495CF787561459 /* RequestLogMiddleware.swift */; };
 		A5E30849CC9E035589C27BB6 /* InProcessOperatorJobDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD96F7AFC4FC2A09E16DE8D /* InProcessOperatorJobDispatcher.swift */; };
+		A783819C9E0C3FCEF6B8F450 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = D8C3CDDD323E80F7CEA3FFDC /* Logging */; };
 		A83A6E3E2374B274D3019B14 /* RequestLogWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */; };
 		AC30D0FB747F41276C215796 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 727CA8D8C2312BC5490A8AC8 /* Logging */; };
 		B1D5B6750BF0C682FDFDDAC2 /* OnDeviceClassificationLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40931948716064CFDD8523A3 /* OnDeviceClassificationLogic.swift */; };
+		B9E6DEA50801AFFB6DDA0C58 /* TranscriptionOnDevice.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 224C8B3DA1B3BA56A24F6BF4 /* TranscriptionOnDevice.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BB3712EE81939BF730AA2D1E /* TranscriptionRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */; };
 		BF2D7FA7194F9A18AEB4E819 /* ModerationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */; };
 		C2E5578B378B0DA01E58BC6B /* HealthRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EF607E80299C4B7F64F0DA /* HealthRoute.swift */; };
@@ -72,7 +77,9 @@
 		C4C6CEA6FCF73DBC89384F39 /* ServiceContextModule in Frameworks */ = {isa = PBXBuildFile; productRef = 6140CD50AA572A7C37891D70 /* ServiceContextModule */; };
 		CC60AB4908AB881AFBCCD32B /* AudioFetching.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF08B317D469DB861A6E53D /* AudioFetching.swift */; };
 		CE47268555219DA284ABB838 /* ModelsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */; };
+		D03578BC15F4B3099D6D439C /* TranscriptionOperator.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D0610C90BF7D8C0C487584F4 /* MultipartFilePart.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C876821C6C463D8736854C /* MultipartFilePart.swift */; };
+		D119ACD21C7002310187B760 /* TranscriptionOnDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 224C8B3DA1B3BA56A24F6BF4 /* TranscriptionOnDevice.framework */; };
 		E066E9507A91BF8A22470BE1 /* TranscriptionOperator.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */; };
 		E1F5B672DA29C6D62B3DE5A2 /* NativeSpeechTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0BF53E0C7DF581ED69E923D /* NativeSpeechTranscriber.swift */; };
 		E471B57DE81026CA3CDC107D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A02866ECC373EE0C2D83000B /* GRDB */; };
@@ -96,7 +103,21 @@
 			remoteGlobalIDString = 0EA6B66AC5EFA53BED705448;
 			remoteInfo = TranscriptionShared;
 		};
+		179D082514029B60C6DA5649 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0EA6B66AC5EFA53BED705448;
+			remoteInfo = TranscriptionShared;
+		};
 		2B680935BEFEE2B8303EA6A4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5B9BC4BF9555CD4F3AAF86DD;
+			remoteInfo = TranscriptionOperator;
+		};
+		455FED3D38482AB3283FEAAD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
 			proxyType = 1;
@@ -124,6 +145,13 @@
 			remoteGlobalIDString = BED2F949749BD9B6EA3E896B;
 			remoteInfo = TranscriptionCore;
 		};
+		BD9E4B126A70CD67BDA949C8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C6EACCB7F06D4B4E47CA5244;
+			remoteInfo = TranscriptionOnDevice;
+		};
 		E7BFA9500DE4F8360CBD7F9C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
@@ -141,6 +169,9 @@
 			dstSubfolderSpec = 10;
 			files = (
 				555EF6F474CF6859E392B1EC /* TranscriptionCore.framework in Embed Frameworks */,
+				7DC2570C0093E6EF9954478E /* TranscriptionShared.framework in Embed Frameworks */,
+				B9E6DEA50801AFFB6DDA0C58 /* TranscriptionOnDevice.framework in Embed Frameworks */,
+				D03578BC15F4B3099D6D439C /* TranscriptionOperator.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -227,9 +258,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				8125148F00BC05AB11D5B7E8 /* TranscriptionCore.framework in Frameworks */,
+				A46E961F441D94C61EA3A33A /* TranscriptionShared.framework in Frameworks */,
+				D119ACD21C7002310187B760 /* TranscriptionOnDevice.framework in Frameworks */,
+				302DDDBA20573513575140E2 /* TranscriptionOperator.framework in Frameworks */,
 				0F0854CC4F1F4FDDD89F8A4A /* AsyncHTTPClient in Frameworks */,
 				5A1966C958F0E6A00DC40583 /* NIOTransportServices in Frameworks */,
-				68F84D09B19F35052809FDB6 /* Logging in Frameworks */,
+				68F84D09B19F35052809FDB6 /* Crypto in Frameworks */,
+				A783819C9E0C3FCEF6B8F450 /* Logging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -478,11 +513,15 @@
 			);
 			dependencies = (
 				6F57E94EF33521462960A389 /* PBXTargetDependency */,
+				9CFB88B638ADB8CB2F5430E6 /* PBXTargetDependency */,
+				6A1BEE3181EF9B680EDCABD8 /* PBXTargetDependency */,
+				30A22CF8D3DD56822230C67A /* PBXTargetDependency */,
 			);
 			name = TranscriptionApp;
 			packageProductDependencies = (
 				A64957A038D57839FF3D5A02 /* AsyncHTTPClient */,
 				AE59993EA682646EBC28CAA1 /* NIOTransportServices */,
+				99D0B70DA725802797315DFA /* Crypto */,
 				D8C3CDDD323E80F7CEA3FFDC /* Logging */,
 			);
 			productName = TranscriptionApp;
@@ -714,10 +753,20 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		30A22CF8D3DD56822230C67A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5B9BC4BF9555CD4F3AAF86DD /* TranscriptionOperator */;
+			targetProxy = 455FED3D38482AB3283FEAAD /* PBXContainerItemProxy */;
+		};
 		54462E6599B60F4EE8710B68 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 5B9BC4BF9555CD4F3AAF86DD /* TranscriptionOperator */;
 			targetProxy = 2B680935BEFEE2B8303EA6A4 /* PBXContainerItemProxy */;
+		};
+		6A1BEE3181EF9B680EDCABD8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C6EACCB7F06D4B4E47CA5244 /* TranscriptionOnDevice */;
+			targetProxy = BD9E4B126A70CD67BDA949C8 /* PBXContainerItemProxy */;
 		};
 		6F57E94EF33521462960A389 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -733,6 +782,11 @@
 			isa = PBXTargetDependency;
 			target = 0EA6B66AC5EFA53BED705448 /* TranscriptionShared */;
 			targetProxy = E7BFA9500DE4F8360CBD7F9C /* PBXContainerItemProxy */;
+		};
+		9CFB88B638ADB8CB2F5430E6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0EA6B66AC5EFA53BED705448 /* TranscriptionShared */;
+			targetProxy = 179D082514029B60C6DA5649 /* PBXContainerItemProxy */;
 		};
 		B863A40A27D34BC00886B3B5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1274,6 +1328,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
 			productName = Logging;
+		};
+		99D0B70DA725802797315DFA /* Crypto */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F62D063A895F6C9C0FE0CC28 /* XCRemoteSwiftPackageReference "swift-crypto" */;
+			productName = Crypto;
 		};
 		9E7C0AD8BC115F2CB4C08F0E /* Hummingbird */ = {
 			isa = XCSwiftPackageProductDependency;
