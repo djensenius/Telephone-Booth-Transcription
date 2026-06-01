@@ -133,6 +133,23 @@ mac_kill() {
   for p in $pids; do kill "$p" 2>/dev/null || true; done
 }
 
+# Normalize a macOS window capture to an accepted App Store size. Apple requires
+# one of a fixed set of 16:10 dimensions; a raw window grab is rarely an exact
+# match. Center the window on a neutral canvas (downscaling only when the capture
+# is larger than the canvas, so native pixels are preserved otherwise).
+mac_normalize() {
+  local f="$1" tw=2560 th=1600 bg=1c1c1e
+  local w h
+  w=$(sips -g pixelWidth "$f" | awk '/pixelWidth/{print $2}')
+  h=$(sips -g pixelHeight "$f" | awk '/pixelHeight/{print $2}')
+  if (( w > tw || h > th )); then
+    sips --resampleHeightWidthMax "$tw" "$f" >/dev/null
+    h=$(sips -g pixelHeight "$f" | awk '/pixelHeight/{print $2}')
+    (( h > th )) && sips --resampleHeight "$th" "$f" >/dev/null
+  fi
+  sips --padToHeightWidth "$th" "$tw" --padColor "$bg" "$f" >/dev/null
+}
+
 do_mac() {
   log "Building TranscriptionApp for host …"
   xcodebuild -project "$PROJECT" -scheme TranscriptionApp \
@@ -163,6 +180,7 @@ do_mac() {
     if [[ ! -s "$f" ]]; then
       die "mac capture produced no image for $tab (grant Screen Recording permission to the controlling terminal in System Settings ▸ Privacy & Security ▸ Screen Recording, then retry)"
     fi
+    mac_normalize "$f"
     assert_size "$f" "2880 1800" "2560 1600" "1440 900" "1280 800" "1520 1200" "1640 1200"
     i=$((i + 1))
   done
