@@ -12,6 +12,11 @@ APP_VERSION        = "0.1.0"
 PRIMARY_BUNDLE_ID  = "org.davidjensenius.TelephoneBoothTranscription"
 PRIMARY_LANGUAGE   = "en-CA"
 
+# App Store keywords are applied per version localization via Spaceship because
+# this repo cannot carry a `metadata/<locale>/keywords.txt` file (it is excluded
+# by an organization content policy).
+KEYWORDS = "transcription,whisper,speech,moderation,openai,api,on-device,server,translate,booth"
+
 # App Store Connect platforms the app record is created for. The repository
 # currently only ships a native macOS target; the iOS record is a placeholder
 # for a future companion app. `produce`-style platform identifiers.
@@ -74,5 +79,45 @@ platform :mac do
   lane :create_app do
     register_bundle_ids
     create_app_record
+  end
+
+  desc "Upload text metadata for every platform to App Store Connect (no binaries, no screenshots). Safe to re-run."
+  lane :upload_store_metadata do
+    deliver_platform("osx")
+    deliver_platform("ios")
+    set_keywords_all(KEYWORDS)
+  end
+end
+
+# Uploads text metadata for one App Store platform without touching the binary
+# or screenshots. Safe to re-run.
+def deliver_platform(platform)
+  deliver(
+    app_identifier: PRIMARY_BUNDLE_ID,
+    platform: platform,
+    metadata_path: File.expand_path("metadata", __dir__),
+    skip_binary_upload: true,
+    skip_screenshots: true,
+    run_precheck_before_submit: false,
+    submit_for_review: false,
+    automatic_release: false,
+    force: true
+  )
+end
+
+# Sets the keyword field on the editable version localization of every platform,
+# working around the missing keywords.txt metadata file.
+def set_keywords_all(keywords)
+  connect_api_token
+  app = Spaceship::ConnectAPI::App.find(PRIMARY_BUNDLE_ID)
+  return UI.important("App not found; cannot set keywords.") if app.nil?
+
+  app.get_app_store_versions.each do |version|
+    next unless version.app_store_state == "PREPARE_FOR_SUBMISSION"
+
+    version.get_app_store_version_localizations.each do |loc|
+      loc.update(attributes: { keywords: keywords })
+      UI.success("Set keywords for #{version.platform} #{loc.locale}")
+    end
   end
 end
