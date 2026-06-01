@@ -65,6 +65,11 @@ OpenAI-compatible multipart upload. The behaviour depends on the configured
   Wider locale coverage and no model download, but lower accuracy. Useful
   fallback for locales the new engine doesn't yet support.
 
+> **iOS / Apple Intelligence:** on iOS the Speech Analyzer backend is the
+> **default** and runs entirely on-device. The proxy backend is still selectable
+> (and `ServerConfig` supports `.proxy` on every platform), but it is not the
+> default on iOS and needs a reachable upstream to be useful.
+
 For both native backends the response is the OpenAI default JSON shape:
 `{ "text": "…" }`. Other multipart fields (`prompt`, `temperature`,
 `response_format`, etc.) are ignored on the native backends; only `language`
@@ -141,6 +146,17 @@ return a single JSON object. As with the moderation fallback, this is
 best-effort: local LLMs vary in quality and can occasionally be coerced.
 Bodies are **not** logged.
 
+### On-device backend (Apple Intelligence)
+
+When the **text-translation backend** is set to on-device (the default on iOS),
+`/v1/translations` is served by Apple's FoundationModels on-device model instead
+of the translation upstream. The response `model` is `apple-foundation-models`
+and no data leaves the device. If on-device translation is selected but Apple
+Intelligence is unavailable (e.g. older OS, simulator, unsupported hardware),
+the endpoint returns `503 on_device_unavailable` — it never silently falls back
+to the proxy upstream. `/v1/audio/translations` is **proxy-only** and is not
+served on-device in this release.
+
 ## `POST /v1/moderations`
 
 OpenAI-compatible moderation. JSON body:
@@ -179,6 +195,17 @@ OpenAI moderation response shape:
 
 See [`moderation.md`](./moderation.md) for the limitations of the local
 fallback. **It is not a replacement for OpenAI's first-party safety model.**
+
+### On-device backend (Apple Intelligence)
+
+When the **moderation backend** is set to on-device (the default on iOS),
+`/v1/moderations` is served by Apple's FoundationModels on-device model. Because
+FoundationModels only returns a single safety verdict (not per-category scores),
+the response carries `"model": "apple-foundation-models"`, a single `flagged`
+boolean, and **all-false `categories` with all-zero `category_scores`** — i.e. a
+`flagged: true` result intentionally has zero category scores. If on-device
+moderation is selected but Apple Intelligence is unavailable, the endpoint
+returns `503 on_device_unavailable` and never falls back to the proxy upstream.
 
 ## `GET /v1/requests`
 

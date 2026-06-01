@@ -1,4 +1,5 @@
 import Foundation
+#if canImport(IOKit)
 import IOKit
 import IOKit.pwr_mgt
 
@@ -72,3 +73,67 @@ public final class PowerAssertion: @unchecked Sendable {
         }
     }
 }
+#else
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// iOS counterpart of the macOS `PowerAssertion`. Keeps the device awake while
+/// the server is running by toggling `UIApplication.isIdleTimerDisabled`.
+///
+/// The public surface mirrors the macOS implementation (`acquire()` /
+/// `release()` / `isHeld`) so callers compile unchanged on both platforms.
+public final class PowerAssertion: @unchecked Sendable {
+    public enum AssertionKind {
+        case preventIdleSystemSleep
+        case preventDisplaySleep
+    }
+
+    private let lock = NSLock()
+    private var held = false
+
+    public let reason: String
+    public let kind: AssertionKind
+
+    public init(reason: String = "Telephone Booth Transcription server running",
+                kind: AssertionKind = .preventIdleSystemSleep) {
+        self.reason = reason
+        self.kind = kind
+    }
+
+    public var isHeld: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return held
+    }
+
+    @discardableResult
+    public func acquire() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if held { return true }
+        held = true
+        Self.setIdleTimerDisabled(true)
+        return true
+    }
+
+    public func release() {
+        lock.lock(); defer { lock.unlock() }
+        guard held else { return }
+        held = false
+        Self.setIdleTimerDisabled(false)
+    }
+
+    private static func setIdleTimerDisabled(_ disabled: Bool) {
+        #if canImport(UIKit)
+        Task { @MainActor in
+            UIApplication.shared.isIdleTimerDisabled = disabled
+        }
+        #endif
+    }
+
+    deinit {
+        if held {
+            Self.setIdleTimerDisabled(false)
+        }
+    }
+}
+#endif

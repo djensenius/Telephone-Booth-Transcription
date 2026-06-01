@@ -2,6 +2,7 @@ import Foundation
 import Hummingbird
 import HTTPTypes
 import NIOCore
+import TranscriptionShared
 
 /// `POST /v1/translations` — JSON in / JSON out convenience endpoint that
 /// translates already-transcribed text to English. Backed by a
@@ -22,10 +23,19 @@ import NIOCore
 /// have a transcript and want English text without re-uploading audio.
 public struct TextTranslationRoute<Context: RequestContext>: Sendable {
     public let translator: TextTranslator
+    public let backend: TextServiceBackend
+    public let onDeviceTranslator: (any TextTranslationService)?
     public let maxRequestBytes: Int
 
-    public init(translator: TextTranslator, maxRequestBytes: Int) {
+    public init(
+        translator: TextTranslator,
+        backend: TextServiceBackend = .proxy,
+        onDeviceTranslator: (any TextTranslationService)? = nil,
+        maxRequestBytes: Int
+    ) {
         self.translator = translator
+        self.backend = backend
+        self.onDeviceTranslator = onDeviceTranslator
         self.maxRequestBytes = maxRequestBytes
     }
 
@@ -47,6 +57,10 @@ public struct TextTranslationRoute<Context: RequestContext>: Sendable {
                                       message: "`input` must be a non-empty string")
         }
         let sourceLanguage = obj["source_language"] as? String
+
+        if backend == .onDevice {
+            return await handleOnDevice(input: input, sourceLanguage: sourceLanguage)
+        }
 
         // Reject early when the translation model is not configured. Without it,
         // we'd send `"model": ""` to the upstream and surface a confusing
@@ -99,6 +113,45 @@ public struct TextTranslationRoute<Context: RequestContext>: Sendable {
         } catch {
             return Self.errorResponse(status: .badGateway, code: "translation_error",
                                       message: "translation error: \(error)")
+        }
+    }
+
+    /// On-device translation path: translate with Apple's Foundation Models, no
+    /// network upstream. Returns an explicit 503 when the capability is
+    /// unavailable rather than silently proxying.
+    private func handleOnDevice(input: String, sourceLanguage: String?) async -> Response {
+        guard let onDeviceTranslator else {
+            return Self.errorResponse(
+                status: .serviceUnavailable, code: "on_device_unavailable",
+                message: "on-device translation requires Apple Intelligence (macOS 26 / iOS 26) "
+                + "and is not available on this device")
+        }
+        do {
+            let translation = try await onDeviceTranslator.translate(input, sourceLanguage: sourceLanguage)
+            let payload: [String: Any] = [
+                "translated_text": translation.translatedText,
+                "source_language": translation.sourceLanguage ?? NSNull(),
+                "target_language": translation.targetLanguage,
+                "model": translation.model ?? "apple-foundation-models"
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            var headers = HTTPFields()
+            headers[.contentType] = "application/json"
+            return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(bytes: data)))
+        } catch let error as OnDeviceServiceError {
+            switch error {
+            case .badRequest(let why):
+                return Self.errorResponse(status: .badRequest, code: "invalid_input", message: why)
+            case .unauthorized(let why):
+                return Self.errorResponse(status: .forbidden, code: "on_device_unauthorized", message: why)
+            case .timeout(let why):
+                return Self.errorResponse(status: .gatewayTimeout, code: "on_device_timeout", message: why)
+            case .unavailable(let why):
+                return Self.errorResponse(status: .serviceUnavailable, code: "on_device_unavailable", message: why)
+            }
+        } catch {
+            return Self.errorResponse(status: .badGateway, code: "on_device_error",
+                                      message: "on-device translation error: \(error)")
         }
     }
 

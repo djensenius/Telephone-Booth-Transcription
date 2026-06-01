@@ -14,6 +14,17 @@ public struct ServerConfig: Sendable, Equatable {
 
     /// Backend used for `POST /v1/audio/transcriptions`.
     public var transcriptionBackend: TranscriptionBackend
+    /// Backend used for `POST /v1/moderations`. `.proxy` forwards to
+    /// `moderationUpstream` (with optional chat-completion fallback);
+    /// `.onDevice` classifies with Apple's on-device Foundation Models and
+    /// never contacts a network upstream.
+    public var moderationBackend: TextServiceBackend
+    /// Backend used for `POST /v1/translations` (text→English). `.proxy` calls
+    /// `translationUpstream`'s `/chat/completions`; `.onDevice` translates with
+    /// Apple's on-device Foundation Models. Does **not** affect the
+    /// OpenAI-compatible audio endpoint `POST /v1/audio/translations`, which is
+    /// always a proxy.
+    public var textTranslationBackend: TextServiceBackend
     /// Moderation upstream. Always a proxy — moderation classification needs
     /// an LLM, which the macOS Speech framework does not provide.
     public var moderationUpstream: UpstreamConfig
@@ -161,7 +172,9 @@ public struct ServerConfig: Sendable, Equatable {
     public init(
         bindHost: String = "127.0.0.1",
         bindPort: Int = 8089,
-        transcriptionBackend: TranscriptionBackend = .proxy(.defaultTranscription),
+        transcriptionBackend: TranscriptionBackend = ServerConfig.defaultTranscriptionBackend,
+        moderationBackend: TextServiceBackend = ServerConfig.defaultTextServiceBackend,
+        textTranslationBackend: TextServiceBackend = ServerConfig.defaultTextServiceBackend,
         moderationUpstream: UpstreamConfig = .defaultModeration,
         translationUpstream: UpstreamConfig = .defaultTranslation,
         maxRequestBytes: Int = 100 * 1024 * 1024,
@@ -179,6 +192,8 @@ public struct ServerConfig: Sendable, Equatable {
         self.bindHost = bindHost
         self.bindPort = bindPort
         self.transcriptionBackend = transcriptionBackend
+        self.moderationBackend = moderationBackend
+        self.textTranslationBackend = textTranslationBackend
         self.moderationUpstream = moderationUpstream
         self.translationUpstream = translationUpstream
         self.maxRequestBytes = maxRequestBytes
@@ -192,6 +207,30 @@ public struct ServerConfig: Sendable, Equatable {
         self.nativeTranscriptionLocale = nativeTranscriptionLocale
         self.nonLoopbackBindAcknowledged = nonLoopbackBindAcknowledged
         self.operatorPolling = operatorPolling
+    }
+
+    // MARK: - Platform defaults
+
+    /// Default transcription backend for a fresh install. iOS has no local
+    /// Whisper proxy to reach, so it defaults to the on-device `SpeechAnalyzer`
+    /// engine; macOS keeps the proxy default so existing setups are unchanged.
+    public static var defaultTranscriptionBackend: TranscriptionBackend {
+        #if os(iOS)
+        return .appleSpeechAnalyzer
+        #else
+        return .proxy(.defaultTranscription)
+        #endif
+    }
+
+    /// Default moderation / text-translation backend for a fresh install. iOS
+    /// defaults to on-device Foundation Models (no Mac-hosted LLM to reach);
+    /// macOS keeps the proxy default.
+    public static var defaultTextServiceBackend: TextServiceBackend {
+        #if os(iOS)
+        return .onDevice
+        #else
+        return .proxy
+        #endif
     }
 
     /// The transcription upstream config, when the backend is a proxy. Returns
@@ -217,6 +256,17 @@ public enum TranscriptionBackend: Sendable, Equatable {
     /// accuracy, handles long-form audio, fully on-device. Requires per-locale
     /// model assets to be downloaded the first time a given locale is used.
     case appleSpeechAnalyzer
+}
+
+/// Which engine handles a text-only service (`POST /v1/moderations`,
+/// `POST /v1/translations`).
+public enum TextServiceBackend: String, Sendable, Equatable, Codable, CaseIterable {
+    /// Forward to a configured network upstream (LM Studio / OpenAI-compatible).
+    case proxy
+    /// Run fully on-device using Apple's Foundation Models. Requires macOS 26 /
+    /// iOS 26 with Apple Intelligence available; otherwise the route reports the
+    /// capability as unavailable rather than silently contacting an upstream.
+    case onDevice
 }
 
 public struct UpstreamConfig: Sendable, Equatable {

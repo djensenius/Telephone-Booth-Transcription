@@ -507,6 +507,10 @@ enum ConfigPersistence {
         var bindPort: Int
         var transcriptionBackendKind: String       // "proxy" | "nativeMacOS" | "appleSpeechAnalyzer"
         var transcriptionBase: String
+        // Optional for migration: older saves predate the on-device text
+        // services and decode as nil → platform default in `asConfig`.
+        var moderationBackendKind: String?          // "proxy" | "onDevice"
+        var textTranslationBackendKind: String?     // "proxy" | "onDevice"
         // Retained for migration decoding only — never written to new saves.
         var transcriptionKey: String?
         var moderationBase: String
@@ -548,6 +552,8 @@ enum ConfigPersistence {
             }
             // Keys are never serialized to UserDefaults
             transcriptionKey = nil
+            moderationBackendKind = c.moderationBackend.rawValue
+            textTranslationBackendKind = c.textTranslationBackend.rawValue
             moderationBase = c.moderationUpstream.baseURL
             moderationKey = nil
             translationBase = c.translationUpstream.baseURL
@@ -592,6 +598,10 @@ enum ConfigPersistence {
                 bindHost: bindHost,
                 bindPort: bindPort,
                 transcriptionBackend: backend,
+                moderationBackend: moderationBackendKind
+                    .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
+                textTranslationBackend: textTranslationBackendKind
+                    .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
                 moderationUpstream: .init(baseURL: moderationBase, apiKey: nil),
                 translationUpstream: translationUpstream,
                 maxRequestBytes: maxRequestBytes,

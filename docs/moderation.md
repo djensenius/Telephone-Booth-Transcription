@@ -52,6 +52,26 @@ If you need OpenAI-equivalent moderation semantics, set the moderation
 upstream to OpenAI itself (`https://api.openai.com/v1`) and disable the
 fallback in Settings.
 
+## On-device backend (Apple Intelligence)
+
+On iOS — and optionally on macOS — the moderation backend can be set to
+**on-device**, in which case `/v1/moderations` is served by Apple's
+FoundationModels safety model rather than any HTTP upstream. Nothing leaves the
+device.
+
+FoundationModels exposes only a single safety verdict, not OpenAI's per-category
+scores. The route therefore maps it to the least-misleading OpenAI shape:
+
+- `model` is `apple-foundation-models`.
+- `flagged` reflects the on-device verdict.
+- `categories` are **all `false`** and `category_scores` are **all `0.0`**, even
+  when `flagged` is `true`, because no per-category signal is available.
+
+Consumers that branch on individual categories should treat on-device results as
+a binary flag only. If on-device moderation is selected but Apple Intelligence is
+unavailable, the route returns `503 on_device_unavailable`; it never silently
+falls back to a network upstream (the privacy contract).
+
 ## Hardening
 
 - Always run with the fallback disabled in production if you have a
