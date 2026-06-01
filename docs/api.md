@@ -66,8 +66,9 @@ OpenAI-compatible multipart upload. The behaviour depends on the configured
   fallback for locales the new engine doesn't yet support.
 
 > **iOS / Apple Intelligence:** on iOS the Speech Analyzer backend is the
-> default and runs entirely on-device. There is no Mac-hosted upstream to proxy
-> to, so the proxy backend is not used on iOS.
+> **default** and runs entirely on-device. The proxy backend is still selectable
+> (and `ServerConfig` supports `.proxy` on every platform), but it is not the
+> default on iOS and needs a reachable upstream to be useful.
 
 For both native backends the response is the OpenAI default JSON shape:
 `{ "text": "…" }`. Other multipart fields (`prompt`, `temperature`,

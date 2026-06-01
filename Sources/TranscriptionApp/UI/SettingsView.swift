@@ -23,8 +23,13 @@ struct SettingsView: View {
         var label: String {
             switch self {
             case .proxy: return "Proxy (LM Studio / OpenAI-compatible)"
+            #if os(macOS)
             case .appleSpeechAnalyzer: return "macOS 26 Speech Analyzer (Apple Intelligence)"
             case .nativeMacOS: return "macOS legacy Speech Recognizer"
+            #else
+            case .appleSpeechAnalyzer: return "Speech Analyzer (Apple Intelligence)"
+            case .nativeMacOS: return "Legacy Speech Recognizer"
+            #endif
             }
         }
     }
@@ -67,7 +72,11 @@ struct SettingsView: View {
                 ), in: 1...65535) {
                     LabeledContent("Bind port", value: "\(host.config.bindPort)")
                 }
+                #if os(macOS)
                 Toggle("Prevent Mac from sleeping while running", isOn: $host.preventSleep)
+                #else
+                Toggle("Prevent device from sleeping while running", isOn: $host.preventSleep)
+                #endif
             }
 
             Section("Transcription backend") {

@@ -93,7 +93,7 @@ You'll need:
 
 The same codebase ships an iOS app (also named **Transcriber**, bundle id
 `org.davidjensenius.TelephoneBoothTranscription`). On iOS the server runs in the
-foreground only and **everything is on-device via Apple Intelligence**:
+foreground only and the defaults are **on-device via Apple Intelligence**:
 
 - **Transcription** defaults to the on-device Speech Analyzer.
 - **Moderation** and **text translation** default to on-device FoundationModels
@@ -102,7 +102,9 @@ foreground only and **everything is on-device via Apple Intelligence**:
   `503 on_device_unavailable`. See [`docs/api.md`](./docs/api.md) and
   [`docs/moderation.md`](./docs/moderation.md) for the on-device response shapes
   (notably, on-device moderation returns a single `flagged` flag with all-zero
-  category scores). `/v1/audio/translations` remains proxy-only.
+  category scores).
+- **Audio translation** (`/v1/audio/translations`) remains proxy-only and is not
+  served on-device, so it requires a configured upstream to use on iOS.
 
 iOS requires iOS 26 and a device with Apple Intelligence support; on-device
 features are unavailable on the simulator. The app ships Light, Dark, and Tinted
