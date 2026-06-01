@@ -183,8 +183,8 @@ targets:
         CFBundleIconFile: AppIcon
         CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
         CFBundleInfoDictionaryVersion: "6.0"
-        CFBundleName: "Telephone Booth Transcription"
-        CFBundleDisplayName: "Telephone Booth Transcription"
+        CFBundleName: "Transcriber"
+        CFBundleDisplayName: "Transcriber"
         CFBundlePackageType: APPL
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
