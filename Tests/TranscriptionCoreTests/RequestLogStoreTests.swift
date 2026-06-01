@@ -214,4 +214,45 @@ struct SQLiteRetentionTests {
         let paths = entries.map(\.path).sorted()
         #expect(paths == ["/b", "/c"])
     }
+
+    @Test func seedInitializerPopulatesAndAssignsIDs() async throws {
+        let now = Date()
+        let store = InMemoryRequestLogStore(seed: [
+            .init(receivedAt: now.addingTimeInterval(-2), method: "GET", path: "/a", status: 200, durationMs: 1),
+            .init(receivedAt: now, method: "POST", path: "/b", status: 200, durationMs: 2)
+        ])
+        let entries = try await store.recent(limit: 10)
+        #expect(entries.count == 2)
+        #expect(entries[0].path == "/b")
+        #expect(entries.allSatisfy { $0.id != nil })
+        try await store.record(.init(receivedAt: now.addingTimeInterval(5), method: "GET", path: "/c", status: 200, durationMs: 1))
+        #expect(try await store.count() == 3)
+    }
+
+    @Test func seedInitializerEnforcesRetention() async throws {
+        let now = Date()
+        let store = InMemoryRequestLogStore(
+            retention: .init(maxRows: 2),
+            seed: [
+                .init(receivedAt: now.addingTimeInterval(-30), method: "GET", path: "/a", status: 200, durationMs: 1),
+                .init(receivedAt: now.addingTimeInterval(-20), method: "GET", path: "/b", status: 200, durationMs: 1),
+                .init(receivedAt: now.addingTimeInterval(-10), method: "GET", path: "/c", status: 200, durationMs: 1)
+            ]
+        )
+        let paths = try await store.recent(limit: 10).map(\.path).sorted()
+        #expect(paths == ["/b", "/c"])
+    }
+
+    @Test func seedInitializerEnforcesMaxAge() async throws {
+        let now = Date()
+        let store = InMemoryRequestLogStore(
+            retention: .init(maxAge: 60),
+            seed: [
+                .init(receivedAt: now.addingTimeInterval(-3600), method: "GET", path: "/old", status: 200, durationMs: 1),
+                .init(receivedAt: now.addingTimeInterval(-10), method: "GET", path: "/fresh", status: 200, durationMs: 1)
+            ]
+        )
+        let paths = try await store.recent(limit: 10).map(\.path)
+        #expect(paths == ["/fresh"])
+    }
 }

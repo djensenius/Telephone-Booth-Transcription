@@ -1,0 +1,1 @@
+A private, OpenAI-compatible transcription and moderation server on your own Mac or iPhone.

@@ -207,6 +207,9 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "9JALHNGRBQ"
         CODE_SIGN_ENTITLEMENTS: Resources/TranscriptionApp.entitlements
+        # Required for Mac App Store / TestFlight distribution. macOS rejects
+        # uploads whose executable is not hardened; iOS has no equivalent.
+        ENABLE_HARDENED_RUNTIME: YES
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny"
 
   # ---------------------------------------------------------------------------

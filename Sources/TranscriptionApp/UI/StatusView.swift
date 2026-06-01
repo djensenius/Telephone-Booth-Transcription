@@ -6,7 +6,7 @@ import UIKit
 
 struct StatusView: View {
     @EnvironmentObject var host: ServerHost
-    @State private var revealToken = false
+    @State private var revealToken = DemoMode.isActive
 
     var body: some View {
         ScrollView {
@@ -22,6 +22,7 @@ struct StatusView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
+        .onAppear { if host.isDemo { revealToken = true } }
     }
 
     private var serverCard: some View {
@@ -120,4 +121,10 @@ struct StatusView: View {
         }
         .glassCard()
     }
+}
+
+#Preview {
+    StatusView()
+        .environmentObject(ServerHost(demo: true))
+        .frame(width: 820, height: 600)
 }

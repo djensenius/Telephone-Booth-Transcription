@@ -12,6 +12,11 @@ APP_VERSION        = "0.1.0"
 PRIMARY_BUNDLE_ID  = "org.davidjensenius.TelephoneBoothTranscription"
 PRIMARY_LANGUAGE   = "en-CA"
 
+# App Store keywords are applied per version localization via Spaceship because
+# this repo cannot carry a `metadata/<locale>/keywords.txt` file (it is excluded
+# by an organization content policy).
+KEYWORDS = "transcription,whisper,speech,moderation,openai,api,on-device,server,translate,booth"
+
 # App Store Connect platforms the app record is created for. The repository
 # currently only ships a native macOS target; the iOS record is a placeholder
 # for a future companion app. `produce`-style platform identifiers.
@@ -74,5 +79,87 @@ platform :mac do
   lane :create_app do
     register_bundle_ids
     create_app_record
+  end
+
+  desc "Upload text metadata for every platform to App Store Connect (no binaries). Uploads screenshots too when fastlane/screenshots/<platform>/ exists. Safe to re-run."
+  lane :upload_store_metadata do
+    deliver_platform("osx", "mac")
+    deliver_platform("ios", "ios")
+    set_keywords_all(KEYWORDS)
+  end
+
+  desc "Rename the editable App Store Connect version of every platform to APP_VERSION (#{APP_VERSION}) so the version record matches the app's CFBundleShortVersionString. Idempotent."
+  lane :align_store_version do
+    align_store_version_all(APP_VERSION)
+  end
+end
+
+# Uploads text metadata (and screenshots when present) for one App Store
+# platform without touching the binary. Safe to re-run. `screenshots_subdir` is
+# the folder under fastlane/screenshots/ holding the per-locale screenshot dirs.
+def deliver_platform(platform, screenshots_subdir)
+  shots = File.expand_path("screenshots/#{screenshots_subdir}", __dir__)
+  has_shots = Dir.exist?(shots) && !Dir.glob("#{shots}/**/*.png").empty?
+  UI.important("No screenshots for #{platform} (#{shots}); uploading text only.") unless has_shots
+
+  # Authenticate with the App Store Connect API key so the upload runs
+  # non-interactively (no Apple ID password / 2FA prompt).
+  key = app_store_connect_api_key(
+    key_id: API_KEY[:key_id],
+    issuer_id: API_KEY[:issuer_id],
+    key_filepath: API_KEY[:key_filepath]
+  )
+
+  deliver(
+    api_key: key,
+    app_identifier: PRIMARY_BUNDLE_ID,
+    platform: platform,
+    metadata_path: File.expand_path("metadata", __dir__),
+    screenshots_path: (has_shots ? shots : nil),
+    skip_binary_upload: true,
+    skip_screenshots: !has_shots,
+    overwrite_screenshots: has_shots,
+    run_precheck_before_submit: false,
+    submit_for_review: false,
+    automatic_release: false,
+    force: true
+  )
+end
+
+# Sets the keyword field on the editable version localization of every platform,
+# working around the missing keywords.txt metadata file.
+def set_keywords_all(keywords)
+  connect_api_token
+  app = Spaceship::ConnectAPI::App.find(PRIMARY_BUNDLE_ID)
+  return UI.important("App not found; cannot set keywords.") if app.nil?
+
+  app.get_app_store_versions.each do |version|
+    next unless version.app_store_state == "PREPARE_FOR_SUBMISSION"
+
+    version.get_app_store_version_localizations.each do |loc|
+      loc.update(attributes: { keywords: keywords })
+      UI.success("Set keywords for #{version.platform} #{loc.locale}")
+    end
+  end
+end
+
+# Renames the editable (PREPARE_FOR_SUBMISSION) App Store Connect version of
+# every platform to `target` so the version record matches the binary's
+# CFBundleShortVersionString. Idempotent.
+def align_store_version_all(target)
+  connect_api_token
+  app = Spaceship::ConnectAPI::App.find(PRIMARY_BUNDLE_ID)
+  return UI.important("App not found; cannot align version.") if app.nil?
+
+  app.get_app_store_versions.each do |version|
+    UI.message("#{version.platform} version #{version.version_string} state=#{version.app_store_state}")
+    next unless version.app_store_state == "PREPARE_FOR_SUBMISSION"
+
+    if version.version_string == target
+      UI.success("#{version.platform} already at #{target}")
+      next
+    end
+    version.update(attributes: { versionString: target })
+    UI.success("Renamed #{version.platform} version to #{target}")
   end
 end

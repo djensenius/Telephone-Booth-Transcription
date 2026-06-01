@@ -176,7 +176,25 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Translation upstream") {
+            Section("Text translation") {
+                Picker("Text backend (/v1/translations)", selection: Binding(
+                    get: { host.config.textTranslationBackend },
+                    set: { host.config.textTranslationBackend = $0 }
+                )) {
+                    Text("On-device (Apple Intelligence)").tag(TextServiceBackend.onDevice)
+                    Text("Proxy (chat-completions upstream)").tag(TextServiceBackend.proxy)
+                }
+                .pickerStyle(.inline)
+
+                if host.config.textTranslationBackend == .onDevice {
+                    Text("Text→English (`/v1/translations`) runs on-device with Apple " +
+                         "Intelligence — no upstream required. Returns " +
+                         "`503 on_device_unavailable` if Apple Intelligence is turned off " +
+                         "or unsupported on this device.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+
                 TextField("Base URL", text: Binding(
                     get: { host.config.translationUpstream.baseURL },
                     set: { host.config.translationUpstream.baseURL = $0 }
@@ -216,60 +234,80 @@ struct SettingsView: View {
                     }
                     .help("Refresh model list from upstream")
                 }
-                Text("Audio→English translation (OpenAI `/v1/audio/translations`). " +
-                     "Independent from transcription so you can run, e.g., a larger " +
-                     "Whisper model on a different host. Default points at the same " +
-                     "faster-whisper-server (`:8000`) as transcription.")
+                Text("Audio→English translation (`/v1/audio/translations`) always uses " +
+                     "this upstream — there is no on-device audio-translation engine. " +
+                     "Text translation uses it only when the backend above is set to " +
+                     "Proxy. Default points at the same faster-whisper-server (`:8000`) " +
+                     "as transcription.")
                     .font(.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
 
-            Section("Moderation upstream") {
-                TextField("Base URL", text: Binding(
-                    get: { host.config.moderationUpstream.baseURL },
-                    set: { host.config.moderationUpstream.baseURL = $0 }
-                ))
-                SecureField("API key (optional)", text: Binding(
-                    get: { host.moderationAPIKey() },
-                    set: { newValue in host.setModerationAPIKey(newValue) }
-                ))
-                if case .failure = host.config.moderationUpstream.validateSecurity() {
-                    Label("HTTPS is required for remote upstreams with an API key. "
-                          + "The key will not be sent over this connection.",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
+            Section("Moderation") {
+                Picker("Backend", selection: Binding(
+                    get: { host.config.moderationBackend },
+                    set: { host.config.moderationBackend = $0 }
+                )) {
+                    Text("On-device (Apple Intelligence)").tag(TextServiceBackend.onDevice)
+                    Text("Proxy (LM Studio / OpenAI-compatible)").tag(TextServiceBackend.proxy)
+                }
+                .pickerStyle(.inline)
+
+                if host.config.moderationBackend == .onDevice {
+                    Text("Classifies entirely on-device with Apple Intelligence " +
+                         "Foundation Models — no upstream required. Returns a single " +
+                         "`flagged` decision with all-zero category scores, and " +
+                         "`503 on_device_unavailable` if Apple Intelligence is turned " +
+                         "off or unsupported on this device.")
                         .font(.caption)
-                }
-                HStack {
-                    Picker("Model", selection: Binding(
-                        get: { host.config.moderationModel },
-                        set: { host.config.moderationModel = $0 }
-                    )) {
-                        ForEach(moderationModels, id: \.self) { Text($0).tag($0) }
-                        if !moderationModels.contains(host.config.moderationModel) {
-                            Text(host.config.moderationModel).tag(host.config.moderationModel)
-                        }
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                } else {
+                    TextField("Base URL", text: Binding(
+                        get: { host.config.moderationUpstream.baseURL },
+                        set: { host.config.moderationUpstream.baseURL = $0 }
+                    ))
+                    SecureField("API key (optional)", text: Binding(
+                        get: { host.moderationAPIKey() },
+                        set: { newValue in host.setModerationAPIKey(newValue) }
+                    ))
+                    if case .failure = host.config.moderationUpstream.validateSecurity() {
+                        Label("HTTPS is required for remote upstreams with an API key. "
+                              + "The key will not be sent over this connection.",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption)
                     }
-                    Button {
-                        Task { await reloadModerationModels() }
-                    } label: {
-                        if isLoadingModerationModels {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
+                    HStack {
+                        Picker("Model", selection: Binding(
+                            get: { host.config.moderationModel },
+                            set: { host.config.moderationModel = $0 }
+                        )) {
+                            ForEach(moderationModels, id: \.self) { Text($0).tag($0) }
+                            if !moderationModels.contains(host.config.moderationModel) {
+                                Text(host.config.moderationModel).tag(host.config.moderationModel)
+                            }
                         }
+                        Button {
+                            Task { await reloadModerationModels() }
+                        } label: {
+                            if isLoadingModerationModels {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .help("Refresh model list from upstream")
                     }
-                    .help("Refresh model list from upstream")
+                    Toggle("Use chat-completion fallback when /v1/moderations is unavailable",
+                           isOn: Binding(
+                            get: { host.config.moderationFallbackEnabled },
+                            set: { host.config.moderationFallbackEnabled = $0 }
+                           ))
+                    Text("Default points at LM Studio (`http://127.0.0.1:1234/v1`). LM Studio " +
+                         "does not implement `/v1/moderations`; the fallback uses chat-completions.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
                 }
-                Toggle("Use chat-completion fallback when /v1/moderations is unavailable",
-                       isOn: Binding(
-                        get: { host.config.moderationFallbackEnabled },
-                        set: { host.config.moderationFallbackEnabled = $0 }
-                       ))
-                Text("Default points at LM Studio (`http://127.0.0.1:1234/v1`). LM Studio " +
-                     "does not implement `/v1/moderations`; the fallback uses chat-completions.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.Colors.textSecondary)
             }
 
             Section("Limits") {
@@ -321,6 +359,10 @@ struct SettingsView: View {
     }
 
     private func reloadModerationModels() async {
+        guard host.config.moderationBackend == .proxy else {
+            moderationModels = []
+            return
+        }
         isLoadingModerationModels = true
         defer { isLoadingModerationModels = false }
         moderationModels = await host.fetchModels(
@@ -444,4 +486,10 @@ struct SettingsView: View {
         case .error: return "error"
         }
     }
+}
+
+#Preview {
+    SettingsView()
+        .environmentObject(ServerHost(demo: true))
+        .frame(width: 820, height: 600)
 }
