@@ -81,23 +81,30 @@ platform :mac do
     create_app_record
   end
 
-  desc "Upload text metadata for every platform to App Store Connect (no binaries, no screenshots). Safe to re-run."
+  desc "Upload text metadata for every platform to App Store Connect (no binaries). Uploads screenshots too when fastlane/screenshots/<platform>/ exists. Safe to re-run."
   lane :upload_store_metadata do
-    deliver_platform("osx")
-    deliver_platform("ios")
+    deliver_platform("osx", "mac")
+    deliver_platform("ios", "ios")
     set_keywords_all(KEYWORDS)
   end
 end
 
-# Uploads text metadata for one App Store platform without touching the binary
-# or screenshots. Safe to re-run.
-def deliver_platform(platform)
+# Uploads text metadata (and screenshots when present) for one App Store
+# platform without touching the binary. Safe to re-run. `screenshots_subdir` is
+# the folder under fastlane/screenshots/ holding the per-locale screenshot dirs.
+def deliver_platform(platform, screenshots_subdir)
+  shots = File.expand_path("screenshots/#{screenshots_subdir}", __dir__)
+  has_shots = Dir.exist?(shots) && !Dir.glob("#{shots}/**/*.png").empty?
+  UI.important("No screenshots for #{platform} (#{shots}); uploading text only.") unless has_shots
+
   deliver(
     app_identifier: PRIMARY_BUNDLE_ID,
     platform: platform,
     metadata_path: File.expand_path("metadata", __dir__),
+    screenshots_path: (has_shots ? shots : nil),
     skip_binary_upload: true,
-    skip_screenshots: true,
+    skip_screenshots: !has_shots,
+    overwrite_screenshots: has_shots,
     run_precheck_before_submit: false,
     submit_for_review: false,
     automatic_release: false,

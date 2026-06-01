@@ -445,3 +445,9 @@ struct SettingsView: View {
         }
     }
 }
+
+#Preview {
+    SettingsView()
+        .environmentObject(ServerHost(demo: true))
+        .frame(width: 820, height: 600)
+}

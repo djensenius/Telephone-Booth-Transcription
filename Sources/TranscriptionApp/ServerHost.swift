@@ -47,12 +47,14 @@ final class ServerHost: ObservableObject {
     @Published private(set) var state: RunState = .stopped
     @Published var config: ServerConfig {
         didSet {
+            guard !isDemo else { return }
             ConfigPersistence.save(config, keyStore: apiKeyStore)
             Task { await self.reconcileOperatorWorker() }
         }
     }
     @Published var preventSleep: Bool {
         didSet {
+            guard !isDemo else { return }
             UserDefaults.standard.set(preventSleep, forKey: "preventSleep")
             applyPowerAssertion()
         }
@@ -69,6 +71,10 @@ final class ServerHost: ObservableObject {
     private let powerAssertion = PowerAssertion()
     private let logger = Logger(label: "server-host")
 
+    /// When true, the host is a deterministic demo/screenshot stand-in and all
+    /// real lifecycle operations are no-ops.
+    let isDemo: Bool
+
     private var httpClient: HTTPClient?
     private var serverTask: Task<Void, Never>?
 
@@ -80,7 +86,28 @@ final class ServerHost: ObservableObject {
     /// Serialization gate: each lifecycle operation awaits the previous one.
     private var lifecycleGate: Task<Void, Never>?
 
-    init() {
+    convenience init() {
+        self.init(demo: DemoMode.isActive)
+    }
+
+    init(demo: Bool) {
+        if demo {
+            // Demo/screenshot mode: deterministic sample data, no Keychain, no
+            // network, no real server. The published `state` is pinned to
+            // `.running` so the UI renders as if serving traffic.
+            let keyStore = InMemoryAPIKeyStore()
+            self.apiKeyStore = keyStore
+            self.tokenStore = InMemoryTokenStore(initial: DemoData.token)
+            self.logStore = InMemoryRequestLogStore(seed: DemoData.requestLog)
+            self.config = DemoData.config
+            self.preventSleep = true
+            self.state = .running(host: DemoData.bindHost, port: DemoData.bindPort)
+            self.sleepAssertionHeld = true
+            self.isDemo = true
+            return
+        }
+
+        self.isDemo = false
         #if canImport(Security)
         let keyStore = KeychainAPIKeyStore()
         self.apiKeyStore = keyStore
@@ -101,6 +128,7 @@ final class ServerHost: ObservableObject {
     }
 
     func start() async {
+        if isDemo { return }
         // Wait for any prior stop transition to complete.
         await lifecycleGate?.value
 
@@ -195,6 +223,7 @@ final class ServerHost: ObservableObject {
     }
 
     func stop() async {
+        if isDemo { return }
         guard state.isActive else { return }
         if case .stopping = state { return }
         state = .stopping
@@ -230,6 +259,7 @@ final class ServerHost: ObservableObject {
     /// Gracefully shuts down the server, awaiting in-flight work and HTTP client
     /// cleanup. Use this from app termination handlers that can defer exit.
     func shutdown() async {
+        if isDemo { return }
         guard state.isRunning || state == .starting else { return }
         state = .stopping
         await stopOperatorWorker()
@@ -316,6 +346,7 @@ final class ServerHost: ObservableObject {
     /// from this server itself once it's running) so the UI can populate
     /// model pickers. Returns an empty list on any failure.
     func fetchModels(from baseURL: String, apiKey: String?) async -> [String] {
+        if isDemo { return [] }
         guard !baseURL.isEmpty,
               let url = URL(string: baseURL.hasSuffix("/")
                             ? "\(baseURL)models"
@@ -345,6 +376,10 @@ final class ServerHost: ObservableObject {
     }
 
     private func applyPowerAssertion() {
+        if isDemo {
+            sleepAssertionHeld = true
+            return
+        }
         let shouldHold = preventSleep && state.isRunning
         if shouldHold {
             _ = powerAssertion.acquire()

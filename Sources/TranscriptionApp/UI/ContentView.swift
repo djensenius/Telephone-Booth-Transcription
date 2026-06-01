@@ -3,7 +3,7 @@ import TranscriptionCore
 
 struct ContentView: View {
     @EnvironmentObject var host: ServerHost
-    @State private var selectedTab: AppTab = .status
+    @State private var selectedTab: AppTab = AppTab(screenshotName: DemoMode.screenshotTab) ?? .status
 
     var body: some View {
         VStack(spacing: Theme.Spacing.large) {
@@ -34,6 +34,15 @@ private enum AppTab: String, CaseIterable, Identifiable {
     case requests
 
     var id: Self { self }
+
+    init?(screenshotName: String?) {
+        switch screenshotName?.lowercased() {
+        case "status": self = .status
+        case "settings": self = .settings
+        case "requests": self = .requests
+        default: return nil
+        }
+    }
 
     var title: String {
         switch self {
@@ -114,4 +123,10 @@ private struct GlassTabBarModifier: ViewModifier {
 
 private extension View {
     func glassTabBar() -> some View { modifier(GlassTabBarModifier()) }
+}
+
+#Preview {
+    ContentView()
+        .environmentObject(ServerHost(demo: true))
+        .frame(width: 820, height: 600)
 }
