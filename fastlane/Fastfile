@@ -87,6 +87,11 @@ platform :mac do
     deliver_platform("ios", "ios")
     set_keywords_all(KEYWORDS)
   end
+
+  desc "Rename the editable App Store Connect version of every platform to APP_VERSION (#{APP_VERSION}) so the version record matches the app's CFBundleShortVersionString. Idempotent."
+  lane :align_store_version do
+    align_store_version_all(APP_VERSION)
+  end
 end
 
 # Uploads text metadata (and screenshots when present) for one App Store
@@ -135,5 +140,26 @@ def set_keywords_all(keywords)
       loc.update(attributes: { keywords: keywords })
       UI.success("Set keywords for #{version.platform} #{loc.locale}")
     end
+  end
+end
+
+# Renames the editable (PREPARE_FOR_SUBMISSION) App Store Connect version of
+# every platform to `target` so the version record matches the binary's
+# CFBundleShortVersionString. Idempotent.
+def align_store_version_all(target)
+  connect_api_token
+  app = Spaceship::ConnectAPI::App.find(PRIMARY_BUNDLE_ID)
+  return UI.important("App not found; cannot align version.") if app.nil?
+
+  app.get_app_store_versions.each do |version|
+    UI.message("#{version.platform} version #{version.version_string} state=#{version.app_store_state}")
+    next unless version.app_store_state == "PREPARE_FOR_SUBMISSION"
+
+    if version.version_string == target
+      UI.success("#{version.platform} already at #{target}")
+      next
+    end
+    version.update(attributes: { versionString: target })
+    UI.success("Renamed #{version.platform} version to #{target}")
   end
 end
