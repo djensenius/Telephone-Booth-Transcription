@@ -9,7 +9,11 @@
 //
 
 import SwiftUI
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 /// Project-wide design tokens — colours, fonts, spacing, radii.
 public enum Theme {
@@ -75,11 +79,19 @@ public enum Theme {
     }
 
     private static func dynamic(light: Color, dark: Color) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
+        #if canImport(AppKit)
+        return Color(nsColor: NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
                 ? NSColor(dark)
                 : NSColor(light)
         })
+        #elseif canImport(UIKit)
+        return Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+        #else
+        return light
+        #endif
     }
 
     // MARK: - Semantic colours
@@ -181,7 +193,7 @@ extension Color {
 /// build-time on hosts without the new SDK).
 public struct GlassCard: ViewModifier {
     public func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, iOS 26.0, *) {
             content
                 .padding(Theme.Spacing.large)
                 .glassEffect(
@@ -250,7 +262,7 @@ public struct TBTGlassButtonStyle: ButtonStyle {
             .padding(.vertical, Theme.Spacing.small)
 
         return Group {
-            if #available(macOS 26.0, *) {
+            if #available(macOS 26.0, iOS 26.0, *) {
                 label.glassEffect(
                     .regular,
                     in: .rect(cornerRadius: Theme.cornerRadius)

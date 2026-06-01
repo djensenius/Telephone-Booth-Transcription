@@ -203,11 +203,212 @@ targets:
         DEVELOPMENT_TEAM: "9JALHNGRBQ"
         CODE_SIGN_ENTITLEMENTS: Resources/TranscriptionApp.entitlements
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny"
+
+  # ---------------------------------------------------------------------------
+  # iOS variants. These share the same Sources/ as the macOS targets above but
+  # build for iOS. PRODUCT_MODULE_NAME is pinned to the base module name so
+  # `import TranscriptionCore` (etc.) keeps resolving from the shared sources.
+  # ---------------------------------------------------------------------------
+  TranscriptionShared_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionShared
+    info:
+      path: Resources/TranscriptionShared-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionShared
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.shared
+        PRODUCT_NAME: TranscriptionShared
+        PRODUCT_MODULE_NAME: TranscriptionShared
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionOnDevice_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionOnDevice
+    info:
+      path: Resources/TranscriptionOnDevice-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionOnDevice
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared_iOS
+      - package: swift-log
+        product: Logging
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.ondevice
+        PRODUCT_NAME: TranscriptionOnDevice
+        PRODUCT_MODULE_NAME: TranscriptionOnDevice
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionOperator_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionOperator
+    info:
+      path: Resources/TranscriptionOperator-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionOperator
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared_iOS
+      - package: async-http-client
+        product: AsyncHTTPClient
+      - package: swift-nio
+        product: NIOCore
+      - package: swift-nio
+        product: NIOHTTP1
+      - package: swift-log
+        product: Logging
+      - package: swift-crypto
+        product: Crypto
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.operator
+        PRODUCT_NAME: TranscriptionOperator
+        PRODUCT_MODULE_NAME: TranscriptionOperator
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionCore_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionCore
+    info:
+      path: Resources/TranscriptionCore-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionCore
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared_iOS
+      - target: TranscriptionOnDevice_iOS
+      - target: TranscriptionOperator_iOS
+      - package: hummingbird
+        product: Hummingbird
+      - package: swift-service-context
+        product: ServiceContextModule
+      - package: async-http-client
+        product: AsyncHTTPClient
+      - package: swift-log
+        product: Logging
+      - package: swift-crypto
+        product: Crypto
+      - package: grdb-swift
+        product: GRDB
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.core
+        PRODUCT_NAME: TranscriptionCore
+        PRODUCT_MODULE_NAME: TranscriptionCore
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
+  TranscriptionAppiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionApp
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+    dependencies:
+      - target: TranscriptionCore_iOS
+      - target: TranscriptionShared_iOS
+      - target: TranscriptionOnDevice_iOS
+      - target: TranscriptionOperator_iOS
+      - package: async-http-client
+        product: AsyncHTTPClient
+      - package: swift-nio-transport-services
+        product: NIOTransportServices
+      - package: swift-crypto
+        product: Crypto
+      - package: swift-log
+        product: Logging
+    info:
+      path: Resources/TranscriptionAppiOS-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleDisplayName: "Transcriber"
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: "Transcriber"
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        NSLocalNetworkUsageDescription: "Transcriber serves its OpenAI-compatible HTTP API to clients on your local network when you bind it to a LAN address."
+        NSMicrophoneUsageDescription: "Transcriber needs microphone access only if you point a client at the on-device Speech backend with a live audio source."
+        NSSpeechRecognitionUsageDescription: "Transcriber uses on-device speech recognition to convert audio to text when the on-device transcription backend is selected."
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription
+        PRODUCT_NAME: "Telephone Booth Transcription"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "9JALHNGRBQ"
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny"
 schemes:
   TranscriptionApp:
     build:
       targets:
         TranscriptionApp: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  TranscriptionAppiOS:
+    build:
+      targets:
+        TranscriptionAppiOS: all
     run:
       config: Debug
     archive:

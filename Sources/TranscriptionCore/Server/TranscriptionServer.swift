@@ -3,6 +3,10 @@ import Foundation
 import Hummingbird
 import Logging
 import NIOCore
+import TranscriptionShared
+#if canImport(FoundationModels)
+import TranscriptionOnDevice
+#endif
 
 /// Composes the entire HTTP surface — router + middlewares + routes — into a
 /// `Hummingbird.Application` ready to run.
@@ -86,7 +90,7 @@ public struct TranscriptionServer: Sendable {
                 defaultModel: config.defaultTranscriptionModel
             )
         case .nativeMacOS:
-            #if canImport(Speech) && os(macOS)
+            #if canImport(Speech)
             backendImpl = NativeMacOSTranscriptionBackend(
                 locale: Locale(identifier: config.nativeTranscriptionLocale),
                 logger: logger
@@ -95,8 +99,8 @@ public struct TranscriptionServer: Sendable {
             backendImpl = NativeMacOSTranscriptionBackend()
             #endif
         case .appleSpeechAnalyzer:
-            #if canImport(Speech) && os(macOS)
-            if #available(macOS 26.0, *) {
+            #if canImport(Speech)
+            if #available(macOS 26.0, iOS 26.0, *) {
                 backendImpl = SpeechAnalyzerBackend(
                     locale: Locale(identifier: config.nativeTranscriptionLocale),
                     logger: logger
@@ -127,12 +131,16 @@ public struct TranscriptionServer: Sendable {
         )
         let textTranslation = TextTranslationRoute<BasicRequestContext>(
             translator: textTranslator,
+            backend: config.textTranslationBackend,
+            onDeviceTranslator: Self.makeOnDeviceTranslator(logger: logger),
             maxRequestBytes: config.maxRequestBytes
         )
         let moderation = ModerationRoute<BasicRequestContext>(
             upstream: upstream,
             upstreamConfig: config.moderationUpstream,
             classifier: classifier,
+            backend: config.moderationBackend,
+            onDeviceModerator: Self.makeOnDeviceModerator(logger: logger),
             maxRequestBytes: config.maxRequestBytes,
             fallbackEnabled: config.moderationFallbackEnabled
         )
@@ -160,5 +168,29 @@ public struct TranscriptionServer: Sendable {
         router.get("/v1/models", use: models.handle)
 
         return router
+    }
+
+    /// Builds the on-device moderation service when Foundation Models is
+    /// available on this platform/OS. Returns `nil` otherwise — the moderation
+    /// route then reports `.onDevice` as unavailable instead of silently
+    /// falling back to a network upstream.
+    static func makeOnDeviceModerator(logger: Logger) -> (any TextModerationService)? {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
+            return FoundationModelsModerationService(logger: logger)
+        }
+        #endif
+        return nil
+    }
+
+    /// Builds the on-device translation service when Foundation Models is
+    /// available on this platform/OS. Returns `nil` otherwise.
+    static func makeOnDeviceTranslator(logger: Logger) -> (any TextTranslationService)? {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
+            return FoundationModelsTranslationService(logger: logger)
+        }
+        #endif
+        return nil
     }
 }

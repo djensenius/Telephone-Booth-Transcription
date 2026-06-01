@@ -1,5 +1,8 @@
 import SwiftUI
 import TranscriptionCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct StatusView: View {
     @EnvironmentObject var host: ServerHost
@@ -99,8 +102,12 @@ struct StatusView: View {
                 Button(revealToken ? "Hide" : "Reveal") { revealToken.toggle() }
                     .buttonStyle(.tbtGlass)
                 Button("Copy") {
+                    #if canImport(AppKit)
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(host.currentToken(), forType: .string)
+                    #elseif canImport(UIKit)
+                    UIPasteboard.general.string = host.currentToken()
+                    #endif
                 }
                 .buttonStyle(.tbtGlass)
                 Button("Rotate") { host.rotateToken() }

@@ -48,6 +48,30 @@ jobs:
           path: build/Telephone Booth Transcription.app
           if-no-files-found: error
 
+  ios-build:
+    name: build iOS (simulator)
+    runs-on: macos-26
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift toolchain
+        run: |
+          swift --version
+          xcrun --show-sdk-version --sdk iphonesimulator
+      - name: Build iOS app (simulator, unsigned)
+        run: |
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=safe.bareRepository \
+          GIT_CONFIG_VALUE_0=all \
+          xcodebuild \
+            -project TelephoneBoothTranscription.xcodeproj \
+            -scheme TranscriptionAppiOS \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath .build-ios \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
   docs:
     name: docs lint
     runs-on: macos-26

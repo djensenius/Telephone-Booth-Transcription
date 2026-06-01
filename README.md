@@ -2,7 +2,8 @@
 
 > _"Operator? I'd like to leave a message — and have it written down."_
 
-A native macOS app that exposes an **OpenAI-compatible HTTP API** for:
+A native macOS **and iOS** app that exposes an **OpenAI-compatible HTTP API**
+for:
 
 - **Audio transcription** — `POST /v1/audio/transcriptions` (multipart, same wire format
   as `https://api.openai.com/v1/audio/transcriptions`).
@@ -87,6 +88,25 @@ You'll need:
 
   Both run fully on-device, no separate server. Grant the permission prompt at
   first use.
+
+### iOS app
+
+The same codebase ships an iOS app (also named **Transcriber**, bundle id
+`org.davidjensenius.TelephoneBoothTranscription`). On iOS the server runs in the
+foreground only and **everything is on-device via Apple Intelligence**:
+
+- **Transcription** defaults to the on-device Speech Analyzer.
+- **Moderation** and **text translation** default to on-device FoundationModels
+  (`model: apple-foundation-models`). These never fall back to a network
+  upstream — if Apple Intelligence is unavailable the relevant endpoint returns
+  `503 on_device_unavailable`. See [`docs/api.md`](./docs/api.md) and
+  [`docs/moderation.md`](./docs/moderation.md) for the on-device response shapes
+  (notably, on-device moderation returns a single `flagged` flag with all-zero
+  category scores). `/v1/audio/translations` remains proxy-only.
+
+iOS requires iOS 26 and a device with Apple Intelligence support; on-device
+features are unavailable on the simulator. The app ships Light, Dark, and Tinted
+home-screen icons.
 
 The Settings panel auto-discovers available models by calling `GET /v1/models`
 on each upstream, and shows them in a picker. Refresh the list with the
