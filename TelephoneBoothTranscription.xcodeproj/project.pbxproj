@@ -1413,6 +1413,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9JALHNGRBQ;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1835,6 +1836,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9JALHNGRBQ;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
