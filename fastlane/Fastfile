@@ -97,7 +97,16 @@ def deliver_platform(platform, screenshots_subdir)
   has_shots = Dir.exist?(shots) && !Dir.glob("#{shots}/**/*.png").empty?
   UI.important("No screenshots for #{platform} (#{shots}); uploading text only.") unless has_shots
 
+  # Authenticate with the App Store Connect API key so the upload runs
+  # non-interactively (no Apple ID password / 2FA prompt).
+  key = app_store_connect_api_key(
+    key_id: API_KEY[:key_id],
+    issuer_id: API_KEY[:issuer_id],
+    key_filepath: API_KEY[:key_filepath]
+  )
+
   deliver(
+    api_key: key,
     app_identifier: PRIMARY_BUNDLE_ID,
     platform: platform,
     metadata_path: File.expand_path("metadata", __dir__),
