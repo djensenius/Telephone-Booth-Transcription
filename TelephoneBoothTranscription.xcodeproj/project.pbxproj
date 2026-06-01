@@ -345,6 +345,7 @@
 		012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerAssertion.swift; sourceTree = "<group>"; };
 		01682C9E143027DFBB660EBF /* TranscriptionCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyTranscriptionBackend.swift; sourceTree = "<group>"; };
+		09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Telephone Booth Transcription.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		09B93C64136C4803E30D6E66 /* TranscriptionCore_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionCore_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBackend.swift; sourceTree = "<group>"; };
 		0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAPIKeyStore.swift; sourceTree = "<group>"; };
@@ -377,12 +378,12 @@
 		6B07206E4A2FEF078EBF9972 /* OnDeviceTranscriptionAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceTranscriptionAdapter.swift; sourceTree = "<group>"; };
 		6F093D733703A349373FC072 /* RequestsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsRoute.swift; sourceTree = "<group>"; };
 		6FD96F7AFC4FC2A09E16DE8D /* InProcessOperatorJobDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InProcessOperatorJobDispatcher.swift; sourceTree = "<group>"; };
+		75346A5B605E5A84FB5B15F5 /* Telephone Booth Transcription.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Telephone Booth Transcription.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOperator.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOperator_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8544DD720CB364126F1627E3 /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
 		87D229D9FFFD1DC06A5D418C /* OperatorPollingConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorPollingConfig.swift; sourceTree = "<group>"; };
 		8986C8DF2BB2972833D94E10 /* TextTranslationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextTranslationRoute.swift; sourceTree = "<group>"; };
-		9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TranscriptionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionServer.swift; sourceTree = "<group>"; };
 		A0BF53E0C7DF581ED69E923D /* NativeSpeechTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSpeechTranscriber.swift; sourceTree = "<group>"; };
 		A39A1B6453748F75B9755D69 /* LoopbackOperatorJobDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackOperatorJobDispatcher.swift; sourceTree = "<group>"; };
@@ -405,7 +406,6 @@
 		DD7D772BF49912B0122CA505 /* RequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogStore.swift; sourceTree = "<group>"; };
 		DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsRoute.swift; sourceTree = "<group>"; };
 		DEE2ACB1AEBBF2A3B7B763BC /* TranscriptionShared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		E56F21B91C4BC01EA66A3CC1 /* TranscriptionAppiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TranscriptionAppiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogWriter.swift; sourceTree = "<group>"; };
 		F7C876821C6C463D8736854C /* MultipartFilePart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipartFilePart.swift; sourceTree = "<group>"; };
@@ -610,8 +610,8 @@
 		773B5A91131256DC4B9D6B59 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */,
-				E56F21B91C4BC01EA66A3CC1 /* TranscriptionAppiOS.app */,
+				75346A5B605E5A84FB5B15F5 /* Telephone Booth Transcription.app */,
+				09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */,
 				09B93C64136C4803E30D6E66 /* TranscriptionCore_iOS.framework */,
 				01682C9E143027DFBB660EBF /* TranscriptionCore.framework */,
 				4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */,
@@ -770,7 +770,7 @@
 				D8C3CDDD323E80F7CEA3FFDC /* Logging */,
 			);
 			productName = TranscriptionApp;
-			productReference = 9813515CC2AE9DFC2CD65A10 /* TranscriptionApp.app */;
+			productReference = 75346A5B605E5A84FB5B15F5 /* Telephone Booth Transcription.app */;
 			productType = "com.apple.product-type.application";
 		};
 		4139892C0B3E8825C9459DA2 /* TranscriptionOnDevice_iOS */ = {
@@ -940,7 +940,7 @@
 				3803380DBA71D54DEC3E94D6 /* Logging */,
 			);
 			productName = TranscriptionAppiOS;
-			productReference = E56F21B91C4BC01EA66A3CC1 /* TranscriptionAppiOS.app */;
+			productReference = 09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */

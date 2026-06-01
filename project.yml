@@ -158,6 +158,11 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "26.0"
+    # productName must match PRODUCT_NAME so the product reference filename is
+    # "Telephone Booth Transcription.app". Otherwise xcodegen names the product
+    # reference after the target ("TranscriptionApp.app") and Xcode rewrites the
+    # shared scheme on every open to match the real product name.
+    productName: "Telephone Booth Transcription"
     sources:
       - path: Sources/TranscriptionApp
       - path: Resources/AppIcon.icns
@@ -341,6 +346,9 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "26.0"
+    # See TranscriptionApp above: keep productName in sync with PRODUCT_NAME so
+    # the product reference filename matches and Xcode stops rewriting the scheme.
+    productName: "Telephone Booth Transcription"
     sources:
       - path: Sources/TranscriptionApp
       - path: Resources/Assets.xcassets

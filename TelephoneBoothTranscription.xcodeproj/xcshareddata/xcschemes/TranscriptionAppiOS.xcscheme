@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E57143538295CB4EF4ED11B7"
-               BuildableName = "TranscriptionAppiOS.app"
+               BuildableName = "Telephone Booth Transcription.app"
                BlueprintName = "TranscriptionAppiOS"
                ReferencedContainer = "container:TelephoneBoothTranscription.xcodeproj">
             </BuildableReference>
@@ -33,7 +33,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E57143538295CB4EF4ED11B7"
-            BuildableName = "TranscriptionAppiOS.app"
+            BuildableName = "Telephone Booth Transcription.app"
             BlueprintName = "TranscriptionAppiOS"
             ReferencedContainer = "container:TelephoneBoothTranscription.xcodeproj">
          </BuildableReference>
@@ -56,7 +56,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E57143538295CB4EF4ED11B7"
-            BuildableName = "TranscriptionAppiOS.app"
+            BuildableName = "Telephone Booth Transcription.app"
             BlueprintName = "TranscriptionAppiOS"
             ReferencedContainer = "container:TelephoneBoothTranscription.xcodeproj">
          </BuildableReference>
@@ -75,7 +75,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E57143538295CB4EF4ED11B7"
-            BuildableName = "TranscriptionAppiOS.app"
+            BuildableName = "Telephone Booth Transcription.app"
             BlueprintName = "TranscriptionAppiOS"
             ReferencedContainer = "container:TelephoneBoothTranscription.xcodeproj">
          </BuildableReference>
