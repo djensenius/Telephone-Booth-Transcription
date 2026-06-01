@@ -89,6 +89,13 @@ You'll need:
   Both run fully on-device, no separate server. Grant the permission prompt at
   first use.
 
+- **Moderation** and **text translation** (`/v1/translations`) can likewise be
+  switched in _Settings_ between **on-device Apple Intelligence** (Foundation
+  Models, `model: apple-foundation-models`) and a **proxy** upstream. On macOS
+  the default stays proxy (so existing setups are unchanged); pick on-device to
+  run with no LM Studio. Audio translation (`/v1/audio/translations`) is always
+  proxy — there is no on-device audio-translation engine.
+
 ### iOS app
 
 The same codebase ships an iOS app (also named **Transcriber**, bundle id
