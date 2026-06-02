@@ -96,7 +96,7 @@ struct ReviewView: View {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
             }
-            .buttonStyle(TBTGlassButtonStyle())
+            .buttonStyle(.tbtGlass)
             .disabled(store.state == .loading)
         }
     }
