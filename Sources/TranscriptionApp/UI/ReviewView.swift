@@ -74,7 +74,7 @@ struct ReviewView: View {
                     kind: .moderation
                 )
             }
-            .padding(.bottom, Theme.Spacing.large)
+            .padding(Theme.Spacing.large)
         }
         .refreshable { await store.refresh() }
     }
