@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "TranscriptionCore", targets: ["TranscriptionCore"]),
         .library(name: "TranscriptionShared", targets: ["TranscriptionShared"]),
         .library(name: "TranscriptionAuth", targets: ["TranscriptionAuth"]),
+        .library(name: "TranscriptionReview", targets: ["TranscriptionReview"]),
         .library(name: "TranscriptionOnDevice", targets: ["TranscriptionOnDevice"]),
         .library(name: "TranscriptionOperator", targets: ["TranscriptionOperator"])
     ],
@@ -31,6 +32,13 @@ let package = Package(
         ),
         .target(
             name: "TranscriptionAuth",
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny"),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
+            name: "TranscriptionReview",
             swiftSettings: [
                 .enableUpcomingFeature("ExistentialAny"),
                 .enableExperimentalFeature("StrictConcurrency")
@@ -79,7 +87,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "TranscriptionApp",
-            dependencies: ["TranscriptionCore", "TranscriptionAuth"],
+            dependencies: ["TranscriptionCore", "TranscriptionAuth", "TranscriptionReview"],
             swiftSettings: [
                 .enableUpcomingFeature("ExistentialAny")
             ]
@@ -87,6 +95,10 @@ let package = Package(
         .testTarget(
             name: "TranscriptionAuthTests",
             dependencies: ["TranscriptionAuth"]
+        ),
+        .testTarget(
+            name: "TranscriptionReviewTests",
+            dependencies: ["TranscriptionReview"]
         ),
         .testTarget(
             name: "TranscriptionCoreTests",

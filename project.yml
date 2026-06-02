@@ -176,6 +176,28 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.auth
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
+  TranscriptionReview:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionReview
+    info:
+      path: Resources/TranscriptionReview-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionReview
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.review
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionApp:
     type: application
     platform: macOS
@@ -195,6 +217,7 @@ targets:
       - target: TranscriptionOnDevice
       - target: TranscriptionOperator
       - target: TranscriptionAuth
+      - target: TranscriptionReview
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio-transport-services
@@ -402,6 +425,30 @@ targets:
         PRODUCT_MODULE_NAME: TranscriptionAuth
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
+  TranscriptionReview_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionReview
+    info:
+      path: Resources/TranscriptionReview-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionReview
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.review
+        PRODUCT_NAME: TranscriptionReview
+        PRODUCT_MODULE_NAME: TranscriptionReview
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionAppiOS:
     type: application
     platform: iOS
@@ -419,6 +466,7 @@ targets:
       - target: TranscriptionOnDevice_iOS
       - target: TranscriptionOperator_iOS
       - target: TranscriptionAuth_iOS
+      - target: TranscriptionReview_iOS
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio-transport-services
@@ -511,3 +559,7 @@ schemes:
     build:
       targets:
         TranscriptionAuth: all
+  TranscriptionReview:
+    build:
+      targets:
+        TranscriptionReview: all
