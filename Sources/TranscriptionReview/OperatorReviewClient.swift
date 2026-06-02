@@ -18,16 +18,29 @@ public enum OperatorReviewError: Error, Sendable, Equatable {
     case unauthenticated
     case unauthorized
     case http(Int)
+    /// A structured failure the Operator reported via its `{ "error": "<code>" }`
+    /// envelope (e.g. `message_not_decidable`, `no_succeeded_transcription`).
+    case api(status: Int, code: String)
     case invalidResponse
 }
 
-/// Read-only client for the Operator message-review API. Every request carries
-/// the operator's OIDC bearer token. This deliberately covers only the read
-/// path today; write actions (approve/reject, submit translation) land once the
-/// backend exposes the corresponding endpoints.
+/// Client for the Operator message-review API. Every request carries the
+/// operator's OIDC bearer token. Covers the read path (queue + transcriptions)
+/// and the human write actions: recording a moderation decision and submitting
+/// a translation for a message's latest transcription.
 public protocol OperatorReviewClient: Sendable {
     func fetchMessages(status: MessageStatus?, since: Date?, limit: Int) async throws -> MessageList
     func fetchTranscriptions(messageID: String) async throws -> TranscriptionList
+    func submitDecision(
+        messageID: String,
+        decision: ReviewDecision,
+        notes: String?
+    ) async throws -> Message
+    func submitTranslation(
+        messageID: String,
+        translatedText: String,
+        translatedLanguage: String?
+    ) async throws -> Transcription
 }
 
 public actor HTTPOperatorReviewClient: OperatorReviewClient {
@@ -62,6 +75,37 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         try await get("/v1/messages/\(messageID)/transcriptions")
     }
 
+    public func submitDecision(
+        messageID: String,
+        decision: ReviewDecision,
+        notes: String?
+    ) async throws -> Message {
+        struct Body: Encodable {
+            let decision: ReviewDecision
+            let notes: String?
+        }
+        let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = Body(decision: decision, notes: (trimmedNotes?.isEmpty == false) ? trimmedNotes : nil)
+        return try await post("/v1/messages/\(messageID)/decision", body: body)
+    }
+
+    public func submitTranslation(
+        messageID: String,
+        translatedText: String,
+        translatedLanguage: String?
+    ) async throws -> Transcription {
+        struct Body: Encodable {
+            let translatedText: String
+            let translatedLanguage: String?
+        }
+        let trimmedLanguage = translatedLanguage?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = Body(
+            translatedText: translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
+            translatedLanguage: (trimmedLanguage?.isEmpty == false) ? trimmedLanguage : nil
+        )
+        return try await post("/v1/messages/\(messageID)/translation", body: body)
+    }
+
     // MARK: - Request plumbing
 
     private func get<Response: Decodable>(
@@ -89,6 +133,30 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(header, forHTTPHeaderField: "Authorization")
 
+        return try await send(request)
+    }
+
+    private func post<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        body: Body
+    ) async throws -> Response {
+        let url = config.url(forPath: path)
+        guard let header = await tokenProvider.authorizationHeader() else {
+            throw OperatorReviewError.unauthenticated
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(header, forHTTPHeaderField: "Authorization")
+        request.httpBody = try OperatorJSON.encoder.encode(body)
+
+        return try await send(request)
+    }
+
+    /// Performs the request and maps the response, translating the Operator's
+    /// `{ "error": "<code>" }` envelope into a structured ``OperatorReviewError``.
+    private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
         let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw OperatorReviewError.invalidResponse
@@ -97,8 +165,16 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             throw OperatorReviewError.unauthorized
         }
         guard (200..<300).contains(http.statusCode) else {
+            if let code = Self.decodeErrorCode(from: data) {
+                throw OperatorReviewError.api(status: http.statusCode, code: code)
+            }
             throw OperatorReviewError.http(http.statusCode)
         }
         return try OperatorJSON.decoder.decode(Response.self, from: data)
+    }
+
+    private static func decodeErrorCode(from data: Data) -> String? {
+        struct Envelope: Decodable { let error: String }
+        return try? JSONDecoder().decode(Envelope.self, from: data).error
     }
 }

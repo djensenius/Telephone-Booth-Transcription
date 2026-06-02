@@ -254,8 +254,33 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+extension Message {
+    /// Returns a copy with `latestTranscription` replaced. Used to fold an
+    /// operator-submitted translation back into local state without waiting for
+    /// the next poll.
+    public func replacingLatestTranscription(_ transcription: Transcription) -> Message {
+        Message(
+            id: id,
+            status: status,
+            questionId: questionId,
+            notes: notes,
+            createdAt: createdAt,
+            receivedAt: receivedAt,
+            audio: audio,
+            latestTranscription: transcription,
+            latestModeration: latestModeration
+        )
+    }
+}
+
 public struct MessageList: Codable, Sendable, Equatable {
     public let items: [Message]
 
     public init(items: [Message]) { self.items = items }
+}
+
+/// A human moderation decision an operator can take on a message.
+public enum ReviewDecision: String, Codable, Sendable, Hashable {
+    case approve
+    case reject
 }
