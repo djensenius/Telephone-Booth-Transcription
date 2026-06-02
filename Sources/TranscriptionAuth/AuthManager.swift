@@ -241,9 +241,8 @@ public final class AuthManager {
         guard storeTokens(tokens) else {
             throw AuthError.keychainWriteFailed
         }
-        authState = .signedIn
+        setAuthState(.signedIn)
         logger.info("Signed in via OIDC")
-        NotificationCenter.default.post(name: .operatorAuthStateDidChange, object: self)
         #else
         throw AuthError.unknown
         #endif
