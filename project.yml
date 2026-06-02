@@ -193,6 +193,7 @@ targets:
         CFBundlePackageType: APPL
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHighResolutionCapable: true
         NSHumanReadableCopyright: "Copyright 2026 David Jensenius"
