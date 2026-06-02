@@ -8,6 +8,8 @@ import TranscriptionReview
 /// submit a translation, or approve / reject a message.
 struct ReviewView: View {
     @State private var auth = AuthManager.shared
+    @State private var isSigningIn = false
+    @State private var signInError: String?
     @State private var store = ReviewStore(
         client: HTTPOperatorReviewClient(tokenProvider: AuthBearerAdapter())
     )
@@ -36,13 +38,46 @@ struct ReviewView: View {
             Text("Sign in to review messages")
                 .font(Theme.Fonts.headerLarge())
                 .foregroundStyle(Theme.Colors.textPrimary)
-            Text("Connect your Operator account in Settings to load the review queue.")
+            Text("Sign in with your Operator account to load the review queue.")
                 .font(Theme.Fonts.bodyMedium)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 360)
+
+            Button {
+                Task { await signIn() }
+            } label: {
+                if isSigningIn {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
+                }
+            }
+            .buttonStyle(.tbtGlass)
+            .disabled(isSigningIn)
+
+            if let signInError {
+                Text(signInError)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.error)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func signIn() async {
+        isSigningIn = true
+        signInError = nil
+        defer { isSigningIn = false }
+        do {
+            try await auth.signInWithOIDC()
+        } catch AuthError.cancelled {
+            // User dismissed the sheet; not an error worth surfacing.
+        } catch {
+            signInError = error.localizedDescription
+        }
     }
 
     private var queue: some View {

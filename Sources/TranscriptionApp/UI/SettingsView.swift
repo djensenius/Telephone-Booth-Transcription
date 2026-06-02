@@ -1,5 +1,6 @@
 import SwiftUI
 #if os(macOS)
+import TranscriptionAuth
 import TranscriptionCore
 
 #if canImport(Speech)
@@ -8,6 +9,7 @@ import Speech
 
 struct SettingsView: View {
     @EnvironmentObject var host: ServerHost
+    @State private var auth = AuthManager.shared
 
     @State private var transcriptionModels: [String] = []
     @State private var moderationModels: [String] = []
@@ -420,27 +422,24 @@ struct SettingsView: View {
                 get: { host.config.operatorPolling.enabled },
                 set: { host.config.operatorPolling.enabled = $0 }
             ))
-            Text("When on, this app periodically asks the configured Operator " +
-                 "for transcription, translation, and moderation jobs and posts " +
-                 "results back. Use this when the Operator can't reach the Mac " +
-                 "directly.")
+            Text("When on, this app periodically asks the Operator for "
+                 + "transcription, translation, and moderation jobs and posts "
+                 + "results back. Use this when the Operator can't reach the Mac "
+                 + "directly.")
                 .font(.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
-            TextField("Operator base URL", text: Binding(
-                get: { host.config.operatorPolling.baseURL },
-                set: { host.config.operatorPolling.baseURL = $0 }
-            ))
-                .textFieldStyle(.roundedBorder)
-
-            SecureField("Operator API token", text: Binding(
-                get: { host.operatorAPIToken() },
-                set: { host.setOperatorAPIToken($0) }
-            ))
-                .textFieldStyle(.roundedBorder)
-            Text("Token is stored in the macOS Keychain (account: \(APIKeyAccount.operatorPull)).")
-                .font(.caption)
-                .foregroundStyle(Theme.Colors.textSecondary)
+            if auth.isSignedIn {
+                Label("Polling as your signed-in Operator account", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+            } else {
+                Label("Sign in (Account, above) to enable polling — the worker "
+                      + "authenticates as your Operator account.",
+                      systemImage: "person.crop.circle.badge.exclamationmark")
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+            }
 
             Stepper(value: Binding(
                 get: { host.config.operatorPolling.pollIntervalSeconds },

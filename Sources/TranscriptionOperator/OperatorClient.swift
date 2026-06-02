@@ -34,7 +34,10 @@ public enum OperatorClientError: Error, Sendable, Equatable {
 public final class HTTPOperatorClient: OperatorClient {
     private let httpClient: HTTPClient
     private let config: OperatorPollingConfig
-    private let token: String
+    /// Resolves the current `Authorization` header value (e.g.
+    /// `"Bearer <token>"`) per request, allowing the credential to refresh or
+    /// expire between polls. Returns `nil` when no valid session exists.
+    private let authHeaderProvider: @Sendable () async -> String?
     private let logger: Logger
     private let timeout: TimeAmount
     private let capabilities: Set<OperatorJob.Kind>?
@@ -42,17 +45,37 @@ public final class HTTPOperatorClient: OperatorClient {
     public init(
         httpClient: HTTPClient,
         config: OperatorPollingConfig,
-        token: String,
+        authHeaderProvider: @escaping @Sendable () async -> String?,
         timeout: TimeAmount = .seconds(30),
         capabilities: Set<OperatorJob.Kind>? = nil,
         logger: Logger = Logger(label: "operator-client")
     ) {
         self.httpClient = httpClient
         self.config = config
-        self.token = token
+        self.authHeaderProvider = authHeaderProvider
         self.timeout = timeout
         self.capabilities = capabilities
         self.logger = logger
+    }
+
+    /// Convenience initializer for a static bearer token. Wraps the token in a
+    /// provider that returns the same `Authorization` header every call.
+    public convenience init(
+        httpClient: HTTPClient,
+        config: OperatorPollingConfig,
+        token: String,
+        timeout: TimeAmount = .seconds(30),
+        capabilities: Set<OperatorJob.Kind>? = nil,
+        logger: Logger = Logger(label: "operator-client")
+    ) {
+        self.init(
+            httpClient: httpClient,
+            config: config,
+            authHeaderProvider: { "Bearer \(token)" },
+            timeout: timeout,
+            capabilities: capabilities,
+            logger: logger
+        )
     }
 
     /// The kinds we are willing to lease: the configured kinds, optionally
@@ -71,7 +94,7 @@ public final class HTTPOperatorClient: OperatorClient {
         guard !kinds.isEmpty else { return nil }
         let kindsValue = kinds.map(\.rawValue).joined(separator: ",")
         let path = "/v1/jobs/next?leaseSeconds=\(config.leaseSeconds)&kinds=\(kindsValue)"
-        var request = try makeRequest(method: .GET, path: path)
+        var request = try await makeRequest(method: .GET, path: path)
         request.headers.add(name: "Accept", value: "application/json")
         let response = try await execute(request)
         switch response.status.code {
@@ -112,7 +135,7 @@ public final class HTTPOperatorClient: OperatorClient {
     }
 
     private func postJSON(path: String, body: Data) async throws {
-        var request = try makeRequest(method: .POST, path: path)
+        var request = try await makeRequest(method: .POST, path: path)
         request.headers.add(name: "Content-Type", value: "application/json")
         request.body = .bytes(ByteBuffer(bytes: body))
         let response = try await execute(request)
@@ -128,12 +151,15 @@ public final class HTTPOperatorClient: OperatorClient {
         _ = try? await collect(response.body)
     }
 
-    private func makeRequest(method: HTTPMethod, path: String) throws -> HTTPClientRequest {
+    private func makeRequest(method: HTTPMethod, path: String) async throws -> HTTPClientRequest {
         let base = config.baseURL.hasSuffix("/") ? String(config.baseURL.dropLast()) : config.baseURL
         guard !base.isEmpty else { throw OperatorClientError.notConfigured }
+        guard let header = await authHeaderProvider() else {
+            throw OperatorClientError.unauthorized
+        }
         var request = HTTPClientRequest(url: base + path)
         request.method = method
-        request.headers.add(name: "Authorization", value: "Bearer \(token)")
+        request.headers.add(name: "Authorization", value: header)
         request.headers.add(name: "User-Agent", value: config.userAgent)
         return request
     }
