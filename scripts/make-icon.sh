@@ -5,10 +5,13 @@
 # *full-bleed* icon supplied through an asset catalog — the app must NOT bake
 # its own rounded rectangle (doing so lands the macOS icon in "squircle jail":
 # a flat hard-rounded square that ignores the system's Liquid Glass treatment).
-# So we emit one appiconset, shared by both targets, holding two full-bleed icon
+# So we emit one appiconset, shared by both targets, holding full-bleed icon
 # families: the iOS single-size 1024 "universal" format (light / dark / tinted)
-# and the macOS multi-size `mac` idiom iconset that actool compiles into
-# Assets.car + AppIcon.icns.
+# and a single full-bleed `mac` idiom 1024 (declared 512x512@2x, the largest
+# slot actool accepts for the mac idiom) that compiles into Assets.car +
+# AppIcon.icns. A pure "universal" icon with no platform is left *unassigned*
+# for the macOS target by actool (the app would ship with no icon at all), so
+# the mac idiom entry is required.
 #
 # The generated source background is stripped away. The final icon uses the
 # gt3pro-style background plus the extracted brushstroke foreground.
@@ -80,48 +83,24 @@ magick -size 1024x1024 xc:black "$fg_white" -compose over -composite \
 
 rm -f "$mask" "$fg_white" "$bg_dark"
 
-# Emit the appiconset shared by the macOS + iOS targets. Two icon families live
-# side by side in one set:
+# Emit a single full-bleed 1024 app icon (light / dark / tinted) shared by the
+# macOS + iOS targets. This is the modern Xcode 26 / macOS 26 (Tahoe)
+# single-size app-icon format: the system masks the full-bleed art and applies
+# its own Liquid Glass treatment on both platforms.
 #
-#   * iOS  — the modern single-size 1024 "universal" format (platform: ios) with
-#     light / dark / tinted appearances. iOS masks + Liquid-Glasses the
-#     full-bleed art itself.
-#   * macOS — the traditional multi-size `mac` idiom iconset (16…512 @1x/@2x).
-#     This is the format every sibling Mac app (gt3pro, Rhizome, FluxHaus) ships
-#     and the one actool actually compiles into Assets.car + AppIcon.icns on
-#     macOS 26. Shipping a bare `.icns` via CFBundleIconFile is what lands the
-#     icon in "squircle jail"; routing it through a `mac` idiom catalog lets
-#     Tahoe apply its own Liquid Glass mask. The art stays full-bleed — no
-#     hand-baked rounding.
-#
-# actool filters each entry by platform, so the iOS slots are ignored on a macOS
-# build and vice versa, with no "unassigned children" warnings.
+# The previous build shipped a legacy multi-size `mac` idiom iconset
+# (16…512 @1x/@2x). On macOS 26 that legacy path bypasses Liquid Glass and
+# lands the icon in "squircle jail" (a flat hard-rounded square). We replace it
+# with a single full-bleed 1024 `mac` entry so macOS applies Liquid Glass
+# itself. The art stays full-bleed — no hand-baked rounding. (macOS only takes
+# the light appearance; dark / tinted variants are iOS-only.)
 mkdir -p "$appiconset"
 magick "$composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-light-1024.png"
 magick "$dark_composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-dark-1024.png"
 magick "$tinted_composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-tinted-1024.png"
 
-# macOS multi-size renditions, derived from the light composite.
-mac_images=""
-for size in 16 32 128 256 512; do
-  px1=$size
-  px2=$((size * 2))
-  magick "$composite" -resize ${px1}x${px1}! -depth 8 "$appiconset/AppIcon-mac-${size}.png"
-  magick "$composite" -resize ${px2}x${px2}! -depth 8 "$appiconset/AppIcon-mac-${size}@2x.png"
-  mac_images="$mac_images
-    {
-      \"filename\" : \"AppIcon-mac-${size}.png\",
-      \"idiom\" : \"mac\",
-      \"scale\" : \"1x\",
-      \"size\" : \"${size}x${size}\"
-    },
-    {
-      \"filename\" : \"AppIcon-mac-${size}@2x.png\",
-      \"idiom\" : \"mac\",
-      \"scale\" : \"2x\",
-      \"size\" : \"${size}x${size}\"
-    },"
-done
+# Remove any stale legacy mac-idiom renditions from earlier runs.
+rm -f "$appiconset"/AppIcon-mac-*.png
 
 cat > "$appiconset/Contents.json" <<JSON
 {
@@ -155,7 +134,13 @@ cat > "$appiconset/Contents.json" <<JSON
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
-    },${mac_images%,}
+    },
+    {
+      "filename" : "AppIcon-light-1024.png",
+      "idiom" : "mac",
+      "scale" : "2x",
+      "size" : "512x512"
+    }
   ],
   "info" : {
     "author" : "xcode",

@@ -26,6 +26,15 @@ let authManagerLogger = Logger(
 
 private let logger = authManagerLogger
 
+public extension Notification.Name {
+    /// Posted on the main actor whenever the shared `AuthManager`'s
+    /// `authState` changes at runtime (sign-in, sign-out, session restore).
+    /// Lets non-observing components (e.g. the Operator pull worker) react to
+    /// the OIDC session coming or going.
+    static let operatorAuthStateDidChange =
+        Notification.Name("org.davidjensenius.TelephoneBoothTranscription.authStateDidChange")
+}
+
 /// Serialises concurrent refresh attempts: at most one in-flight refresh
 /// per process.
 private actor RefreshCoordinator {
@@ -66,6 +75,16 @@ public final class AuthManager {
 
     public private(set) var authState: AuthState = .unknown
     public var isSignedIn: Bool { authState == .signedIn }
+
+    /// Mutates `authState` and, when the value actually changes, posts
+    /// `.operatorAuthStateDidChange` so non-observing components can react.
+    private func setAuthState(_ newValue: AuthState) {
+        let changed = authState != newValue
+        authState = newValue
+        if changed {
+            NotificationCenter.default.post(name: .operatorAuthStateDidChange, object: self)
+        }
+    }
 
     @ObservationIgnored
     private let config: AppAuthConfig
@@ -117,10 +136,10 @@ public final class AuthManager {
 
         let refreshed = await refreshTokenIfNeeded()
         if refreshed {
-            authState = .signedIn
+            setAuthState(.signedIn)
             logger.info("validateSession: session restored via refresh")
         } else if authState == .unknown, getAccessToken() != nil, !isTokenExpired() {
-            authState = .signedIn
+            setAuthState(.signedIn)
             logger.info("validateSession: refresh failed but token still valid")
         } else if authState == .unknown {
             signOut()
@@ -222,7 +241,7 @@ public final class AuthManager {
         guard storeTokens(tokens) else {
             throw AuthError.keychainWriteFailed
         }
-        authState = .signedIn
+        setAuthState(.signedIn)
         logger.info("Signed in via OIDC")
         #else
         throw AuthError.unknown
@@ -233,7 +252,7 @@ public final class AuthManager {
         deleteKeychainItem(account: "oidc_access_token")
         deleteKeychainItem(account: "oidc_refresh_token")
         deleteKeychainItem(account: "oidc_token_expiry")
-        authState = .signedOut
+        setAuthState(.signedOut)
         logger.info("Signed out")
     }
 
@@ -273,7 +292,7 @@ public final class AuthManager {
 
     private func restoreStateIfNeeded() {
         guard authState == .signedOut else { return }
-        if getAccessToken() != nil { authState = .signedIn }
+        if getAccessToken() != nil { setAuthState(.signedIn) }
     }
 
     public func refreshTokenIfNeeded() async -> Bool {

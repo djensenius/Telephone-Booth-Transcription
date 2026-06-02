@@ -30,18 +30,27 @@ struct TelephoneBoothTranscriptionApp: App {
             }
         }
         #endif
+
+        #if os(macOS)
+        Settings {
+            SettingsView()
+                .environmentObject(host)
+                .frame(minWidth: 480, minHeight: 560)
+        }
+        #endif
     }
 }
 
 #if os(macOS)
-/// Adds ⌘1…⌘4 section navigation to the menu bar, driving the focused
-/// window's sidebar selection.
+/// Adds ⌘1…⌘3 section navigation to the menu bar, driving the focused
+/// window's sidebar selection. (Settings is reached the standard Mac way via
+/// the app menu / ⌘,, so it is not part of this list.)
 struct NavigationCommands: Commands {
     @FocusedBinding(\.selectedNavigationItem) private var selection: NavigationItem?
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
-            ForEach(NavigationItem.allCases) { item in
+            ForEach(NavigationItem.macSidebarItems) { item in
                 Button(item.title) { selection = item }
                     .keyboardShortcut(item.shortcut, modifiers: .command)
                     .disabled(selection == nil)

@@ -5,7 +5,9 @@ import Hummingbird
 import Logging
 import NIOCore
 import NIOPosix
+import TranscriptionAuth
 import TranscriptionCore
+import TranscriptionReview
 
 /// Owns the lifecycle of the embedded HTTP server, the power assertion, and
 /// the shared `HTTPClient`. All UI mutations go through this actor.
@@ -84,6 +86,12 @@ final class ServerHost: ObservableObject {
     /// loopback.
     private var operatorWorker: OperatorWorker?
 
+    /// Observer for OIDC auth-state changes; the pull worker authenticates as
+    /// the signed-in account, so it must start/stop when the session does.
+    /// `nonisolated(unsafe)` so `deinit` can remove it; only ever assigned once
+    /// during init and read in `deinit`.
+    private nonisolated(unsafe) var authObserver: (any NSObjectProtocol)?
+
     /// Serialization gate: each lifecycle operation awaits the previous one.
     private var lifecycleGate: Task<Void, Never>?
 
@@ -125,6 +133,24 @@ final class ServerHost: ObservableObject {
         } catch {
             self.logStore = InMemoryRequestLogStore()
             logger.error("falling back to in-memory request log: \(error)")
+        }
+
+        // The Operator pull worker authenticates as the signed-in OIDC account,
+        // so restart it whenever the session is established or torn down.
+        self.authObserver = NotificationCenter.default.addObserver(
+            forName: .operatorAuthStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.reconcileOperatorWorker()
+            }
+        }
+    }
+
+    deinit {
+        if let authObserver {
+            NotificationCenter.default.removeObserver(authObserver)
         }
     }
 
@@ -322,26 +348,7 @@ final class ServerHost: ObservableObject {
         config.translationUpstream.apiKey = value.isEmpty ? nil : value
     }
 
-    /// Returns the Operator API token from Keychain, or empty string.
-    func operatorAPIToken() -> String {
-        (try? apiKeyStore.read(account: APIKeyAccount.operatorPull)) ?? ""
-    }
-
-    /// Persists the Operator API token to Keychain. Saved immediately because
-    /// the token is not part of `config`/UserDefaults.
-    func setOperatorAPIToken(_ value: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        do {
-            if trimmed.isEmpty {
-                try apiKeyStore.delete(account: APIKeyAccount.operatorPull)
-            } else {
-                try apiKeyStore.write(account: APIKeyAccount.operatorPull, value: trimmed)
-            }
-        } catch {
-            logger.error("operator token persist failed: \(error)")
-        }
-        Task { await self.reconcileOperatorWorker() }
-    }
+    // MARK: - Operator pull worker
 
     /// Fetches `/v1/models` from one of the user's configured upstreams (or
     /// from this server itself once it's running) so the UI can populate
@@ -398,9 +405,15 @@ final class ServerHost: ObservableObject {
             await stopOperatorWorker()
             return
         }
-        let cfg = config.operatorPolling.validated()
-        let token = operatorAPIToken()
-        let shouldRun = cfg.enabled && cfg.isRunnableWithToken && !token.isEmpty
+        var cfg = config.operatorPolling.validated()
+        // The pull worker authenticates as the signed-in Operator account and
+        // talks to the same Operator base URL as the review queue, rather than
+        // a separately-entered URL + API token.
+        cfg.baseURL = OperatorAPIConfig().baseURL.absoluteString
+        cfg = cfg.validated()
+        let shouldRun = cfg.enabled
+            && cfg.isRunnableWithToken
+            && AuthManager.shared.isSignedIn
         guard shouldRun else {
             await stopOperatorWorker()
             return
@@ -408,7 +421,12 @@ final class ServerHost: ObservableObject {
         // Restart on any meaningful change. Cheap to teardown+rebuild.
         await stopOperatorWorker()
         guard let client = httpClient else { return }
-        let opClient = HTTPOperatorClient(httpClient: client, config: cfg, token: token, logger: logger)
+        let opClient = HTTPOperatorClient(
+            httpClient: client,
+            config: cfg,
+            authHeaderProvider: { await AuthManager.shared.authorizationHeader() },
+            logger: logger
+        )
         let bearer = (try? tokenStore.current()) ?? ""
         let dispatcher = LoopbackOperatorJobDispatcher(
             httpClient: client,

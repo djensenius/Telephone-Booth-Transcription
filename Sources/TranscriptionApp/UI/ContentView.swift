@@ -53,6 +53,10 @@ enum NavigationItem: String, CaseIterable, Identifiable {
 
     /// Destinations exposed on iOS (no embedded server there).
     static let iOSItems: [NavigationItem] = [.review, .settings]
+
+    /// Destinations shown in the macOS sidebar. Settings is intentionally
+    /// excluded — it lives in the standard macOS Settings window (⌘,).
+    static let macSidebarItems: [NavigationItem] = [.review, .status, .requests]
 }
 
 struct ContentView: View {
@@ -75,7 +79,6 @@ struct ContentView: View {
                 Section("Pro") {
                     row(.status)
                     row(.requests)
-                    row(.settings)
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
