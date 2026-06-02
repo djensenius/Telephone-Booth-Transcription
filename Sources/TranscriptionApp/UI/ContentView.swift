@@ -1,5 +1,4 @@
 import SwiftUI
-import TranscriptionCore
 
 /// A top-level destination in the app.
 ///
@@ -133,9 +132,17 @@ struct ContentView: View {
         case .review:
             ReviewView()
         case .status:
+            #if os(macOS)
             StatusView()
+            #else
+            EmptyView()
+            #endif
         case .requests:
+            #if os(macOS)
             RequestLogView()
+            #else
+            EmptyView()
+            #endif
         case .settings:
             SettingsView()
         }

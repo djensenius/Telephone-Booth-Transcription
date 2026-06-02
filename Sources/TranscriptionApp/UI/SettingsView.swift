@@ -1,7 +1,8 @@
 import SwiftUI
+#if os(macOS)
 import TranscriptionCore
 
-#if canImport(Speech) && os(macOS)
+#if canImport(Speech)
 import Speech
 #endif
 
@@ -508,3 +509,30 @@ struct SettingsView: View {
         .environmentObject(ServerHost(demo: true))
         .frame(width: 820, height: 600)
 }
+#else
+
+/// iOS settings: account-only. The transcription server, upstreams, and the
+/// Operator pull worker are macOS ("Pro") features, so on iOS the app is a
+/// review/translation client that just needs an Operator sign-in to poll.
+struct SettingsView: View {
+    var body: some View {
+        NavigationStack {
+            Form {
+                AccountSettingsSection()
+                Section("About") {
+                    Text("This device reviews and translates messages by polling "
+                         + "the Operator. The transcription server is a feature of "
+                         + "the Mac app.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Settings")
+        }
+    }
+}
+
+#Preview {
+    SettingsView()
+}
+#endif

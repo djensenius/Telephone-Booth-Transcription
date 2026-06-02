@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import TranscriptionCore
 #if canImport(UIKit)
@@ -128,3 +129,5 @@ struct StatusView: View {
         .environmentObject(ServerHost(demo: true))
         .frame(width: 820, height: 600)
 }
+
+#endif

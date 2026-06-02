@@ -461,20 +461,8 @@ targets:
       - path: Resources/Assets.xcassets
         buildPhase: resources
     dependencies:
-      - target: TranscriptionCore_iOS
-      - target: TranscriptionShared_iOS
-      - target: TranscriptionOnDevice_iOS
-      - target: TranscriptionOperator_iOS
       - target: TranscriptionAuth_iOS
       - target: TranscriptionReview_iOS
-      - package: async-http-client
-        product: AsyncHTTPClient
-      - package: swift-nio-transport-services
-        product: NIOTransportServices
-      - package: swift-crypto
-        product: Crypto
-      - package: swift-log
-        product: Logging
     info:
       path: Resources/TranscriptionAppiOS-Info.plist
       properties:
@@ -490,9 +478,6 @@ targets:
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
-        NSLocalNetworkUsageDescription: "Transcriber serves its OpenAI-compatible HTTP API to clients on your local network when you bind it to a LAN address."
-        NSMicrophoneUsageDescription: "Transcriber needs microphone access only if you point a client at the on-device Speech backend with a live audio source."
-        NSSpeechRecognitionUsageDescription: "Transcriber uses on-device speech recognition to convert audio to text when the on-device transcription backend is selected."
         OIDCIssuerBase: "https://auth.fluxhaus.io/application/o/telephone-booth-operator-mobile"
         OIDCClientID: "x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY"
         OIDCRedirectScheme: "tbtranscription"

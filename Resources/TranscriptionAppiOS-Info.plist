@@ -37,12 +37,6 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Transcriber serves its OpenAI-compatible HTTP API to clients on your local network when you bind it to a LAN address.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Transcriber needs microphone access only if you point a client at the on-device Speech backend with a live audio source.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Transcriber uses on-device speech recognition to convert audio to text when the on-device transcription backend is selected.</string>
 	<key>OIDCClientID</key>
 	<string>x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY</string>
 	<key>OIDCIssuerBase</key>
