@@ -4,9 +4,8 @@ import TranscriptionReview
 
 /// The review queue: the operator's primary surface. Surfaces messages whose
 /// transcription still needs translation and messages awaiting a moderation
-/// decision, alongside the AI's recommendation. Read-only for now — the
-/// translate / approve / reject actions land once the Operator exposes the
-/// matching endpoints.
+/// decision, alongside the AI's recommendation, and lets the operator act:
+/// submit a translation, or approve / reject a message.
 struct ReviewView: View {
     @State private var auth = AuthManager.shared
     @State private var store = ReviewStore(
@@ -55,18 +54,24 @@ struct ReviewView: View {
                     banner(message, systemImage: "exclamationmark.triangle.fill", tint: Theme.Colors.warning)
                 }
 
+                if let actionError = store.actionError {
+                    banner(actionError, systemImage: "xmark.octagon.fill", tint: Theme.Colors.error)
+                }
+
                 bucket(
                     title: "Needs translation",
                     systemImage: "character.book.closed",
                     messages: store.awaitingTranslation,
-                    emptyText: "Every transcription is translated."
+                    emptyText: "Every transcription is translated.",
+                    kind: .translation
                 )
 
                 bucket(
                     title: "Awaiting moderation",
                     systemImage: "checklist",
                     messages: store.awaitingModeration,
-                    emptyText: "No messages waiting on a decision."
+                    emptyText: "No messages waiting on a decision.",
+                    kind: .moderation
                 )
             }
             .padding(.bottom, Theme.Spacing.large)
@@ -106,7 +111,8 @@ struct ReviewView: View {
         title: String,
         systemImage: String,
         messages: [Message],
-        emptyText: String
+        emptyText: String,
+        kind: ReviewRow.Kind
     ) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
             Label("\(title) (\(messages.count))", systemImage: systemImage)
@@ -121,7 +127,7 @@ struct ReviewView: View {
                     .padding(.vertical, Theme.Spacing.small)
             } else {
                 ForEach(messages) { message in
-                    ReviewRow(message: message)
+                    ReviewRow(message: message, kind: kind, store: store)
                 }
             }
         }
@@ -140,7 +146,16 @@ struct ReviewView: View {
 }
 
 private struct ReviewRow: View {
+    enum Kind { case translation, moderation }
+
     let message: Message
+    let kind: Kind
+    let store: ReviewStore
+
+    @State private var translationDraft = ""
+    @State private var notesDraft = ""
+
+    private var isActing: Bool { store.isActing(on: message.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
@@ -169,11 +184,93 @@ private struct ReviewRow: View {
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .lineLimit(2)
             }
+
+            switch kind {
+            case .translation: translationActions
+            case .moderation: moderationActions
+            }
         }
         .padding(Theme.Spacing.medium)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Colors.tertiaryBackground.opacity(0.4),
                     in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+    }
+
+    @ViewBuilder
+    private var translationActions: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            TextField("English translation", text: $translationDraft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(2...5)
+                .font(Theme.Fonts.bodyMedium)
+                .padding(Theme.Spacing.small)
+                .background(Theme.Colors.secondaryBackground.opacity(0.6),
+                            in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                .disabled(isActing)
+                .onChange(of: message.latestTranscription?.id) {
+                    // A new transcription replaced the one being translated;
+                    // drop the draft so it can't be applied to the wrong source.
+                    translationDraft = ""
+                }
+
+            HStack {
+                Spacer()
+                Button {
+                    let text = translationDraft
+                    Task { await store.submitTranslation(message, text: text) }
+                } label: {
+                    actionLabel("Submit translation", systemImage: "character.book.closed.fill")
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(isActing || translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var moderationActions: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            TextField("Notes (optional)", text: $notesDraft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...3)
+                .font(Theme.Fonts.caption)
+                .padding(Theme.Spacing.small)
+                .background(Theme.Colors.secondaryBackground.opacity(0.6),
+                            in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                .disabled(isActing)
+
+            HStack(spacing: Theme.Spacing.small) {
+                Spacer()
+                Button {
+                    let notes = notesDraft
+                    Task { await store.decide(message, .reject, notes: notes) }
+                } label: {
+                    actionLabel("Reject", systemImage: "xmark.circle.fill")
+                }
+                .buttonStyle(.tbtGlass)
+                .tint(Theme.Colors.error)
+                .disabled(isActing)
+
+                Button {
+                    let notes = notesDraft
+                    Task { await store.decide(message, .approve, notes: notes) }
+                } label: {
+                    actionLabel("Approve", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.tbtGlass)
+                .tint(Theme.Colors.success)
+                .disabled(isActing)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actionLabel(_ title: String, systemImage: String) -> some View {
+        if isActing {
+            ProgressView().controlSize(.small)
+        } else {
+            Label(title, systemImage: systemImage)
+        }
     }
 
     private var transcriptText: String {
