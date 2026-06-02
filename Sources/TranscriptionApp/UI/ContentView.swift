@@ -20,6 +20,8 @@ struct ContentView: View {
         switch selectedTab {
         case .status:
             StatusView()
+        case .review:
+            ReviewView()
         case .settings:
             SettingsView()
         case .requests:
@@ -30,6 +32,7 @@ struct ContentView: View {
 
 private enum AppTab: String, CaseIterable, Identifiable {
     case status
+    case review
     case settings
     case requests
 
@@ -38,6 +41,7 @@ private enum AppTab: String, CaseIterable, Identifiable {
     init?(screenshotName: String?) {
         switch screenshotName?.lowercased() {
         case "status": self = .status
+        case "review": self = .review
         case "settings": self = .settings
         case "requests": self = .requests
         default: return nil
@@ -47,6 +51,7 @@ private enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .status: "Status"
+        case .review: "Review"
         case .settings: "Settings"
         case .requests: "Requests"
         }
@@ -55,6 +60,7 @@ private enum AppTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .status: "phone.connection.fill"
+        case .review: "checklist"
         case .settings: "gearshape"
         case .requests: "list.bullet.rectangle"
         }
@@ -63,8 +69,9 @@ private enum AppTab: String, CaseIterable, Identifiable {
     var shortcut: KeyEquivalent {
         switch self {
         case .status: "1"
-        case .settings: "2"
-        case .requests: "3"
+        case .review: "2"
+        case .settings: "3"
+        case .requests: "4"
         }
     }
 }
