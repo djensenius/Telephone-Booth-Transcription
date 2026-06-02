@@ -1,40 +1,16 @@
 import SwiftUI
 import TranscriptionCore
 
-struct ContentView: View {
-    @EnvironmentObject var host: ServerHost
-    @State private var selectedTab: AppTab = AppTab(screenshotName: DemoMode.screenshotTab) ?? .status
-
-    var body: some View {
-        VStack(spacing: Theme.Spacing.large) {
-            GlassTabBar(selection: $selectedTab)
-
-            selectedContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding(Theme.Spacing.large)
-    }
-
-    @ViewBuilder
-    private var selectedContent: some View {
-        switch selectedTab {
-        case .status:
-            StatusView()
-        case .review:
-            ReviewView()
-        case .settings:
-            SettingsView()
-        case .requests:
-            RequestLogView()
-        }
-    }
-}
-
-private enum AppTab: String, CaseIterable, Identifiable {
-    case status
+/// A top-level destination in the app.
+///
+/// On macOS these are sidebar rows in a `NavigationSplitView`; on iOS the
+/// review/settings subset is surfaced as a `TabView`. The server surfaces
+/// (`status`, `requests`) are macOS-only "Pro" features.
+enum NavigationItem: String, CaseIterable, Identifiable {
     case review
-    case settings
+    case status
     case requests
+    case settings
 
     var id: Self { self }
 
@@ -50,90 +26,138 @@ private enum AppTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .status: "Status"
         case .review: "Review"
-        case .settings: "Settings"
+        case .status: "Server"
         case .requests: "Requests"
+        case .settings: "Settings"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .status: "phone.connection.fill"
         case .review: "checklist"
-        case .settings: "gearshape"
+        case .status: "server.rack"
         case .requests: "list.bullet.rectangle"
+        case .settings: "gearshape"
         }
     }
 
+    /// `⌘1…⌘4`, following sidebar order (Review first).
     var shortcut: KeyEquivalent {
         switch self {
-        case .status: "1"
-        case .review: "2"
-        case .settings: "3"
-        case .requests: "4"
+        case .review: "1"
+        case .status: "2"
+        case .requests: "3"
+        case .settings: "4"
         }
     }
+
+    /// Destinations exposed on iOS (no embedded server there).
+    static let iOSItems: [NavigationItem] = [.review, .settings]
 }
 
-private struct GlassTabBar: View {
-    @Binding var selection: AppTab
+struct ContentView: View {
+    @EnvironmentObject var host: ServerHost
+    @State private var selection: NavigationItem = NavigationItem(screenshotName: DemoMode.screenshotTab) ?? .review
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.small) {
-            ForEach(AppTab.allCases) { tab in
-                Button {
-                    selection = tab
-                } label: {
-                    Label(tab.title, systemImage: tab.systemImage)
-                        .font(Theme.Fonts.bodyMedium.weight(selection == tab ? .semibold : .medium))
-                        .foregroundStyle(selection == tab ? Theme.Colors.onAccent : Theme.Colors.textPrimary)
-                        .padding(.horizontal, Theme.Spacing.large)
-                        .padding(.vertical, Theme.Spacing.small)
-                        .frame(minWidth: 128)
-                        .background {
-                            selectedBackground(for: tab)
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        platformBody
+            .tint(Theme.Colors.accent)
+            .focusedSceneValue(\.selectedNavigationItem, $selection)
+    }
+
+    #if os(macOS)
+    private var platformBody: some View {
+        NavigationSplitView {
+            List(selection: sidebarSelection) {
+                Section {
+                    row(.review)
                 }
-                .buttonStyle(.plain)
-                .keyboardShortcut(tab.shortcut, modifiers: [.command])
+                Section("Pro") {
+                    row(.status)
+                    row(.requests)
+                    row(.settings)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
+            .listStyle(.sidebar)
+            .navigationTitle("Telephone Booth")
+        } detail: {
+            detail(for: selection)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .foregroundStyle(Theme.Colors.textPrimary)
+                .background(ThemedWindowBackground())
+                .navigationTitle(selection.title)
+        }
+    }
+
+    private func row(_ item: NavigationItem) -> some View {
+        Label(item.title, systemImage: item.systemImage)
+            .tag(item)
+    }
+
+    /// Bridges the non-optional app selection to the optional `List` binding,
+    /// keeping a destination always selected.
+    private var sidebarSelection: Binding<NavigationItem?> {
+        Binding(
+            get: { selection },
+            set: { selection = $0 ?? .review }
+        )
+    }
+    #else
+    private var platformBody: some View {
+        TabView(selection: iOSSelection) {
+            ForEach(NavigationItem.iOSItems) { item in
+                detail(for: item)
+                    .tabItem { Label(item.title, systemImage: item.systemImage) }
+                    .tag(item)
             }
         }
-        .padding(6)
-        .glassTabBar()
+        .foregroundStyle(Theme.Colors.textPrimary)
+        .background(ThemedWindowBackground())
     }
+
+    /// Normalises selection so the iOS `TabView` never points at a macOS-only
+    /// (server) destination.
+    private var iOSSelection: Binding<NavigationItem> {
+        Binding(
+            get: { NavigationItem.iOSItems.contains(selection) ? selection : .review },
+            set: { selection = $0 }
+        )
+    }
+    #endif
 
     @ViewBuilder
-    private func selectedBackground(for tab: AppTab) -> some View {
-        if selection == tab {
-            RoundedRectangle(cornerRadius: Theme.cornerRadius)
-                .fill(Theme.Colors.accent.opacity(0.92))
+    private func detail(for item: NavigationItem) -> some View {
+        switch item {
+        case .review:
+            ReviewView()
+        case .status:
+            StatusView()
+        case .requests:
+            RequestLogView()
+        case .settings:
+            SettingsView()
         }
     }
 }
 
-private struct GlassTabBarModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.glassEffect(
-                .regular.tint(Theme.Colors.secondaryBackground.opacity(0.5)),
-                in: .rect(cornerRadius: Theme.cornerRadius + 8)
-            )
-        } else {
-            content
-                .background(Theme.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius + 8))
-        }
-    }
+// MARK: - Menu commands
+
+/// Lets the active scene's sidebar selection be driven from the menu bar.
+struct SelectedNavigationItemKey: FocusedValueKey {
+    typealias Value = Binding<NavigationItem>
 }
 
-private extension View {
-    func glassTabBar() -> some View { modifier(GlassTabBarModifier()) }
+extension FocusedValues {
+    var selectedNavigationItem: Binding<NavigationItem>? {
+        get { self[SelectedNavigationItemKey.self] }
+        set { self[SelectedNavigationItemKey.self] = newValue }
+    }
 }
 
 #Preview {
     ContentView()
         .environmentObject(ServerHost(demo: true))
-        .frame(width: 820, height: 600)
+        .frame(width: 900, height: 620)
 }
