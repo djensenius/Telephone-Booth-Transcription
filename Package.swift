@@ -10,6 +10,7 @@ let package = Package(
         .executable(name: "telephone-booth-transcription", targets: ["TranscriptionApp"]),
         .library(name: "TranscriptionCore", targets: ["TranscriptionCore"]),
         .library(name: "TranscriptionShared", targets: ["TranscriptionShared"]),
+        .library(name: "TranscriptionAuth", targets: ["TranscriptionAuth"]),
         .library(name: "TranscriptionOnDevice", targets: ["TranscriptionOnDevice"]),
         .library(name: "TranscriptionOperator", targets: ["TranscriptionOperator"])
     ],
@@ -23,6 +24,13 @@ let package = Package(
     targets: [
         .target(
             name: "TranscriptionShared",
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny"),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
+            name: "TranscriptionAuth",
             swiftSettings: [
                 .enableUpcomingFeature("ExistentialAny"),
                 .enableExperimentalFeature("StrictConcurrency")
@@ -71,10 +79,14 @@ let package = Package(
         ),
         .executableTarget(
             name: "TranscriptionApp",
-            dependencies: ["TranscriptionCore"],
+            dependencies: ["TranscriptionCore", "TranscriptionAuth"],
             swiftSettings: [
                 .enableUpcomingFeature("ExistentialAny")
             ]
+        ),
+        .testTarget(
+            name: "TranscriptionAuthTests",
+            dependencies: ["TranscriptionAuth"]
         ),
         .testTarget(
             name: "TranscriptionCoreTests",

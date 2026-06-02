@@ -49,6 +49,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            AccountSettingsSection()
             Section("Server") {
                 TextField("Bind host", text: Binding(
                     get: { host.config.bindHost },

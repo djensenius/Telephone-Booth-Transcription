@@ -154,6 +154,28 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.core
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
+  TranscriptionAuth:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionAuth
+    info:
+      path: Resources/TranscriptionAuth-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionAuth
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.auth
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionApp:
     type: application
     platform: macOS
@@ -172,6 +194,7 @@ targets:
       - target: TranscriptionShared
       - target: TranscriptionOnDevice
       - target: TranscriptionOperator
+      - target: TranscriptionAuth
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio-transport-services
@@ -198,6 +221,15 @@ targets:
         NSHumanReadableCopyright: "Copyright 2026 David Jensenius"
         NSMicrophoneUsageDescription: "Transcription Booth needs microphone access only if you point a client at the macOS Speech backend with a live audio source."
         NSSpeechRecognitionUsageDescription: "Transcription Booth uses on-device speech recognition to convert audio to text when the built-in macOS transcription backend is selected."
+        OIDCIssuerBase: "https://auth.fluxhaus.io/application/o/telephone-booth-operator-mobile"
+        OIDCClientID: "x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY"
+        OIDCRedirectScheme: "tbtranscription"
+        OIDCScopes: "openid email profile offline_access"
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: org.davidjensenius.TelephoneBoothTranscription.oauth
+            CFBundleURLSchemes:
+              - tbtranscription
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription
@@ -346,6 +378,30 @@ targets:
         PRODUCT_MODULE_NAME: TranscriptionCore
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
+  TranscriptionAuth_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionAuth
+    info:
+      path: Resources/TranscriptionAuth-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionAuth
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.auth
+        PRODUCT_NAME: TranscriptionAuth
+        PRODUCT_MODULE_NAME: TranscriptionAuth
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionAppiOS:
     type: application
     platform: iOS
@@ -362,6 +418,7 @@ targets:
       - target: TranscriptionShared_iOS
       - target: TranscriptionOnDevice_iOS
       - target: TranscriptionOperator_iOS
+      - target: TranscriptionAuth_iOS
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio-transport-services
@@ -388,6 +445,15 @@ targets:
         NSLocalNetworkUsageDescription: "Transcriber serves its OpenAI-compatible HTTP API to clients on your local network when you bind it to a LAN address."
         NSMicrophoneUsageDescription: "Transcriber needs microphone access only if you point a client at the on-device Speech backend with a live audio source."
         NSSpeechRecognitionUsageDescription: "Transcriber uses on-device speech recognition to convert audio to text when the on-device transcription backend is selected."
+        OIDCIssuerBase: "https://auth.fluxhaus.io/application/o/telephone-booth-operator-mobile"
+        OIDCClientID: "x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY"
+        OIDCRedirectScheme: "tbtranscription"
+        OIDCScopes: "openid email profile offline_access"
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: org.davidjensenius.TelephoneBoothTranscription.oauth
+            CFBundleURLSchemes:
+              - tbtranscription
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -441,3 +507,7 @@ schemes:
     build:
       targets:
         TranscriptionOperator: all
+  TranscriptionAuth:
+    build:
+      targets:
+        TranscriptionAuth: all

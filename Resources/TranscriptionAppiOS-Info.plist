@@ -18,6 +18,19 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>org.davidjensenius.TelephoneBoothTranscription.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tbtranscription</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -30,6 +43,14 @@
 	<string>Transcriber needs microphone access only if you point a client at the on-device Speech backend with a live audio source.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Transcriber uses on-device speech recognition to convert audio to text when the on-device transcription backend is selected.</string>
+	<key>OIDCClientID</key>
+	<string>x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY</string>
+	<key>OIDCIssuerBase</key>
+	<string>https://auth.fluxhaus.io/application/o/telephone-booth-operator-mobile</string>
+	<key>OIDCRedirectScheme</key>
+	<string>tbtranscription</string>
+	<key>OIDCScopes</key>
+	<string>openid email profile offline_access</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
