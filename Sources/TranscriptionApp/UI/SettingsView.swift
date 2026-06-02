@@ -358,7 +358,7 @@ struct SettingsView: View {
         return "\(name) (\(loc.identifier))"
     }
 
-    // MARK: - Operator pull worker
+    // MARK: - Text translation
 
     @ViewBuilder
     private var translationUpstreamFields: some View {
@@ -409,6 +409,8 @@ struct SettingsView: View {
             .font(.caption)
             .foregroundStyle(Theme.Colors.textSecondary)
     }
+
+    // MARK: - Operator pull worker
 
     @ViewBuilder
     private var operatorPullSection: some View {
