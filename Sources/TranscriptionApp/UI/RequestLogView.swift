@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import TranscriptionCore
 
@@ -161,3 +162,5 @@ private struct RequestRow: View {
         .environmentObject(ServerHost(demo: true))
         .frame(width: 820, height: 600)
 }
+
+#endif

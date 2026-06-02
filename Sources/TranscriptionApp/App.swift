@@ -1,5 +1,4 @@
 import SwiftUI
-import TranscriptionCore
 
 @main
 struct TelephoneBoothTranscriptionApp: App {

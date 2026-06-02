@@ -31,7 +31,6 @@
 		16F7E2CE3C88A4AEBABCE143 /* OperatorWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28446A26FC108E18F7EF1E1F /* OperatorWorker.swift */; };
 		19E3CC713FF4F4265D86D09F /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
 		1A734503E367FF981E3D93CE /* TextTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B41180B457AF420AC1D90 /* TextTranslator.swift */; };
-		1BABC67B3D4E4A407A5DFA91 /* TranscriptionOnDevice_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		20064C1E3EE6440E2B9C4B7A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE434919A1E3F53ECD075137 /* AppDelegate.swift */; };
 		20B13A0E53299A203F188D96 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
 		21D8A4FA65D155C447F61E48 /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B30D8CA32732CB5E386C044 /* DemoData.swift */; };
@@ -45,26 +44,22 @@
 		27F7970B479A80ED1FAE7F25 /* ModelsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */; };
 		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
 		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
-		2F65C494294CBC9461C0B898 /* TranscriptionCore_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09B93C64136C4803E30D6E66 /* TranscriptionCore_iOS.framework */; };
 		2FA20701E10F9B2746B90D37 /* TranscriptionShared_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; };
 		302DDDBA20573513575140E2 /* TranscriptionOperator.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */; };
 		30D55CC04627EABF587DC4D8 /* FoundationModelsAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = AECF96A7E89218F19631C6F8 /* FoundationModelsAvailability.swift */; };
 		31D60056AEF26DEF49761504 /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
-		3572B519777EAA3FED9C0DEB /* TranscriptionOnDevice_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */; };
 		35E453BE4BF7A56D39711D34 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1727A7E08769F44EC9535FA6 /* ReviewView.swift */; };
 		3658702B1FD1853C7251D935 /* TranscriptionAuth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 22E8B53426FAADF7DD38F063 /* TranscriptionAuth.framework */; };
 		36B6D480E8823FBD06A69251 /* OnDeviceTranscriptionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B07206E4A2FEF078EBF9972 /* OnDeviceTranscriptionAdapter.swift */; };
 		37C0BC9639C1D772F6EF0FF4 /* TranscriptionRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */; };
 		387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
 		397F4078EFDF7865D64740B9 /* InMemoryAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */; };
-		3B24BAB6ABC38A504387EDD5 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = DDF65AF5D35BAAE41953C9A7 /* AsyncHTTPClient */; };
 		3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */; };
 		3C9BBBA01B621ACE8C4D4F75 /* TranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */; };
 		3CAA088588C74F197B6B9EBC /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */; };
 		40C599391263CD0F0ACB4993 /* InMemoryAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */; };
 		44891029DCC5BEB9DCBE9D4D /* TranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */; };
 		44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
-		472DDAD2BFD564056D02207D /* TranscriptionShared_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		49ED5FAF400A59841DDA2FAE /* TranscriptionReview_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CDD9AEBF64EEC84471EBB6C /* TranscriptionReview_iOS.framework */; };
 		4A59167FB4FB7ECAF43A30F2 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 9803842996C5BB37757AE577 /* AsyncHTTPClient */; };
 		4A69A39458D90E2FEC2255DA /* OperatorJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C19A26676186A2098968F1 /* OperatorJob.swift */; };
@@ -175,7 +170,6 @@
 		C82BAD39A6AA661F8C0AFBC7 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E193A2B7B90F76E32B325D9D /* AuthManager.swift */; };
 		C98DEE57C52A45146AF50184 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F9B9E624C3755DBEFE5AE1 /* Exports.swift */; };
 		CA041768481B1A116E69173D /* ReviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B13A1252D09210D2ADED00 /* ReviewStore.swift */; };
-		CA5282C2230BE1033F2EAA23 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 18F946DA8A5A99A732942E9E /* Crypto */; };
 		CC60AB4908AB881AFBCCD32B /* AudioFetching.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF08B317D469DB861A6E53D /* AudioFetching.swift */; };
 		CD660732A7922E0F6914D3AD /* TranscriptionReview.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E8195279853DF09932668FF /* TranscriptionReview.framework */; };
 		CE47268555219DA284ABB838 /* ModelsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */; };
@@ -184,34 +178,28 @@
 		D103136C6416041ECD60D00B /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
 		D119ACD21C7002310187B760 /* TranscriptionOnDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 224C8B3DA1B3BA56A24F6BF4 /* TranscriptionOnDevice.framework */; };
 		D29298DFC248B89B2CCEB3F1 /* TranscriptionAuth.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 22E8B53426FAADF7DD38F063 /* TranscriptionAuth.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		D5B14124024893DB66BD49EB /* NIOTransportServices in Frameworks */ = {isa = PBXBuildFile; productRef = 919C4D1C9AE95B0804A45C1F /* NIOTransportServices */; };
 		D78C01B08606B7EE7F876298 /* PowerAssertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */; };
 		D8228D718C3C4781EAEDAC0E /* AuthAnchorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 410F993584E3E22BA61858EF /* AuthAnchorProvider.swift */; };
-		D8ADE10179CF2D22990FB543 /* TranscriptionOperator_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DD06AB6BF619F74E2C866A2D /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
 		DEB8A8521978E3E543FA71DB /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */; };
 		E066E9507A91BF8A22470BE1 /* TranscriptionOperator.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */; };
 		E090E15C4D3D2D91ED736748 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB96230C24FF2DCCC9CF7753 /* App.swift */; };
 		E1F5B672DA29C6D62B3DE5A2 /* NativeSpeechTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0BF53E0C7DF581ED69E923D /* NativeSpeechTranscriber.swift */; };
 		E279675682B848360E87CE32 /* OperatorWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28446A26FC108E18F7EF1E1F /* OperatorWorker.swift */; };
-		E43D7331D42AF154B948831D /* TranscriptionCore_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 09B93C64136C4803E30D6E66 /* TranscriptionCore_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E471B57DE81026CA3CDC107D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A02866ECC373EE0C2D83000B /* GRDB */; };
 		E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */; };
-		E85BFBF458D6B4DC1F0B733D /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 3803380DBA71D54DEC3E94D6 /* Logging */; };
 		E865930C46D5C8018A53285F /* TranscriptionShared_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; };
 		E8E582AC2EFA517E1AC34B7F /* KeychainAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7F8DA580B19AD6FE7B14F4 /* KeychainAPIKeyStore.swift */; };
 		EA0BDE1B247498B5DE21FE6F /* SpeechAnalyzerTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DB7EB72AE7F096B10F8DF9 /* SpeechAnalyzerTranscriber.swift */; };
 		EA72B9F16BA6C0E59A4EE151 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 10D4BBB0C169F544B7239A4F /* AsyncHTTPClient */; };
 		ECB85B37D13AEB2DCF835BFC /* APIKeyStoreError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146970223849E0E0570809D7 /* APIKeyStoreError.swift */; };
 		F2B4C8636CA71C1C03F38E98 /* OperatorJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7D406082BAA0FB8C87E437 /* OperatorJSON.swift */; };
-		F35B22E377EAF6AB9CBD385C /* TranscriptionOperator_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */; };
 		F3729C2320FA3D85C522BFE7 /* FoundationModelsTranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C6176C4691215B5B064F56 /* FoundationModelsTranslationService.swift */; };
 		F3A64BBF3084E4FF12371096 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 3FFEFFD21A7B27E9C8860886 /* AsyncHTTPClient */; };
 		F42DBEF2A6836795F7197AF6 /* AuthBearerAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F460213684A90E631B1439C7 /* AuthBearerAdapter.swift */; };
 		F525F9F02759FDD857749A4A /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */; };
 		F546C4B14DB7A55372E69ED8 /* IDTokenValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1200320186012D574E593BB8 /* IDTokenValidator.swift */; };
 		F727379E99CE0A14CCF64887 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */; };
-		F79058265BA4E4C51671114D /* TranscriptionShared_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; };
 		F8833CC770F56E7846154CA3 /* OperatorJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C19A26676186A2098968F1 /* OperatorJob.swift */; };
 		F9B378E3F48A26ED3A215061 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3907F4CA5B6A5DEE723037D /* Theme.swift */; };
 		FA84A1AD90948EC9C20B48FA /* OperatorAPIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD44A868C8C655C6C21DF876 /* OperatorAPIConfig.swift */; };
@@ -222,13 +210,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		07EB4C4A06A43E0358C1621C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4A23A3ADFF1A411373038C52;
-			remoteInfo = TranscriptionCore_iOS;
-		};
 		1690E92B3EA0BF9C09533BE6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
@@ -249,13 +230,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = 08CF7400CC427FA427D1812D;
 			remoteInfo = TranscriptionReview_iOS;
-		};
-		2A9559DD4F5782E4D18B97E7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4139892C0B3E8825C9459DA2;
-			remoteInfo = TranscriptionOnDevice_iOS;
 		};
 		2B680935BEFEE2B8303EA6A4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -285,26 +259,12 @@
 			remoteGlobalIDString = 04F341D4AF338AFE4901A439;
 			remoteInfo = TranscriptionShared_iOS;
 		};
-		5819AE3DA60E3437D8D75CE0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 04F341D4AF338AFE4901A439;
-			remoteInfo = TranscriptionShared_iOS;
-		};
 		5D4C7F9AF59965CBD1B92C96 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 0EA6B66AC5EFA53BED705448;
 			remoteInfo = TranscriptionShared;
-		};
-		7509F7C7E60ED3137727A5D7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D66FDE6C2D699C44E9D5D19F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C0C2DE1366A8423151476CDF;
-			remoteInfo = TranscriptionOperator_iOS;
 		};
 		75BBC9E6143E71B0E7D2C2D3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -401,10 +361,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				E43D7331D42AF154B948831D /* TranscriptionCore_iOS.framework in Embed Frameworks */,
-				472DDAD2BFD564056D02207D /* TranscriptionShared_iOS.framework in Embed Frameworks */,
-				1BABC67B3D4E4A407A5DFA91 /* TranscriptionOnDevice_iOS.framework in Embed Frameworks */,
-				D8ADE10179CF2D22990FB543 /* TranscriptionOperator_iOS.framework in Embed Frameworks */,
 				0008BC66CBD6BE46C7118429 /* TranscriptionAuth_iOS.framework in Embed Frameworks */,
 				639E5BCEF870668906F77718 /* TranscriptionReview_iOS.framework in Embed Frameworks */,
 			);
@@ -601,16 +557,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2F65C494294CBC9461C0B898 /* TranscriptionCore_iOS.framework in Frameworks */,
-				F79058265BA4E4C51671114D /* TranscriptionShared_iOS.framework in Frameworks */,
-				3572B519777EAA3FED9C0DEB /* TranscriptionOnDevice_iOS.framework in Frameworks */,
-				F35B22E377EAF6AB9CBD385C /* TranscriptionOperator_iOS.framework in Frameworks */,
 				63C61343B0C1EF0F54D2FE8C /* TranscriptionAuth_iOS.framework in Frameworks */,
 				49ED5FAF400A59841DDA2FAE /* TranscriptionReview_iOS.framework in Frameworks */,
-				3B24BAB6ABC38A504387EDD5 /* AsyncHTTPClient in Frameworks */,
-				D5B14124024893DB66BD49EB /* NIOTransportServices in Frameworks */,
-				CA5282C2230BE1033F2EAA23 /* Crypto in Frameworks */,
-				E85BFBF458D6B4DC1F0B733D /* Logging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1110,19 +1058,11 @@
 			buildRules = (
 			);
 			dependencies = (
-				C2EB63005A92D68C50580EAD /* PBXTargetDependency */,
-				AB1AD4A821C60C42007BA7D7 /* PBXTargetDependency */,
-				8D5D842323A7148FFAB00020 /* PBXTargetDependency */,
-				476FB669F481810F4A312941 /* PBXTargetDependency */,
 				63B4AD0646C109C61F0A3B9C /* PBXTargetDependency */,
 				3F23E1A0CF00FA322DD23F20 /* PBXTargetDependency */,
 			);
 			name = TranscriptionAppiOS;
 			packageProductDependencies = (
-				DDF65AF5D35BAAE41953C9A7 /* AsyncHTTPClient */,
-				919C4D1C9AE95B0804A45C1F /* NIOTransportServices */,
-				18F946DA8A5A99A732942E9E /* Crypto */,
-				3803380DBA71D54DEC3E94D6 /* Logging */,
 			);
 			productName = TranscriptionAppiOS;
 			productReference = 09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */;
@@ -1491,11 +1431,6 @@
 			target = 08CF7400CC427FA427D1812D /* TranscriptionReview_iOS */;
 			targetProxy = 202093DC56E5F98A1AEE2855 /* PBXContainerItemProxy */;
 		};
-		476FB669F481810F4A312941 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C0C2DE1366A8423151476CDF /* TranscriptionOperator_iOS */;
-			targetProxy = 7509F7C7E60ED3137727A5D7 /* PBXContainerItemProxy */;
-		};
 		520FE21D8B23122610C28EAB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 04F341D4AF338AFE4901A439 /* TranscriptionShared_iOS */;
@@ -1536,11 +1471,6 @@
 			target = 0EA6B66AC5EFA53BED705448 /* TranscriptionShared */;
 			targetProxy = 1690E92B3EA0BF9C09533BE6 /* PBXContainerItemProxy */;
 		};
-		8D5D842323A7148FFAB00020 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4139892C0B3E8825C9459DA2 /* TranscriptionOnDevice_iOS */;
-			targetProxy = 2A9559DD4F5782E4D18B97E7 /* PBXContainerItemProxy */;
-		};
 		9123714192B890A16D91FD2A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 0EA6B66AC5EFA53BED705448 /* TranscriptionShared */;
@@ -1551,20 +1481,10 @@
 			target = 0EA6B66AC5EFA53BED705448 /* TranscriptionShared */;
 			targetProxy = 179D082514029B60C6DA5649 /* PBXContainerItemProxy */;
 		};
-		AB1AD4A821C60C42007BA7D7 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 04F341D4AF338AFE4901A439 /* TranscriptionShared_iOS */;
-			targetProxy = 5819AE3DA60E3437D8D75CE0 /* PBXContainerItemProxy */;
-		};
 		B863A40A27D34BC00886B3B5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C6EACCB7F06D4B4E47CA5244 /* TranscriptionOnDevice */;
 			targetProxy = A7AF4DD5F3E1B0398322795D /* PBXContainerItemProxy */;
-		};
-		C2EB63005A92D68C50580EAD /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4A23A3ADFF1A411373038C52 /* TranscriptionCore_iOS */;
-			targetProxy = 07EB4C4A06A43E0358C1621C /* PBXContainerItemProxy */;
 		};
 		C7ED42C2C8DA5D50992CC3AF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -2642,11 +2562,6 @@
 			package = DFE940041BE2F7F72AB179F9 /* XCRemoteSwiftPackageReference "async-http-client" */;
 			productName = AsyncHTTPClient;
 		};
-		18F946DA8A5A99A732942E9E /* Crypto */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F62D063A895F6C9C0FE0CC28 /* XCRemoteSwiftPackageReference "swift-crypto" */;
-			productName = Crypto;
-		};
 		1DC4C49A58BFB61D360B8390 /* Crypto */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F62D063A895F6C9C0FE0CC28 /* XCRemoteSwiftPackageReference "swift-crypto" */;
@@ -2663,11 +2578,6 @@
 			productName = GRDB;
 		};
 		36072863AF57A19E367E9CC4 /* Logging */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
-			productName = Logging;
-		};
-		3803380DBA71D54DEC3E94D6 /* Logging */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
 			productName = Logging;
@@ -2701,11 +2611,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
 			productName = Logging;
-		};
-		919C4D1C9AE95B0804A45C1F /* NIOTransportServices */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 54B434DA6D7E37339671ACDE /* XCRemoteSwiftPackageReference "swift-nio-transport-services" */;
-			productName = NIOTransportServices;
 		};
 		9803842996C5BB37757AE577 /* AsyncHTTPClient */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -2768,11 +2673,6 @@
 			productName = Logging;
 		};
 		D9C5C797EFFA9E076F247862 /* AsyncHTTPClient */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFE940041BE2F7F72AB179F9 /* XCRemoteSwiftPackageReference "async-http-client" */;
-			productName = AsyncHTTPClient;
-		};
-		DDF65AF5D35BAAE41953C9A7 /* AsyncHTTPClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DFE940041BE2F7F72AB179F9 /* XCRemoteSwiftPackageReference "async-http-client" */;
 			productName = AsyncHTTPClient;

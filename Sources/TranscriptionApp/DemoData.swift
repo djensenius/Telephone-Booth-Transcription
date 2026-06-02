@@ -1,5 +1,7 @@
 import Foundation
+#if os(macOS)
 import TranscriptionCore
+#endif
 
 /// Detects the screenshot/demo launch configuration. Demo mode swaps the live
 /// server for deterministic, login-free sample data so the App Store screenshot
@@ -33,6 +35,7 @@ enum DemoMode {
 /// Deterministic sample content used by demo mode and SwiftUI previews. None of
 /// this represents real traffic; it exists purely to make the UI legible in
 /// screenshots and previews.
+#if os(macOS)
 enum DemoData {
     /// A stable, obviously-fake bearer token shown on the Status tab.
     static let token = "tbt_demo_3f9c0a7b14d24e6f8a1b5c9d0e2f4a6b"
@@ -162,3 +165,5 @@ enum DemoData {
         ]
     }
 }
+
+#endif
