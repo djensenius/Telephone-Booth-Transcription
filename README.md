@@ -127,7 +127,7 @@ open TelephoneBoothTranscription.xcodeproj
 
 # Or build a local .app bundle into ./build/
 ./scripts/build-app.sh
-open ./build/Telephone\ Booth\ Transcription.app
+open ./build/Transcriber.app
 ```
 
 The first launch generates a random bearer token, stores it in the Keychain, and
@@ -163,8 +163,8 @@ fallback works (and how it differs from OpenAI's first-party moderation model).
 | `Sources/TranscriptionCore/` | Platform-agnostic library: auth, request log, upstream proxy, route handlers, server composition. Fully unit-tested. |
 | `Tests/TranscriptionCoreTests/` | Swift Testing suite for `TranscriptionCore`. |
 | `TelephoneBoothTranscription.xcodeproj` + `project.yml` | Native macOS app project and its XcodeGen source. |
-| `Resources/AppIconSource.png` + `Resources/AppIcon.icns` | Source-of-truth app icon and generated macOS icon. |
-| `scripts/make-icon.sh` | Extracts the PNG foreground and renders a complete `.icns` bundle. |
+| `Resources/AppIconSource.png` + `Resources/AppIcon.icon` | Source-of-truth app icon art and generated Icon Composer document. |
+| `scripts/make-icon.sh` | Extracts the PNG foreground and renders iOS fallback assets plus the layered Icon Composer icon. |
 | `scripts/build-app.sh` | Builds the native macOS `.app` bundle from the Xcode project. |
 | `docs/` | Architecture notes, API reference, LM Studio setup, moderation design. |
 | `.github/workflows/ci.yml` | macOS CI: build, test, `.app` packaging, doc lint. |
