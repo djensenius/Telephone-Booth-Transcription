@@ -266,28 +266,10 @@ targets:
         DEVELOPMENT_TEAM: "9JALHNGRBQ"
         CODE_SIGN_ENTITLEMENTS: Resources/TranscriptionApp.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        INFOPLIST_ENABLE_CFBUNDLEICONS_MERGE: NO
         # Required for Mac App Store / TestFlight distribution. macOS rejects
         # uploads whose executable is not hardened; iOS has no equivalent.
         ENABLE_HARDENED_RUNTIME: YES
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny"
-    postBuildScripts:
-      - name: "Prefer Icon Composer app icon"
-        shell: /bin/bash
-        basedOnDependencyAnalysis: false
-        inputFiles:
-          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Assets.car"
-        outputFiles:
-          - "$(DERIVED_FILE_DIR)/PreferIconComposerAppIcon.stamp"
-        script: |
-          set -euo pipefail
-          plist="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
-          if [[ -f "$plist" ]]; then
-            /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$plist" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$plist" 2>/dev/null \
-              || /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$plist"
-          fi
-          touch "${DERIVED_FILE_DIR}/PreferIconComposerAppIcon.stamp"
   # ---------------------------------------------------------------------------
   # iOS variants. These share the same Sources/ as the macOS targets above but
   # build for iOS. PRODUCT_MODULE_NAME is pinned to the base module name so

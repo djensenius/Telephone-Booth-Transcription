@@ -852,7 +852,6 @@
 				5E8E5D7769198EE082B9EC58 /* Resources */,
 				A6690C6C30F6B640C65B8563 /* Frameworks */,
 				05A2757752B7DE686BB391FA /* Embed Frameworks */,
-				22BC62F0F3EC621F8AE2165C /* Prefer Icon Composer app icon */,
 			);
 			buildRules = (
 			);
@@ -1171,30 +1170,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		22BC62F0F3EC621F8AE2165C /* Prefer Icon Composer app icon */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Assets.car",
-			);
-			name = "Prefer Icon Composer app icon";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/PreferIconComposerAppIcon.stamp",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "set -euo pipefail\nplist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nif [[ -f \"$plist\" ]]; then\n  /usr/libexec/PlistBuddy -c \"Delete :CFBundleIconFile\" \"$plist\" 2>/dev/null || true\n  /usr/libexec/PlistBuddy -c \"Set :CFBundleIconName AppIcon\" \"$plist\" 2>/dev/null \\\n    || /usr/libexec/PlistBuddy -c \"Add :CFBundleIconName string AppIcon\" \"$plist\"\nfi\ntouch \"${DERIVED_FILE_DIR}/PreferIconComposerAppIcon.stamp\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0E5689B89AE88FFECAC7412F /* Sources */ = {
@@ -1670,7 +1645,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9JALHNGRBQ;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_ENABLE_CFBUNDLEICONS_MERGE = NO;
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2277,7 +2251,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9JALHNGRBQ;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_ENABLE_CFBUNDLEICONS_MERGE = NO;
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -59,11 +59,4 @@ fi
 
 cp -R "$product" "$app"
 
-plist="$app/Contents/Info.plist"
-if [[ -f "$plist" ]]; then
-  /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$plist" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$plist" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$plist"
-fi
-
 echo "✅ wrote $app"
