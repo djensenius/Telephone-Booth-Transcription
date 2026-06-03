@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Render Resources/AppIconSource.png into the unified app-icon asset catalog.
+# Render Resources/AppIconSource.png into app icon assets.
 #
 # iOS uses the modern single-size 1024 icon format with light / dark / tinted
-# appearances. macOS still gets the complete `mac` idiom size set like the
-# sibling Telephone-Booth-Mobile macOS app so actool emits a proper AppIcon.icns.
+# appearances for fallback compatibility. iOS 26 and macOS 26 use the layered
+# Icon Composer document at Resources/AppIcon.icon.
 #
 # The generated source background is stripped away. The final icon uses the
 # gt3pro-style background plus the extracted brushstroke foreground.
@@ -75,8 +75,8 @@ magick -size 1024x1024 xc:black "$fg_white" -compose over -composite \
 
 rm -f "$mask" "$fg_white" "$bg_dark"
 
-# Emit the iOS 26 appiconset: light / dark / tinted single-size entries.
-# macOS 26 uses Resources/AppIcon.icon below instead.
+# Emit the iOS fallback appiconset: light / dark / tinted single-size entries.
+# iOS 26 and macOS 26 use Resources/AppIcon.icon below.
 mkdir -p "$appiconset"
 magick "$composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-light-1024.png"
 magick "$dark_composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-dark-1024.png"
@@ -127,8 +127,8 @@ cat > "$appiconset/Contents.json" <<JSON
 }
 JSON
 
-# Emit the macOS 26 Liquid Glass icon. Xcode 26 prefers an Icon Composer
-# document named AppIcon.icon over the legacy AppIcon.appiconset for macOS.
+# Emit the iOS/macOS 26 Liquid Glass icon. Xcode 26/actool compile the Icon
+# Composer document into Assets.car for the new layered icon system.
 # The background belongs in Icon Composer's document fill, not in a flattened
 # PNG layer. Foreground art is cropped so Icon Composer can center it as a real
 # layer instead of treating a 1024px transparent canvas as the foreground.

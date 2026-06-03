@@ -274,6 +274,7 @@ targets:
     postBuildScripts:
       - name: "Prefer Icon Composer app icon"
         shell: /bin/bash
+        basedOnDependencyAnalysis: false
         inputFiles:
           - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Assets.car"
         outputFiles:
@@ -477,6 +478,8 @@ targets:
     productName: "Transcriber"
     sources:
       - path: Sources/TranscriptionApp
+      - path: Resources/AppIcon.icon
+        buildPhase: resources
       - path: Resources/Assets.xcassets
         buildPhase: resources
     dependencies:

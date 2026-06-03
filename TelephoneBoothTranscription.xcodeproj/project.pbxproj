@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0008BC66CBD6BE46C7118429 /* TranscriptionAuth_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 618D1645A6A0F17CDC44261B /* TranscriptionAuth_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0167B387C4343441257CD2D4 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 4739C61372E6D214327AC357 /* AppIcon.icon */; };
 		056A2DC1EF1008A6BD32AE6D /* TranscriptionOperator_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */; };
 		062B86C9E02B52BD6917A696 /* APIKeyStoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020BB961F3116444D91D359 /* APIKeyStoring.swift */; };
 		06FBEB6CB961AFE1058907BD /* TranscriptionOnDevice_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */; };
@@ -1164,6 +1165,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0167B387C4343441257CD2D4 /* AppIcon.icon in Resources */,
 				15DC7AB1DF9D714277F070C2 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1173,6 +1175,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		22BC62F0F3EC621F8AE2165C /* Prefer Icon Composer app icon */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
