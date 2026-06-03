@@ -24,7 +24,8 @@ if [[ -f "project.yml" && -x "$(command -v xcodegen || true)" ]]; then
   xcodegen generate --spec project.yml
 fi
 
-if [[ ! -f "Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-light-1024.png" ]]; then
+if [[ ! -f "Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-light-1024.png" \
+   || ! -f "Resources/AppIcon.icon/icon.json" ]]; then
   echo "▶ app icon assets not found, generating"
   ./scripts/make-icon.sh
 fi

@@ -38,6 +38,7 @@
 		24B7CD00F887046339165B3C /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = BCE4DE03B71635B38012F71D /* Logging */; };
 		24D476E4ED896EE5402E7176 /* APIKeyStoreError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146970223849E0E0570809D7 /* APIKeyStoreError.swift */; };
 		24FD54ED65DF63FC7A9ACC8D /* AuthBearerAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F460213684A90E631B1439C7 /* AuthBearerAdapter.swift */; };
+		2616D2BF98B3D39879C2B878 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 4739C61372E6D214327AC357 /* AppIcon.icon */; };
 		272FE3F7E038FD7CE07B86C8 /* OperatorJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7D406082BAA0FB8C87E437 /* OperatorJSON.swift */; };
 		27AD87406A5096156C9071A9 /* UpstreamError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B30141AD55720B8046CEC7 /* UpstreamError.swift */; };
 		27D7D7AC69CAADC770207EE7 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = B8FFEE86D7CE513787BE73EC /* NIOCore */; };
@@ -406,6 +407,7 @@
 		3E7F8DA580B19AD6FE7B14F4 /* KeychainAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainAPIKeyStore.swift; sourceTree = "<group>"; };
 		40931948716064CFDD8523A3 /* OnDeviceClassificationLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceClassificationLogic.swift; sourceTree = "<group>"; };
 		410F993584E3E22BA61858EF /* AuthAnchorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthAnchorProvider.swift; sourceTree = "<group>"; };
+		4739C61372E6D214327AC357 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOnDevice_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E090AC8162782215C378960 /* OperatorClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorClient.swift; sourceTree = "<group>"; };
 		4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHost.swift; sourceTree = "<group>"; };
@@ -644,6 +646,7 @@
 		7245DF5E1764D82965B6D652 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				4739C61372E6D214327AC357 /* AppIcon.icon */,
 				18F0434A75D27D639D8578C4 /* Assets.xcassets */,
 			);
 			path = Resources;
@@ -848,6 +851,7 @@
 				5E8E5D7769198EE082B9EC58 /* Resources */,
 				A6690C6C30F6B640C65B8563 /* Frameworks */,
 				05A2757752B7DE686BB391FA /* Embed Frameworks */,
+				22BC62F0F3EC621F8AE2165C /* Prefer Icon Composer app icon */,
 			);
 			buildRules = (
 			);
@@ -1151,6 +1155,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2616D2BF98B3D39879C2B878 /* AppIcon.icon in Resources */,
 				C2764A01EE19C70481AA6CA7 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1164,6 +1169,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		22BC62F0F3EC621F8AE2165C /* Prefer Icon Composer app icon */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Assets.car",
+			);
+			name = "Prefer Icon Composer app icon";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/PreferIconComposerAppIcon.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\nplist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nif [[ -f \"$plist\" ]]; then\n  /usr/libexec/PlistBuddy -c \"Delete :CFBundleIconFile\" \"$plist\" 2>/dev/null || true\n  /usr/libexec/PlistBuddy -c \"Set :CFBundleIconName AppIcon\" \"$plist\" 2>/dev/null \\\n    || /usr/libexec/PlistBuddy -c \"Add :CFBundleIconName string AppIcon\" \"$plist\"\nfi\ntouch \"${DERIVED_FILE_DIR}/PreferIconComposerAppIcon.stamp\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0E5689B89AE88FFECAC7412F /* Sources */ = {
@@ -1639,6 +1667,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9JALHNGRBQ;
 				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_ENABLE_CFBUNDLEICONS_MERGE = NO;
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2245,6 +2274,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9JALHNGRBQ;
 				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_ENABLE_CFBUNDLEICONS_MERGE = NO;
 				INFOPLIST_FILE = "Resources/TranscriptionApp-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
