@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# Render Resources/AppIconSource.png into the unified app-icon asset catalog.
+# Render Resources/AppIconSource.png into app icon assets.
 #
-# macOS 26 (Tahoe) and iOS 18+ both mask, round, and apply Liquid Glass to a
-# *full-bleed* icon supplied through an asset catalog — the app must NOT bake
-# its own rounded rectangle (doing so lands the macOS icon in "squircle jail":
-# a flat hard-rounded square that ignores the system's Liquid Glass treatment).
-# So we emit one appiconset, shared by both targets, holding full-bleed icon
-# families: the iOS single-size 1024 "universal" format (light / dark / tinted)
-# and a single full-bleed `mac` idiom 1024 (declared 512x512@2x, the largest
-# slot actool accepts for the mac idiom) that compiles into Assets.car +
-# AppIcon.icns. A pure "universal" icon with no platform is left *unassigned*
-# for the macOS target by actool (the app would ship with no icon at all), so
-# the mac idiom entry is required.
+# iOS uses the modern single-size 1024 icon format with light / dark / tinted
+# appearances for fallback compatibility. iOS 26 and macOS 26 use the layered
+# Icon Composer document at Resources/AppIcon.icon.
 #
 # The generated source background is stripped away. The final icon uses the
 # gt3pro-style background plus the extracted brushstroke foreground.
@@ -20,13 +12,15 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 source_png="$root/Resources/AppIconSource.png"
-default_reference_background="$HOME/Developer/gt3pro/Icons/scooter-bkgrd.png"
 reference_background="${REFERENCE_BACKGROUND:-}"
+warm_background="#E8D5B7"
 background="$root/Resources/AppIcon-background.png"
 foreground="$root/Resources/AppIcon-foreground.png"
 composite="$root/Resources/AppIcon-composite.png"
 mask="$root/Resources/.AppIcon-mask.png"
 appiconset="$root/Resources/Assets.xcassets/AppIcon.appiconset"
+icon_composer="$root/Resources/AppIcon.icon"
+icon_composer_assets="$icon_composer/Assets"
 
 if ! command -v magick >/dev/null 2>&1; then
   echo "magick not found — brew install imagemagick" >&2
@@ -38,16 +32,14 @@ if [[ ! -f "$source_png" ]]; then
   exit 1
 fi
 
-if [[ -z "$reference_background" && -f "$default_reference_background" ]]; then
-  reference_background="$default_reference_background"
-fi
-
-if [[ -n "$reference_background" || ! -f "$background" ]]; then
+if [[ -n "$reference_background" ]]; then
   if [[ ! -f "$reference_background" ]]; then
     echo "missing reference background $reference_background" >&2
     exit 1
   fi
   magick "$reference_background" -resize 1024x1024! -depth 8 "$background"
+else
+  magick -size 1024x1024 "xc:$warm_background" -depth 8 "$background"
 fi
 
 # Extract the brushstroke as a foreground with a transparent field.
@@ -76,31 +68,23 @@ fg_white="$root/Resources/.AppIcon-fg-white.png"
 bg_dark="$root/Resources/.AppIcon-bg-dark.png"
 
 magick "$foreground" -fill white -colorize 100% -depth 8 "$fg_white"
-magick "$background" -modulate 10 -depth 8 "$bg_dark"
+magick "$background" -modulate 22 -depth 8 "$bg_dark"
 magick "$bg_dark" "$fg_white" -compose over -composite -depth 8 "$dark_composite"
 magick -size 1024x1024 xc:black "$fg_white" -compose over -composite \
   -colorspace sRGB -depth 8 "$tinted_composite"
 
 rm -f "$mask" "$fg_white" "$bg_dark"
 
-# Emit a single full-bleed 1024 app icon (light / dark / tinted) shared by the
-# macOS + iOS targets. This is the modern Xcode 26 / macOS 26 (Tahoe)
-# single-size app-icon format: the system masks the full-bleed art and applies
-# its own Liquid Glass treatment on both platforms.
-#
-# The previous build shipped a legacy multi-size `mac` idiom iconset
-# (16…512 @1x/@2x). On macOS 26 that legacy path bypasses Liquid Glass and
-# lands the icon in "squircle jail" (a flat hard-rounded square). We replace it
-# with a single full-bleed 1024 `mac` entry so macOS applies Liquid Glass
-# itself. The art stays full-bleed — no hand-baked rounding. (macOS only takes
-# the light appearance; dark / tinted variants are iOS-only.)
+# Emit the iOS fallback appiconset: light / dark / tinted single-size entries.
+# iOS 26 and macOS 26 use Resources/AppIcon.icon below.
 mkdir -p "$appiconset"
 magick "$composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-light-1024.png"
 magick "$dark_composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-dark-1024.png"
 magick "$tinted_composite" -resize 1024x1024! -depth 8 "$appiconset/AppIcon-tinted-1024.png"
 
-# Remove any stale legacy mac-idiom renditions from earlier runs.
-rm -f "$appiconset"/AppIcon-mac-*.png
+# Remove stale mac-idiom renditions from earlier generator versions. macOS is
+# 26+ only and uses the Icon Composer document, not legacy appiconset PNGs.
+rm -f "$appiconset"/AppIcon-mac-*.png "$appiconset"/icon_*.png
 
 cat > "$appiconset/Contents.json" <<JSON
 {
@@ -134,12 +118,6 @@ cat > "$appiconset/Contents.json" <<JSON
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
-    },
-    {
-      "filename" : "AppIcon-light-1024.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "512x512"
     }
   ],
   "info" : {
@@ -149,4 +127,57 @@ cat > "$appiconset/Contents.json" <<JSON
 }
 JSON
 
+# Emit the iOS/macOS 26 Liquid Glass icon. Xcode 26/actool compile the Icon
+# Composer document into Assets.car for the new layered icon system.
+# The background belongs in Icon Composer's document fill, not in a flattened
+# PNG layer. Foreground art is cropped so Icon Composer can center it as a real
+# layer instead of treating a 1024px transparent canvas as the foreground.
+rm -rf "$icon_composer"
+mkdir -p "$icon_composer_assets"
+magick "$foreground" -trim +repage -resize 720x -depth 8 "$icon_composer_assets/brushstroke.png"
+cat > "$icon_composer/icon.json" <<JSON
+{
+  "color-space-for-untagged-svg-colors" : "display-p3",
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.94902,0.88235,0.75294,1.00000",
+      "srgb:0.85098,0.74902,0.58431,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "blend-mode" : "normal",
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "brushstroke.png",
+          "name" : "Brushstroke"
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Brushstroke",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.35
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
+JSON
+
 echo "wrote $appiconset"
+echo "wrote $icon_composer"

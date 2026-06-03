@@ -37,15 +37,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install ImageMagick for icon rendering
         run: brew install imagemagick
-      - name: Regenerate AppIcon.icns from PNG source
+      - name: Regenerate app icon assets from PNG source
         run: ./scripts/make-icon.sh
       - name: Build .app bundle
         run: ./scripts/build-app.sh
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Telephone-Booth-Transcription.app
-          path: build/Telephone Booth Transcription.app
+          name: Transcriber.app
+          path: build/Transcriber.app
           if-no-files-found: error
 
   ios-build:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the real macOS .app bundle from the Xcode project.
 #
-# Output: ./build/Telephone Booth Transcription.app
+# Output: ./build/Transcriber.app
 #
 # Ad-hoc/no-signing build for local use or as a CI artifact. To distribute,
 # run `codesign --deep --options runtime --sign "Developer ID Application: ..."`
@@ -14,7 +14,7 @@ root="$(cd "$here/.." && pwd)"
 cd "$root"
 
 config="${CONFIG:-Release}"
-app_name="Telephone Booth Transcription"
+app_name="Transcriber"
 project="TelephoneBoothTranscription.xcodeproj"
 scheme="TranscriptionApp"
 derived="$root/build/DerivedData"
@@ -24,7 +24,8 @@ if [[ -f "project.yml" && -x "$(command -v xcodegen || true)" ]]; then
   xcodegen generate --spec project.yml
 fi
 
-if [[ ! -f "Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-light-1024.png" ]]; then
+if [[ ! -f "Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-light-1024.png" \
+   || ! -f "Resources/AppIcon.icon/icon.json" ]]; then
   echo "▶ app icon assets not found, generating"
   ./scripts/make-icon.sh
 fi
