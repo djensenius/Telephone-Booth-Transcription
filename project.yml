@@ -203,10 +203,10 @@ targets:
     platform: macOS
     deploymentTarget: "26.0"
     # productName must match PRODUCT_NAME so the product reference filename is
-    # "Telephone Booth Transcription.app". Otherwise xcodegen names the product
+    # "Transcriber.app". Otherwise xcodegen names the product
     # reference after the target ("TranscriptionApp.app") and Xcode rewrites the
     # shared scheme on every open to match the real product name.
-    productName: "Telephone Booth Transcription"
+    productName: "Transcriber"
     sources:
       - path: Sources/TranscriptionApp
       - path: Resources/AppIcon.icon
@@ -259,7 +259,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription
-        PRODUCT_NAME: "Telephone Booth Transcription"
+        PRODUCT_NAME: "Transcriber"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
@@ -474,7 +474,7 @@ targets:
     deploymentTarget: "26.0"
     # See TranscriptionApp above: keep productName in sync with PRODUCT_NAME so
     # the product reference filename matches and Xcode stops rewriting the scheme.
-    productName: "Telephone Booth Transcription"
+    productName: "Transcriber"
     sources:
       - path: Sources/TranscriptionApp
       - path: Resources/Assets.xcassets
@@ -518,7 +518,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription
-        PRODUCT_NAME: "Telephone Booth Transcription"
+        PRODUCT_NAME: "Transcriber"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1,2"

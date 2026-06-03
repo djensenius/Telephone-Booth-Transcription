@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the real macOS .app bundle from the Xcode project.
 #
-# Output: ./build/Telephone Booth Transcription.app
+# Output: ./build/Transcriber.app
 #
 # Ad-hoc/no-signing build for local use or as a CI artifact. To distribute,
 # run `codesign --deep --options runtime --sign "Developer ID Application: ..."`
@@ -14,7 +14,7 @@ root="$(cd "$here/.." && pwd)"
 cd "$root"
 
 config="${CONFIG:-Release}"
-app_name="Telephone Booth Transcription"
+app_name="Transcriber"
 project="TelephoneBoothTranscription.xcodeproj"
 scheme="TranscriptionApp"
 derived="$root/build/DerivedData"

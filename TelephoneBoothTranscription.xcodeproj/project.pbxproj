@@ -375,7 +375,6 @@
 		012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerAssertion.swift; sourceTree = "<group>"; };
 		01682C9E143027DFBB660EBF /* TranscriptionCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyTranscriptionBackend.swift; sourceTree = "<group>"; };
-		09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Telephone Booth Transcription.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		09B93C64136C4803E30D6E66 /* TranscriptionCore_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionCore_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CDD9AEBF64EEC84471EBB6C /* TranscriptionReview_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionReview_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBackend.swift; sourceTree = "<group>"; };
@@ -403,6 +402,7 @@
 		2EACA09D600D816D4B2D9E7E /* OperatorReviewClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorReviewClient.swift; sourceTree = "<group>"; };
 		3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRoute.swift; sourceTree = "<group>"; };
 		3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationRoute.swift; sourceTree = "<group>"; };
+		3B677675667170EBC8F37CD4 /* Transcriber.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Transcriber.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUpstream.swift; sourceTree = "<group>"; };
 		3E7F8DA580B19AD6FE7B14F4 /* KeychainAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainAPIKeyStore.swift; sourceTree = "<group>"; };
 		40931948716064CFDD8523A3 /* OnDeviceClassificationLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceClassificationLogic.swift; sourceTree = "<group>"; };
@@ -418,7 +418,6 @@
 		6B07206E4A2FEF078EBF9972 /* OnDeviceTranscriptionAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceTranscriptionAdapter.swift; sourceTree = "<group>"; };
 		6F093D733703A349373FC072 /* RequestsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsRoute.swift; sourceTree = "<group>"; };
 		6FD96F7AFC4FC2A09E16DE8D /* InProcessOperatorJobDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InProcessOperatorJobDispatcher.swift; sourceTree = "<group>"; };
-		75346A5B605E5A84FB5B15F5 /* Telephone Booth Transcription.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Telephone Booth Transcription.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7B7D406082BAA0FB8C87E437 /* OperatorJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorJSON.swift; sourceTree = "<group>"; };
 		7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOperator.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOperator_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -456,6 +455,7 @@
 		E193A2B7B90F76E32B325D9D /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogWriter.swift; sourceTree = "<group>"; };
+		EFB5FB6C8C9C1315039088DF /* Transcriber.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Transcriber.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F460213684A90E631B1439C7 /* AuthBearerAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthBearerAdapter.swift; sourceTree = "<group>"; };
 		F7C876821C6C463D8736854C /* MultipartFilePart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipartFilePart.swift; sourceTree = "<group>"; };
 		FE434919A1E3F53ECD075137 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -655,8 +655,8 @@
 		773B5A91131256DC4B9D6B59 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				75346A5B605E5A84FB5B15F5 /* Telephone Booth Transcription.app */,
-				09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */,
+				EFB5FB6C8C9C1315039088DF /* Transcriber.app */,
+				3B677675667170EBC8F37CD4 /* Transcriber.app */,
 				618D1645A6A0F17CDC44261B /* TranscriptionAuth_iOS.framework */,
 				22E8B53426FAADF7DD38F063 /* TranscriptionAuth.framework */,
 				09B93C64136C4803E30D6E66 /* TranscriptionCore_iOS.framework */,
@@ -871,7 +871,7 @@
 				D8C3CDDD323E80F7CEA3FFDC /* Logging */,
 			);
 			productName = TranscriptionApp;
-			productReference = 75346A5B605E5A84FB5B15F5 /* Telephone Booth Transcription.app */;
+			productReference = EFB5FB6C8C9C1315039088DF /* Transcriber.app */;
 			productType = "com.apple.product-type.application";
 		};
 		1B041733E292CBF034B96900 /* TranscriptionAuth */ = {
@@ -1069,7 +1069,7 @@
 			packageProductDependencies = (
 			);
 			productName = TranscriptionAppiOS;
-			productReference = 09508D5D7EAF6A7545085C0B /* Telephone Booth Transcription.app */;
+			productReference = 3B677675667170EBC8F37CD4 /* Transcriber.app */;
 			productType = "com.apple.product-type.application";
 		};
 		EBEFB457EDAE73611528B59F /* TranscriptionReview */ = {
@@ -1549,7 +1549,7 @@
 				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
-				PRODUCT_NAME = "Telephone Booth Transcription";
+				PRODUCT_NAME = Transcriber;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1677,7 +1677,7 @@
 				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
-				PRODUCT_NAME = "Telephone Booth Transcription";
+				PRODUCT_NAME = Transcriber;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1803,7 +1803,7 @@
 				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
-				PRODUCT_NAME = "Telephone Booth Transcription";
+				PRODUCT_NAME = Transcriber;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -2284,7 +2284,7 @@
 				MARKETING_VERSION = 0.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
-				PRODUCT_NAME = "Telephone Booth Transcription";
+				PRODUCT_NAME = Transcriber;
 				SDKROOT = macosx;
 			};
 			name = Release;
