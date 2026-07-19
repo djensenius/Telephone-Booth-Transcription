@@ -14,22 +14,22 @@ struct OperatorPollingConfigTests {
         #expect(cfg.moderationEnabled)
     }
 
-    @Test func validatedClampsPollAndLease() {
+    @Test func validatedClampsReconnectDelayAndLegacyLease() {
         var cfg = OperatorPollingConfig(
             enabled: true,
             baseURL: "https://operator.example.com",
             pollIntervalSeconds: 9999,
             leaseSeconds: 1
         )
-        let v = cfg.validated()
-        #expect(v.pollIntervalSeconds == OperatorPollingConfig.maxPollInterval)
-        #expect(v.leaseSeconds == OperatorPollingConfig.minLease)
+        let validated = cfg.validated()
+        #expect(validated.pollIntervalSeconds == OperatorPollingConfig.maxPollInterval)
+        #expect(validated.leaseSeconds == OperatorPollingConfig.minLease)
 
         cfg.pollIntervalSeconds = 0
         cfg.leaseSeconds = 100_000
-        let v2 = cfg.validated()
-        #expect(v2.pollIntervalSeconds == OperatorPollingConfig.minPollInterval)
-        #expect(v2.leaseSeconds == OperatorPollingConfig.maxLease)
+        let clamped = cfg.validated()
+        #expect(clamped.pollIntervalSeconds == OperatorPollingConfig.minPollInterval)
+        #expect(clamped.leaseSeconds == OperatorPollingConfig.maxLease)
     }
 
     @Test func isRunnableRequiresHTTPBaseURL() {

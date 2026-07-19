@@ -2,7 +2,7 @@ import SwiftUI
 import TranscriptionAuth
 
 /// Account sign-in row backed by the shared OIDC `AuthManager`. Signing in
-/// here yields bearer tokens the Operator API accepts, enabling polling.
+/// here yields bearer tokens the Operator API accepts for account features.
 struct AccountSettingsSection: View {
     @State private var auth = AuthManager.shared
     @State private var isWorking = false

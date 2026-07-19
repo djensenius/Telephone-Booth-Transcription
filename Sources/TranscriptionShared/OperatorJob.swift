@@ -1,11 +1,12 @@
 import Foundation
 
-/// A job leased from the Operator's `/v1/jobs/next` endpoint.
+/// A unit of Operator work. Push workers synthesize this from per-message
+/// work input before handing it to a dispatcher.
 ///
-/// The Operator owns job identity; this app treats `id` and `leaseToken`
-/// as opaque tokens to be echoed back on `succeed`/`fail`/`heartbeat`.
+/// The Operator owns job identity. `leaseToken` is retained for compatibility
+/// with existing dispatchers and legacy decoders; push workers leave it empty.
 public struct OperatorJob: Sendable, Equatable {
-    public enum Kind: String, Sendable, Codable, Equatable {
+    public enum Kind: String, Sendable, Codable, Equatable, CaseIterable {
         case transcription
         case translation
         case moderation
@@ -74,14 +75,14 @@ public struct OperatorJob: Sendable, Equatable {
     }
 }
 
-/// Results submitted back to the Operator via `POST /v1/jobs/{id}/succeed`.
+/// Results produced by a local Operator job dispatcher.
 public enum OperatorJobResult: Sendable, Equatable {
     case transcription(text: String, language: String?, model: String?)
     case translation(translatedText: String, sourceLanguage: String?, targetLanguage: String, model: String?)
     case moderation(flagged: Bool, recommendation: String, maxScore: Double, model: String?)
 }
 
-/// Error reported to the Operator via `POST /v1/jobs/{id}/fail`.
+/// Sanitized error produced by a local Operator job dispatcher.
 ///
 /// `code` is a short machine-readable token (e.g. `audio_fetch_failed`).
 /// `message` is sanitized human-readable detail; it MUST NOT contain audio
@@ -98,7 +99,7 @@ public struct OperatorJobError: Sendable, Equatable, Error {
 // MARK: - Wire-format decoding
 
 extension OperatorJob {
-    /// Decodes the JSON body returned by `GET /v1/jobs/next`.
+    /// Decodes the legacy queued-job JSON shape.
     ///
     /// Expected shape (kept loose so future Operator-side additions don't
     /// immediately break this app):
@@ -169,9 +170,7 @@ extension OperatorJob {
 }
 
 extension OperatorJobResult {
-    /// Renders this result as the JSON body for `POST /v1/jobs/{id}/succeed`,
-    /// including the `leaseToken` so the Operator can verify the caller
-    /// still owns the lease.
+    /// Renders this result as the legacy queued-job success JSON body.
     public func encode(leaseToken: String) throws -> Data {
         var payload: [String: Any] = ["leaseToken": leaseToken]
         switch self {
@@ -195,7 +194,7 @@ extension OperatorJobResult {
 }
 
 extension OperatorJobError {
-    /// Renders this error as the JSON body for `POST /v1/jobs/{id}/fail`.
+    /// Renders this error as the legacy queued-job failure JSON body.
     public func encode(leaseToken: String) throws -> Data {
         let payload: [String: Any] = [
             "leaseToken": leaseToken,

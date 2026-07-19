@@ -1,36 +1,32 @@
 import Foundation
 
-/// Configuration for the Operator-pull worker.
+/// Configuration for the Operator push worker.
 ///
-/// When enabled and valid, the app polls `baseURL` every
-/// `pollIntervalSeconds` for queued transcription, translation, and
-/// moderation jobs, runs them locally against the same backend
-/// implementations the HTTP routes use, and submits results back. This is
-/// the inverse of the existing push-in mode (Operator → this app's HTTP
-/// server): it lets the Operator run anywhere reachable by this Mac without
-/// requiring inbound reachability the other direction.
+/// When enabled and valid, the app subscribes to the Operator status WebSocket,
+/// reacts to `work` envelopes for enabled kinds, fetches message inputs, runs
+/// the work locally, and posts results back. The struct name is retained to
+/// avoid app-wide persistence churn.
 ///
-/// The Operator's API token is stored in Keychain under a distinct account
-/// from the server's own bearer token and is **not** included in this
-/// struct.
+/// The Operator API token is stored in Keychain under a distinct account from
+/// the server's own bearer token and is **not** included in this struct.
 public struct OperatorPollingConfig: Sendable, Equatable {
-    /// Master toggle. The worker only starts when this is true, `baseURL`
-    /// is a valid http(s) URL, and a non-empty API token is configured.
+    /// Master toggle. The worker only starts when this is true, `baseURL` is a
+    /// valid http(s) URL, and a non-empty Operator API token is configured.
     public var enabled: Bool
 
     /// Operator base URL, e.g. `https://operator.example.com`. The worker
-    /// appends `/v1/jobs/...` paths. Trailing slashes are tolerated.
+    /// appends `/v1/ws/status` for status events and `/v1/worker/...` paths for
+    /// work input/result calls. Trailing slashes are tolerated.
     public var baseURL: String
 
-    /// Poll cadence in seconds. Clamped at runtime to `[1, 300]`.
+    /// Base reconnect delay in seconds. Reconnects use capped exponential
+    /// backoff from this value up to roughly 30 seconds.
     public var pollIntervalSeconds: Int
 
-    /// Lease duration the worker asks for when claiming a job, in seconds.
-    /// The worker submits the result well before this expires.
+    /// Retained for saved-setting compatibility. Push mode has no lease window.
     public var leaseSeconds: Int
 
-    /// Per-kind enables. The worker requests
-    /// `?kinds=transcription,translation,moderation` filtered by these.
+    /// Per-kind enables. Incoming `work.needs` are filtered by these toggles.
     public var transcriptionEnabled: Bool
     public var translationEnabled: Bool
     public var moderationEnabled: Bool
@@ -63,20 +59,18 @@ public struct OperatorPollingConfig: Sendable, Equatable {
     public static let minLease = 10
     public static let maxLease = 3600
 
-    /// Returns `self` with values clamped to safe ranges; **does not**
-    /// require any particular field to be present (use `isRunnable` to
-    /// decide whether to actually start the worker).
+    /// Returns `self` with values clamped to safe ranges; **does not** require
+    /// any particular field to be present (use `isRunnableWithToken` to decide
+    /// whether to actually start the worker).
     public func validated() -> OperatorPollingConfig {
         var copy = self
         copy.pollIntervalSeconds = max(Self.minPollInterval, min(Self.maxPollInterval, copy.pollIntervalSeconds))
         copy.leaseSeconds = max(Self.minLease, min(Self.maxLease, copy.leaseSeconds))
         copy.baseURL = copy.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if let url = URL(string: copy.baseURL), let scheme = url.scheme {
-            // Strip trailing `/` for predictable joining.
             if copy.baseURL.hasSuffix("/") {
                 copy.baseURL = String(copy.baseURL.dropLast())
             }
-            // Refuse `file:` and other non-http schemes by clearing.
             if scheme != "http" && scheme != "https" {
                 copy.baseURL = ""
             }
@@ -86,21 +80,21 @@ public struct OperatorPollingConfig: Sendable, Equatable {
         return copy
     }
 
-    /// True when the worker has enough config to actually start polling.
-    /// Token presence is checked separately at start time (kept out of this
-    /// struct so a UserDefaults round-trip never includes the token).
+    /// True when the worker has enough config to subscribe. Token presence is
+    /// checked separately at start time (kept out of this struct so a
+    /// UserDefaults round-trip never includes the token).
     public var isRunnableWithToken: Bool {
         guard enabled, !baseURL.isEmpty else { return false }
         guard transcriptionEnabled || translationEnabled || moderationEnabled else { return false }
         return URL(string: baseURL)?.scheme.flatMap { ["http", "https"].contains($0) } == true
     }
 
-    /// Comma-separated `kinds` query value derived from per-kind enables.
+    /// Comma-separated enabled-kind value retained for existing UI/debug use.
     public var requestedKinds: String {
         requestedKindList.map(\.rawValue).joined(separator: ",")
     }
 
-    /// Typed list of job kinds the per-kind toggles enable, in a stable order.
+    /// Typed list of work kinds the per-kind toggles enable, in a stable order.
     public var requestedKindList: [OperatorJob.Kind] {
         var kinds: [OperatorJob.Kind] = []
         if transcriptionEnabled { kinds.append(.transcription) }

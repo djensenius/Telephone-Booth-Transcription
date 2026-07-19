@@ -29,7 +29,7 @@ private let logger = authManagerLogger
 public extension Notification.Name {
     /// Posted on the main actor whenever the shared `AuthManager`'s
     /// `authState` changes at runtime (sign-in, sign-out, session restore).
-    /// Lets non-observing components (e.g. the Operator pull worker) react to
+    /// Lets non-observing components (e.g. the Operator push worker) react to
     /// the OIDC session coming or going.
     static let operatorAuthStateDidChange =
         Notification.Name("org.davidjensenius.TelephoneBoothTranscription.authStateDidChange")

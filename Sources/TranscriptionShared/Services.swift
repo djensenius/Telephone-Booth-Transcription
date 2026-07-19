@@ -2,7 +2,7 @@ import Foundation
 
 /// Platform-neutral, transport-agnostic service protocols and DTOs shared by
 /// the macOS HTTP server (which adapts them into Hummingbird responses) and the
-/// pull/sync clients (which call them directly, in-process).
+/// sync clients (which call them directly, in-process).
 ///
 /// None of these types depend on Hummingbird, GRDB, or NIO, so non-macOS
 /// targets can implement and consume them without linking the HTTP server
@@ -45,7 +45,7 @@ public protocol TextTranslationService: Sendable {
 }
 
 /// Result of moderating a piece of text. Mirrors the fields the Operator's
-/// `/v1/jobs/{id}/succeed` moderation body expects.
+/// Operator moderation result body expects.
 public struct ModerationVerdict: Sendable, Equatable {
     public var flagged: Bool
     public var recommendation: String
