@@ -354,12 +354,12 @@ final class ServerHost: ObservableObject {
         let opClient = HTTPOperatorClient(
             httpClient: client,
             config: cfg,
-            authHeaderProvider: { operatorToken },
+            authHeaderProvider: { OperatorPollingConfig.bearerAuthorizationHeader(for: operatorToken) },
             logger: logger
         )
         let channel = URLSessionOperatorWorkChannel(
             config: cfg,
-            authHeaderProvider: { operatorToken },
+            authHeaderProvider: { OperatorPollingConfig.bearerAuthorizationHeader(for: operatorToken) },
             logger: logger
         )
         let bearer = (try? tokenStore.current()) ?? ""

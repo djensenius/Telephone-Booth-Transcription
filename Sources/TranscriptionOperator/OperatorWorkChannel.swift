@@ -35,7 +35,10 @@ public actor URLSessionOperatorWorkChannel: OperatorWorkChannel {
     public func connect() async throws -> AsyncStream<OperatorWorkEnvelope> {
         await disconnect()
         guard !config.baseURL.isEmpty else { throw OperatorWorkChannelError.notConfigured }
-        guard let header = await authHeaderProvider() else { throw OperatorWorkChannelError.unauthorized }
+        guard config.usesSecureTokenTransport else { throw OperatorWorkChannelError.invalidBaseURL }
+        guard let header = OperatorPollingConfig.bearerAuthorizationHeader(for: await authHeaderProvider()) else {
+            throw OperatorWorkChannelError.unauthorized
+        }
         guard let url = Self.statusWebSocketURL(from: config.baseURL) else {
             throw OperatorWorkChannelError.invalidBaseURL
         }

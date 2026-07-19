@@ -45,6 +45,27 @@ struct OperatorPollingConfigTests {
         #expect(cfg.isRunnableWithToken == false)
     }
 
+    @Test func remoteHTTPIsNotRunnableWithOperatorToken() {
+        let remote = OperatorPollingConfig(enabled: true, baseURL: "http://operator.example.com")
+        #expect(remote.isRunnableWithToken == false)
+        #expect(remote.validated().baseURL == "")
+
+        let loopback = OperatorPollingConfig(enabled: true, baseURL: "http://localhost:8080")
+        #expect(loopback.isRunnableWithToken)
+        #expect(loopback.validated().baseURL == "http://localhost:8080")
+
+        let ipv6Loopback = OperatorPollingConfig(enabled: true, baseURL: "http://[::1]:8080")
+        #expect(ipv6Loopback.isRunnableWithToken)
+    }
+
+    @Test func authorizationHeaderUsesBearerSchemeWithoutDoublePrefixing() {
+        let tokenHeader = OperatorPollingConfig.bearerAuthorizationHeader(for: "operator-token")
+        let existingHeader = OperatorPollingConfig.bearerAuthorizationHeader(for: "  Bearer operator-token  ")
+        #expect(tokenHeader == "Bearer operator-token")
+        #expect(existingHeader == "Bearer operator-token")
+        #expect(OperatorPollingConfig.bearerAuthorizationHeader(for: "") == nil)
+    }
+
     @Test func requestedKindsFollowsToggles() {
         var cfg = OperatorPollingConfig()
         #expect(cfg.requestedKinds.split(separator: ",").sorted()

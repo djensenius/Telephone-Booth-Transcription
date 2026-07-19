@@ -67,11 +67,13 @@ public struct OperatorPollingConfig: Sendable, Equatable {
         copy.pollIntervalSeconds = max(Self.minPollInterval, min(Self.maxPollInterval, copy.pollIntervalSeconds))
         copy.leaseSeconds = max(Self.minLease, min(Self.maxLease, copy.leaseSeconds))
         copy.baseURL = copy.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = URL(string: copy.baseURL), let scheme = url.scheme {
+        if let url = URL(string: copy.baseURL), let scheme = url.scheme?.lowercased() {
             if copy.baseURL.hasSuffix("/") {
                 copy.baseURL = String(copy.baseURL.dropLast())
             }
             if scheme != "http" && scheme != "https" {
+                copy.baseURL = ""
+            } else if scheme == "http" && !Self.isLoopback(url: url) {
                 copy.baseURL = ""
             }
         } else if !copy.baseURL.isEmpty {
@@ -86,7 +88,39 @@ public struct OperatorPollingConfig: Sendable, Equatable {
     public var isRunnableWithToken: Bool {
         guard enabled, !baseURL.isEmpty else { return false }
         guard transcriptionEnabled || translationEnabled || moderationEnabled else { return false }
-        return URL(string: baseURL)?.scheme.flatMap { ["http", "https"].contains($0) } == true
+        return usesSecureTokenTransport
+    }
+
+    /// True when the Operator URL is safe to receive the static API token.
+    public var usesSecureTokenTransport: Bool {
+        guard let url = URL(string: baseURL), let scheme = url.scheme?.lowercased() else { return false }
+        if scheme == "https" { return true }
+        return scheme == "http" && Self.isLoopback(url: url)
+    }
+
+    /// Formats a Keychain token or preformatted header for the Operator API.
+    public static func bearerAuthorizationHeader(for value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.lowercased().hasPrefix("bearer ") { return trimmed }
+        return "Bearer \(trimmed)"
+    }
+
+    /// Whether the parsed Operator host is loopback (safe for plaintext HTTP).
+    public var isLoopback: Bool {
+        guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
+        }
+        return Self.isLoopback(url: url)
+    }
+
+    private static func isLoopback(url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        let stripped = host.hasPrefix("[") && host.hasSuffix("]")
+            ? String(host.dropFirst().dropLast())
+            : host
+        return stripped == "127.0.0.1" || stripped == "::1" || stripped == "localhost"
     }
 
     /// Comma-separated enabled-kind value retained for existing UI/debug use.

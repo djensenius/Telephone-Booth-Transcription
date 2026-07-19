@@ -56,7 +56,7 @@ public final class HTTPOperatorClient: OperatorClient {
         self.init(
             httpClient: httpClient,
             config: config,
-            authHeaderProvider: { token.isEmpty ? nil : token },
+            authHeaderProvider: { OperatorPollingConfig.bearerAuthorizationHeader(for: token) },
             timeout: timeout,
             logger: logger
         )
@@ -137,7 +137,8 @@ public final class HTTPOperatorClient: OperatorClient {
     private func makeRequest(method: HTTPMethod, path: String) async throws -> HTTPClientRequest {
         let base = config.baseURL.hasSuffix("/") ? String(config.baseURL.dropLast()) : config.baseURL
         guard !base.isEmpty else { throw OperatorClientError.notConfigured }
-        guard let header = await authHeaderProvider(), !header.isEmpty else {
+        guard config.usesSecureTokenTransport else { throw OperatorClientError.notConfigured }
+        guard let header = OperatorPollingConfig.bearerAuthorizationHeader(for: await authHeaderProvider()) else {
             throw OperatorClientError.unauthorized
         }
         var request = HTTPClientRequest(url: base + path)

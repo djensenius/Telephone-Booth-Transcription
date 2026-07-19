@@ -14,7 +14,7 @@ step, and posts the result back.
 
 ## Operator wire format
 
-All requests carry `Authorization: <Operator API token>` and
+All requests carry `Authorization: Bearer <Operator API token>` and
 `User-Agent: Telephone-Booth-Transcription/<version>`.
 
 | Method | Path | Notes |

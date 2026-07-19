@@ -39,6 +39,7 @@ public actor OperatorWorker {
     private let logger: Logger
     private let clock: @Sendable () -> Date
     private let onStatusChange: (@Sendable (Status) -> Void)?
+    private let minimumHealthyConnectionSeconds: TimeInterval = 5
 
     private var status = Status()
     private var task: Task<Void, Never>?
@@ -94,13 +95,23 @@ public actor OperatorWorker {
         while !stopRequested && !Task.isCancelled {
             do {
                 setPhase(.connecting)
+                let connectedAt = clock()
                 let stream = try await workChannel.connect()
                 recordSubscribed()
+                var confirmedHealthy = false
                 for await envelope in stream {
                     if stopRequested || Task.isCancelled { break }
+                    if !confirmedHealthy {
+                        recordConnectionHealthy()
+                        confirmedHealthy = true
+                    }
                     await handle(envelope)
                 }
                 if !stopRequested && !Task.isCancelled {
+                    let connectedSeconds = clock().timeIntervalSince(connectedAt)
+                    if !confirmedHealthy, connectedSeconds >= minimumHealthyConnectionSeconds {
+                        recordConnectionHealthy()
+                    }
                     recordError(code: "operator_ws_disconnected", message: "websocket disconnected")
                 }
             } catch {
@@ -158,8 +169,13 @@ public actor OperatorWorker {
 
     private func recordSubscribed() {
         status.phase = .subscribed
+        emitStatus()
+    }
+
+    private func recordConnectionHealthy() {
         status.consecutiveFailures = 0
         status.lastErrorCode = nil
+        status.phase = .subscribed
         emitStatus()
     }
 
