@@ -16,6 +16,7 @@ import TranscriptionReview
 /// awaits any in-flight transition before proceeding, preventing races when the
 /// user taps Start/Stop rapidly or the app is exiting.
 @MainActor
+// swiftlint:disable:next type_body_length
 final class ServerHost: ObservableObject {
     enum RunState: Equatable {
         case stopped
@@ -28,7 +29,7 @@ final class ServerHost: ObservableObject {
             switch self {
             case .stopped: return "Stopped"
             case .starting: return "Starting…"
-            case .running(let h, let p): return "Running on http://\(h):\(p)"
+            case .running(let host, let port): return "Running on http://\(host):\(port)"
             case .stopping: return "Stopping…"
             case .errored(let why): return "Error: \(why)"
             }
@@ -64,7 +65,7 @@ final class ServerHost: ObservableObject {
     }
     @Published private(set) var sleepAssertionHeld: Bool = false
 
-    /// Snapshot of the Operator pull worker's status, updated whenever the
+    /// Snapshot of the Operator push worker's status, updated whenever the
     /// worker transitions phase. `nil` when the worker has never started.
     @Published private(set) var operatorWorkerStatus: OperatorWorker.Status?
 
@@ -81,13 +82,13 @@ final class ServerHost: ObservableObject {
     private var httpClient: HTTPClient?
     private var serverTask: Task<Void, Never>?
 
-    /// Active Operator pull worker, when enabled. Lives alongside (and
+    /// Active Operator push worker, when enabled. Lives alongside (and
     /// depends on) the HTTP server because the worker dispatches via
     /// loopback.
     private var operatorWorker: OperatorWorker?
 
-    /// Observer for OIDC auth-state changes; the pull worker authenticates as
-    /// the signed-in account, so it must start/stop when the session does.
+    /// Observer for OIDC auth-state changes; retained so account changes also
+    /// reconcile background Operator-related work.
     /// `nonisolated(unsafe)` so `deinit` can remove it; only ever assigned once
     /// during init and read in `deinit`.
     private nonisolated(unsafe) var authObserver: (any NSObjectProtocol)?
@@ -135,8 +136,8 @@ final class ServerHost: ObservableObject {
             logger.error("falling back to in-memory request log: \(error)")
         }
 
-        // The Operator pull worker authenticates as the signed-in OIDC account,
-        // so restart it whenever the session is established or torn down.
+        // Restart the Operator worker when auth state changes so legacy review
+        // sign-in transitions still reconcile the worker lifecycle.
         self.authObserver = NotificationCenter.default.addObserver(
             forName: .operatorAuthStateDidChange,
             object: nil,
@@ -154,6 +155,7 @@ final class ServerHost: ObservableObject {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func start() async {
         if isDemo { return }
         // Wait for any prior stop transition to complete.
@@ -184,7 +186,11 @@ final class ServerHost: ObservableObject {
 
         if !cfg.isLoopbackHost {
             logger.warning(
-                "Server binding to non-loopback address \(cfg.bindHost). Traffic (including bearer tokens) is unencrypted. Use a TLS reverse proxy for production deployments."
+                """
+                Server binding to non-loopback address \(cfg.bindHost). \
+                Traffic (including bearer tokens) is unencrypted. \
+                Use a TLS reverse proxy for production deployments.
+                """
             )
         }
 
@@ -217,8 +223,8 @@ final class ServerHost: ObservableObject {
                 self?.applyPowerAssertion()
             }
 
-            // Start the Operator pull worker once the HTTP server is up, since
-            // the worker dispatches jobs via loopback.
+            // Start the Operator push worker once the HTTP server is up, since
+            // the worker dispatches work via loopback.
             Task { @MainActor [weak self] in
                 await self?.reconcileOperatorWorker()
             }
@@ -310,79 +316,6 @@ final class ServerHost: ObservableObject {
         }
     }
 
-    func currentToken() -> String {
-        (try? tokenStore.current()) ?? ""
-    }
-
-    /// Returns the transcription upstream API key from Keychain, or empty string.
-    func transcriptionAPIKey() -> String {
-        (try? apiKeyStore.read(account: APIKeyAccount.transcription)) ?? ""
-    }
-
-    /// Returns the moderation upstream API key from Keychain, or empty string.
-    func moderationAPIKey() -> String {
-        (try? apiKeyStore.read(account: APIKeyAccount.moderation)) ?? ""
-    }
-
-    /// Returns the translation upstream API key from Keychain, or empty string.
-    func translationAPIKey() -> String {
-        (try? apiKeyStore.read(account: APIKeyAccount.translation)) ?? ""
-    }
-
-    /// Persists the transcription API key to Keychain and updates the in-memory config.
-    func setTranscriptionAPIKey(_ value: String) {
-        let key = value.isEmpty ? nil : value
-        if case .proxy(var up) = config.transcriptionBackend {
-            up.apiKey = key
-            config.transcriptionBackend = .proxy(up)
-        }
-    }
-
-    /// Persists the moderation API key to Keychain and updates the in-memory config.
-    func setModerationAPIKey(_ value: String) {
-        config.moderationUpstream.apiKey = value.isEmpty ? nil : value
-    }
-
-    /// Persists the translation API key to Keychain and updates the in-memory config.
-    func setTranslationAPIKey(_ value: String) {
-        config.translationUpstream.apiKey = value.isEmpty ? nil : value
-    }
-
-    // MARK: - Operator pull worker
-
-    /// Fetches `/v1/models` from one of the user's configured upstreams (or
-    /// from this server itself once it's running) so the UI can populate
-    /// model pickers. Returns an empty list on any failure.
-    func fetchModels(from baseURL: String, apiKey: String?) async -> [String] {
-        if isDemo { return [] }
-        guard !baseURL.isEmpty,
-              let url = URL(string: baseURL.hasSuffix("/")
-                            ? "\(baseURL)models"
-                            : "\(baseURL)/models") else {
-            return []
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        let upstream = UpstreamConfig(baseURL: baseURL, apiKey: apiKey).strippingKeyIfInsecure()
-        if let key = upstream.apiKey, !key.isEmpty {
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        }
-        request.timeoutInterval = 5
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                return []
-            }
-            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let list = obj["data"] as? [[String: Any]] else {
-                return []
-            }
-            return list.compactMap { $0["id"] as? String }.sorted()
-        } catch {
-            return []
-        }
-    }
-
     private func applyPowerAssertion() {
         if isDemo {
             sleepAssertionHeld = true
@@ -397,23 +330,20 @@ final class ServerHost: ObservableObject {
         sleepAssertionHeld = powerAssertion.isHeld
     }
 
-    /// Starts, stops, or restarts the Operator pull worker based on the
-    /// current configuration, token presence, and server state. Idempotent
-    /// — safe to call from `didSet` observers and lifecycle transitions.
+    // Starts, stops, or restarts the Operator push worker based on the
+    // current configuration, token presence, and server state. Idempotent
+    // — safe to call from `didSet` observers and lifecycle transitions.
+    // swiftlint:disable:next function_body_length
     func reconcileOperatorWorker() async {
         guard case .running(let host, let port) = state else {
             await stopOperatorWorker()
             return
         }
-        var cfg = config.operatorPolling.validated()
-        // The pull worker authenticates as the signed-in Operator account and
-        // talks to the same Operator base URL as the review queue, rather than
-        // a separately-entered URL + API token.
-        cfg.baseURL = OperatorAPIConfig().baseURL.absoluteString
-        cfg = cfg.validated()
+        let cfg = config.operatorPolling.validated()
+        let operatorToken = operatorAPIKey()
         let shouldRun = cfg.enabled
             && cfg.isRunnableWithToken
-            && AuthManager.shared.isSignedIn
+            && !operatorToken.isEmpty
         guard shouldRun else {
             await stopOperatorWorker()
             return
@@ -424,7 +354,12 @@ final class ServerHost: ObservableObject {
         let opClient = HTTPOperatorClient(
             httpClient: client,
             config: cfg,
-            authHeaderProvider: { await AuthManager.shared.authorizationHeader() },
+            authHeaderProvider: { OperatorPollingConfig.bearerAuthorizationHeader(for: operatorToken) },
+            logger: logger
+        )
+        let channel = URLSessionOperatorWorkChannel(
+            config: cfg,
+            authHeaderProvider: { OperatorPollingConfig.bearerAuthorizationHeader(for: operatorToken) },
             logger: logger
         )
         let bearer = (try? tokenStore.current()) ?? ""
@@ -440,8 +375,9 @@ final class ServerHost: ObservableObject {
         let worker = OperatorWorker(
             client: opClient,
             dispatcher: dispatcher,
-            pollIntervalSeconds: cfg.pollIntervalSeconds,
-            heartbeatIntervalSeconds: max(1, cfg.leaseSeconds / 3),
+            workChannel: channel,
+            reconnectBaseSeconds: cfg.pollIntervalSeconds,
+            enabledKinds: Set(cfg.requestedKindList),
             logger: logger,
             onStatusChange: { [weak self] status in
                 Task { @MainActor [weak self] in
@@ -461,240 +397,4 @@ final class ServerHost: ObservableObject {
     }
 }
 
-/// Persists `ServerConfig` to `UserDefaults` as JSON.
-///
-/// API keys are stored in the macOS Keychain (via `APIKeyStoring`), **not** in
-/// UserDefaults. A one-time migration moves any keys that were previously
-/// serialized in the DTO into Keychain.
-enum ConfigPersistence {
-    private static let key = "serverConfig.v1"
-
-    static func save(_ config: ServerConfig, keyStore: any APIKeyStoring) {
-        let dto = ConfigDTO(config)
-        if let data = try? JSONEncoder().encode(dto) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-        // Persist API keys in Keychain
-        if case .proxy(let up) = config.transcriptionBackend {
-            persistKey(up.apiKey, account: APIKeyAccount.transcription, store: keyStore)
-        } else {
-            persistKey(nil, account: APIKeyAccount.transcription, store: keyStore)
-        }
-        persistKey(config.translationUpstream.apiKey, account: APIKeyAccount.translation, store: keyStore)
-        persistKey(config.moderationUpstream.apiKey, account: APIKeyAccount.moderation, store: keyStore)
-    }
-
-    static func load(keyStore: any APIKeyStoring) -> ServerConfig? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        guard var dto = try? JSONDecoder().decode(ConfigDTO.self, from: data) else { return nil }
-
-        // One-time migration: move keys from DTO into Keychain.
-        // Only clear a key from the DTO if the Keychain write succeeds,
-        // so a locked Keychain doesn't permanently lose the key.
-        var migrated = false
-        if let tKey = dto.transcriptionKey, !tKey.isEmpty {
-            do {
-                try keyStore.write(account: APIKeyAccount.transcription, value: tKey)
-                dto.transcriptionKey = nil
-                migrated = true
-            } catch {
-                // Leave in DTO for retry on next launch
-            }
-        }
-        if let mKey = dto.moderationKey, !mKey.isEmpty {
-            do {
-                try keyStore.write(account: APIKeyAccount.moderation, value: mKey)
-                dto.moderationKey = nil
-                migrated = true
-            } catch {
-                // Leave in DTO for retry on next launch
-            }
-        }
-        if let trKey = dto.translationKey, !trKey.isEmpty {
-            do {
-                try keyStore.write(account: APIKeyAccount.translation, value: trKey)
-                dto.translationKey = nil
-                migrated = true
-            } catch {
-                // Leave in DTO for retry on next launch
-            }
-        }
-        if migrated, let cleaned = try? JSONEncoder().encode(dto) {
-            UserDefaults.standard.set(cleaned, forKey: key)
-        }
-
-        // Inject keys from Keychain into the in-memory config so Settings can
-        // validate and warn about insecure URLs without serializing keys to
-        // UserDefaults. Runtime startup still calls validated(), which strips
-        // keys before forwarding to insecure upstreams.
-        var config = dto.asConfig
-        let transcriptionKey = try? keyStore.read(account: APIKeyAccount.transcription)
-        let translationKey = try? keyStore.read(account: APIKeyAccount.translation)
-        let moderationKey = try? keyStore.read(account: APIKeyAccount.moderation)
-        if case .proxy(var upstream) = config.transcriptionBackend {
-            upstream.apiKey = transcriptionKey
-            config.transcriptionBackend = .proxy(upstream)
-        }
-        config.translationUpstream.apiKey = translationKey
-        config.moderationUpstream.apiKey = moderationKey
-
-        var validated = config.validated()
-        if case .proxy(var upstream) = validated.transcriptionBackend {
-            upstream.apiKey = transcriptionKey
-            validated.transcriptionBackend = .proxy(upstream)
-        }
-        validated.translationUpstream.apiKey = translationKey
-        validated.moderationUpstream.apiKey = moderationKey
-        return validated
-    }
-
-    private static func persistKey(_ value: String?, account: String, store: any APIKeyStoring) {
-        if let key = value, !key.isEmpty {
-            try? store.write(account: account, value: key)
-        } else {
-            try? store.delete(account: account)
-        }
-    }
-
-    private struct ConfigDTO: Codable {
-        var bindHost: String
-        var bindPort: Int
-        var transcriptionBackendKind: String       // "proxy" | "nativeMacOS" | "appleSpeechAnalyzer"
-        var transcriptionBase: String
-        // Optional for migration: older saves predate the on-device text
-        // services and decode as nil → platform default in `asConfig`.
-        var moderationBackendKind: String?          // "proxy" | "onDevice"
-        var textTranslationBackendKind: String?     // "proxy" | "onDevice"
-        // Retained for migration decoding only — never written to new saves.
-        var transcriptionKey: String?
-        var moderationBase: String
-        // Retained for migration decoding only — never written to new saves.
-        var moderationKey: String?
-        var translationBase: String?
-        var translationKey: String?
-        var maxRequestBytes: Int
-        var upstreamTimeoutSeconds: Double
-        var maxConcurrentRequests: Int
-        var logBodies: Bool
-        var moderationFallbackEnabled: Bool
-        var moderationModel: String
-        var defaultTranscriptionModel: String?
-        var defaultTranslationModel: String?
-        var nativeTranscriptionLocale: String?
-        var nonLoopbackBindAcknowledged: Bool?
-        var operatorPollingEnabled: Bool?
-        var operatorPollingBaseURL: String?
-        var operatorPollingIntervalSeconds: Int?
-        var operatorPollingLeaseSeconds: Int?
-        var operatorPollingTranscription: Bool?
-        var operatorPollingTranslation: Bool?
-        var operatorPollingModeration: Bool?
-
-        init(_ c: ServerConfig) {
-            bindHost = c.bindHost
-            bindPort = c.bindPort
-            switch c.transcriptionBackend {
-            case .proxy(let up):
-                transcriptionBackendKind = "proxy"
-                transcriptionBase = up.baseURL
-            case .nativeMacOS:
-                transcriptionBackendKind = "nativeMacOS"
-                transcriptionBase = UpstreamConfig.defaultTranscription.baseURL
-            case .appleSpeechAnalyzer:
-                transcriptionBackendKind = "appleSpeechAnalyzer"
-                transcriptionBase = UpstreamConfig.defaultTranscription.baseURL
-            }
-            // Keys are never serialized to UserDefaults
-            transcriptionKey = nil
-            moderationBackendKind = c.moderationBackend.rawValue
-            textTranslationBackendKind = c.textTranslationBackend.rawValue
-            moderationBase = c.moderationUpstream.baseURL
-            moderationKey = nil
-            translationBase = c.translationUpstream.baseURL
-            // Keys are never serialized to UserDefaults
-            translationKey = nil
-            maxRequestBytes = c.maxRequestBytes
-            upstreamTimeoutSeconds = c.upstreamTimeout.seconds
-            maxConcurrentRequests = c.maxConcurrentRequests
-            logBodies = c.logBodies
-            moderationFallbackEnabled = c.moderationFallbackEnabled
-            moderationModel = c.moderationModel
-            defaultTranscriptionModel = c.defaultTranscriptionModel
-            defaultTranslationModel = c.defaultTranslationModel
-            nativeTranscriptionLocale = c.nativeTranscriptionLocale
-            nonLoopbackBindAcknowledged = c.nonLoopbackBindAcknowledged
-            operatorPollingEnabled = c.operatorPolling.enabled
-            operatorPollingBaseURL = c.operatorPolling.baseURL
-            operatorPollingIntervalSeconds = c.operatorPolling.pollIntervalSeconds
-            operatorPollingLeaseSeconds = c.operatorPolling.leaseSeconds
-            operatorPollingTranscription = c.operatorPolling.transcriptionEnabled
-            operatorPollingTranslation = c.operatorPolling.translationEnabled
-            operatorPollingModeration = c.operatorPolling.moderationEnabled
-        }
-
-        var asConfig: ServerConfig {
-            let backend: TranscriptionBackend
-            switch transcriptionBackendKind {
-            case "nativeMacOS":
-                backend = .nativeMacOS
-            case "appleSpeechAnalyzer":
-                backend = .appleSpeechAnalyzer
-            default:
-                backend = .proxy(.init(baseURL: transcriptionBase, apiKey: nil))
-            }
-            let translationUpstream: UpstreamConfig
-            if let translationBase, !translationBase.isEmpty {
-                translationUpstream = .init(baseURL: translationBase, apiKey: nil)
-            } else {
-                translationUpstream = .defaultTranslation
-            }
-            return ServerConfig(
-                bindHost: bindHost,
-                bindPort: bindPort,
-                transcriptionBackend: backend,
-                moderationBackend: moderationBackendKind
-                    .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
-                textTranslationBackend: textTranslationBackendKind
-                    .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
-                moderationUpstream: .init(baseURL: moderationBase, apiKey: nil),
-                translationUpstream: translationUpstream,
-                maxRequestBytes: maxRequestBytes,
-                upstreamTimeout: .seconds(upstreamTimeoutSeconds),
-                maxConcurrentRequests: maxConcurrentRequests,
-                logBodies: logBodies,
-                moderationFallbackEnabled: moderationFallbackEnabled,
-                moderationModel: moderationModel,
-                defaultTranscriptionModel: defaultTranscriptionModel ?? "",
-                defaultTranslationModel: defaultTranslationModel ?? "",
-                nativeTranscriptionLocale: nativeTranscriptionLocale ?? "en-US",
-                nonLoopbackBindAcknowledged: nonLoopbackBindAcknowledged ?? false,
-                operatorPolling: OperatorPollingConfig(
-                    enabled: operatorPollingEnabled ?? false,
-                    baseURL: operatorPollingBaseURL ?? "",
-                    pollIntervalSeconds: operatorPollingIntervalSeconds ?? 5,
-                    leaseSeconds: operatorPollingLeaseSeconds ?? 60,
-                    transcriptionEnabled: operatorPollingTranscription ?? true,
-                    translationEnabled: operatorPollingTranslation ?? true,
-                    moderationEnabled: operatorPollingModeration ?? true
-                )
-            )
-        }
-    }
-}
-#else
-import Combine
-import Foundation
-
-/// iOS app state. The embedded HTTP server is macOS-only ("Pro"); on iOS the
-/// app is a review/translation client that polls the Operator, so this shim
-/// exists purely to satisfy the shared `@EnvironmentObject` plumbing without
-/// pulling in Hummingbird, GRDB, or the server stack.
-@MainActor
-final class ServerHost: ObservableObject {
-    init() {}
-    init(demo: Bool) {}
-
-    /// No server runs on iOS, so there is nothing to tear down.
-    func shutdown() async {}
-}
 #endif

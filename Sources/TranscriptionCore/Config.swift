@@ -77,9 +77,9 @@ public struct ServerConfig: Sendable, Equatable {
     /// acknowledge the risk in Settings before non-loopback binds take effect.
     public var nonLoopbackBindAcknowledged: Bool
 
-    /// Configuration for the Operator-pull worker. When enabled and valid,
-    /// the app polls a remote Operator for queued jobs and runs them
-    /// locally via loopback HTTP. The Operator's API token is stored
+    /// Configuration for the Operator push worker. When enabled and valid,
+    /// the app subscribes to a remote Operator for work notifications and runs
+    /// them locally via loopback HTTP. The Operator's API token is stored
     /// separately in Keychain (see `APIKeyAccount.operatorPull`).
     public var operatorPolling: OperatorPollingConfig
 
@@ -163,7 +163,7 @@ public struct ServerConfig: Sendable, Equatable {
             copy.transcriptionBackend = .proxy(upstream.strippingKeyIfInsecure())
         }
 
-        // Operator polling clamp
+        // Operator worker config clamp
         copy.operatorPolling = copy.operatorPolling.validated()
 
         return copy
@@ -362,7 +362,7 @@ public enum UpstreamURLSecurityError: Error, Sendable, Equatable {
 public struct TimeAmount: Sendable, Equatable {
     public let seconds: Double
     public init(seconds: Double) { self.seconds = seconds }
-    public static func seconds(_ s: Double) -> TimeAmount { .init(seconds: s) }
+    public static func seconds(_ value: Double) -> TimeAmount { .init(seconds: value) }
     public var asNanoseconds: Int64 { Int64(seconds * 1_000_000_000) }
 }
 

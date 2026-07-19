@@ -5,22 +5,12 @@ import NIOCore
 import NIOHTTP1
 import TranscriptionShared
 
-/// Minimal HTTP client for the Operator's `/v1/jobs/*` API. Abstracted
-/// behind a protocol so the worker can be unit-tested without a real
-/// Operator instance.
+/// Minimal HTTP client for the Operator push worker API. The worker receives
+/// message IDs from the status WebSocket, fetches per-message work input, then
+/// posts one local result per requested need.
 public protocol OperatorClient: Sendable {
-    /// Calls `GET /v1/jobs/next`. Returns nil on 204 (no work available).
-    func leaseNextJob() async throws -> OperatorJob?
-
-    /// Calls `POST /v1/jobs/{id}/succeed` with the encoded result.
-    func submitSuccess(jobID: String, leaseToken: String, result: OperatorJobResult) async throws
-
-    /// Calls `POST /v1/jobs/{id}/fail` with the sanitized error.
-    func submitFailure(jobID: String, leaseToken: String, error: OperatorJobError) async throws
-
-    /// Calls `POST /v1/jobs/{id}/heartbeat` to extend the lease. Reserved
-    /// for long-running jobs; the default worker doesn't issue this.
-    func heartbeat(jobID: String, leaseToken: String) async throws
+    func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput
+    func pushResult(messageID: String, transcriptionId: String?, result: OperatorJobResult) async throws
 }
 
 public enum OperatorClientError: Error, Sendable, Equatable {
@@ -28,133 +18,127 @@ public enum OperatorClientError: Error, Sendable, Equatable {
     case unauthorized
     case http(Int)
     case malformedResponse(String)
+    case missingTranscriptionId
 }
 
 /// Default `AsyncHTTPClient`-backed implementation.
 public final class HTTPOperatorClient: OperatorClient {
     private let httpClient: HTTPClient
     private let config: OperatorPollingConfig
-    /// Resolves the current `Authorization` header value (e.g.
-    /// `"Bearer <token>"`) per request, allowing the credential to refresh or
-    /// expire between polls. Returns `nil` when no valid session exists.
+    /// Resolves the current `Authorization` header value per request. Returns
+    /// `nil` when no valid Operator token exists.
     private let authHeaderProvider: @Sendable () async -> String?
     private let logger: Logger
     private let timeout: TimeAmount
-    private let capabilities: Set<OperatorJob.Kind>?
 
     public init(
         httpClient: HTTPClient,
         config: OperatorPollingConfig,
         authHeaderProvider: @escaping @Sendable () async -> String?,
         timeout: TimeAmount = .seconds(30),
-        capabilities: Set<OperatorJob.Kind>? = nil,
         logger: Logger = Logger(label: "operator-client")
     ) {
         self.httpClient = httpClient
         self.config = config
         self.authHeaderProvider = authHeaderProvider
         self.timeout = timeout
-        self.capabilities = capabilities
         self.logger = logger
     }
 
-    /// Convenience initializer for a static bearer token. Wraps the token in a
-    /// provider that returns the same `Authorization` header every call.
+    /// Convenience initializer for a static Operator API token.
     public convenience init(
         httpClient: HTTPClient,
         config: OperatorPollingConfig,
         token: String,
         timeout: TimeAmount = .seconds(30),
-        capabilities: Set<OperatorJob.Kind>? = nil,
         logger: Logger = Logger(label: "operator-client")
     ) {
         self.init(
             httpClient: httpClient,
             config: config,
-            authHeaderProvider: { "Bearer \(token)" },
+            authHeaderProvider: { OperatorPollingConfig.bearerAuthorizationHeader(for: token) },
             timeout: timeout,
-            capabilities: capabilities,
             logger: logger
         )
     }
 
-    /// The kinds we are willing to lease: the configured kinds, optionally
-    /// intersected with what this device can actually run. Order is stable.
-    private var effectiveKinds: [OperatorJob.Kind] {
-        let requested = config.requestedKindList
-        guard let capabilities else { return requested }
-        return requested.filter(capabilities.contains)
-    }
-
-    public func leaseNextJob() async throws -> OperatorJob? {
-        let kinds = effectiveKinds
-        // No leasable kinds means there is nothing we could run; never call
-        // `/jobs/next` with an empty `kinds` (the Operator treats that as
-        // "all kinds" and we'd lease work we can't perform).
-        guard !kinds.isEmpty else { return nil }
-        let kindsValue = kinds.map(\.rawValue).joined(separator: ",")
-        let path = "/v1/jobs/next?leaseSeconds=\(config.leaseSeconds)&kinds=\(kindsValue)"
-        var request = try await makeRequest(method: .GET, path: path)
+    public func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput {
+        var request = try await makeRequest(method: .GET, path: "/v1/worker/messages/\(escape(messageID))/work")
         request.headers.add(name: "Accept", value: "application/json")
         let response = try await execute(request)
         switch response.status.code {
-        case 204:
-            return nil
         case 200:
             let buffer = try await collect(response.body)
             let bytes = buffer.getBytes(at: buffer.readerIndex, length: buffer.readableBytes) ?? []
             do {
-                return try OperatorJob.decode(from: Data(bytes))
-            } catch let error as OperatorJob.DecodeError {
-                if case .malformed(let why) = error {
-                    throw OperatorClientError.malformedResponse(why)
-                }
-                throw OperatorClientError.malformedResponse("\(error)")
+                return try JSONDecoder().decode(OperatorWorkInput.self, from: Data(bytes))
+            } catch {
+                throw OperatorClientError.malformedResponse("work input: \(type(of: error))")
             }
         case 401, 403:
+            _ = try? await collect(response.body)
             throw OperatorClientError.unauthorized
         default:
+            _ = try? await collect(response.body)
             throw OperatorClientError.http(Int(response.status.code))
         }
     }
 
-    public func submitSuccess(jobID: String, leaseToken: String, result: OperatorJobResult) async throws {
-        let bodyData = try result.encode(leaseToken: leaseToken)
-        try await postJSON(path: "/v1/jobs/\(jobID)/succeed", body: bodyData)
+    public func pushResult(messageID: String, transcriptionId: String?, result: OperatorJobResult) async throws {
+        switch result {
+        case .transcription(let text, let language, let model):
+            let body: [String: Any] = [
+                "text": text,
+                "language": language ?? NSNull(),
+                "model": model ?? NSNull()
+            ]
+            try await postJSON(path: "/v1/worker/messages/\(escape(messageID))/transcription", body: body)
+        case .translation(let translatedText, let sourceLanguage, let targetLanguage, let model):
+            guard let transcriptionId, !transcriptionId.isEmpty else {
+                throw OperatorClientError.missingTranscriptionId
+            }
+            let body: [String: Any] = [
+                "transcriptionId": transcriptionId,
+                "translatedText": translatedText,
+                "sourceLanguage": sourceLanguage ?? NSNull(),
+                "targetLanguage": targetLanguage,
+                "model": model ?? NSNull()
+            ]
+            try await postJSON(path: "/v1/worker/messages/\(escape(messageID))/translation", body: body)
+        case .moderation(let flagged, let recommendation, let maxScore, let model):
+            let body: [String: Any] = [
+                "transcriptionId": transcriptionId ?? NSNull(),
+                "flagged": flagged,
+                "recommendation": normalizedRecommendation(recommendation),
+                "maxScore": max(0, min(1, maxScore)),
+                "categories": [String: Any](),
+                "model": model ?? NSNull()
+            ]
+            try await postJSON(path: "/v1/worker/messages/\(escape(messageID))/moderation", body: body)
+        }
     }
 
-    public func submitFailure(jobID: String, leaseToken: String, error: OperatorJobError) async throws {
-        let bodyData = try error.encode(leaseToken: leaseToken)
-        try await postJSON(path: "/v1/jobs/\(jobID)/fail", body: bodyData)
-    }
-
-    public func heartbeat(jobID: String, leaseToken: String) async throws {
-        let payload: [String: Any] = ["leaseToken": leaseToken]
-        let bodyData = try JSONSerialization.data(withJSONObject: payload)
-        try await postJSON(path: "/v1/jobs/\(jobID)/heartbeat", body: bodyData)
-    }
-
-    private func postJSON(path: String, body: Data) async throws {
+    private func postJSON(path: String, body: [String: Any]) async throws {
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
         var request = try await makeRequest(method: .POST, path: path)
         request.headers.add(name: "Content-Type", value: "application/json")
-        request.body = .bytes(ByteBuffer(bytes: body))
+        request.headers.add(name: "Accept", value: "application/json")
+        request.body = .bytes(ByteBuffer(bytes: bodyData))
         let response = try await execute(request)
+        _ = try? await collect(response.body)
         guard (200..<300).contains(Int(response.status.code)) else {
-            // Drain body so the connection can be reused.
-            _ = try? await collect(response.body)
             if response.status.code == 401 || response.status.code == 403 {
                 throw OperatorClientError.unauthorized
             }
             throw OperatorClientError.http(Int(response.status.code))
         }
-        // Drain to free the connection.
-        _ = try? await collect(response.body)
     }
 
     private func makeRequest(method: HTTPMethod, path: String) async throws -> HTTPClientRequest {
         let base = config.baseURL.hasSuffix("/") ? String(config.baseURL.dropLast()) : config.baseURL
         guard !base.isEmpty else { throw OperatorClientError.notConfigured }
-        guard let header = await authHeaderProvider() else {
+        guard config.usesSecureTokenTransport else { throw OperatorClientError.notConfigured }
+        guard let header = OperatorPollingConfig.bearerAuthorizationHeader(for: await authHeaderProvider()) else {
             throw OperatorClientError.unauthorized
         }
         var request = HTTPClientRequest(url: base + path)
@@ -170,7 +154,18 @@ public final class HTTPOperatorClient: OperatorClient {
     }
 
     private func collect(_ body: HTTPClientResponse.Body) async throws -> ByteBuffer {
-        // Bound at 8 MiB; the Operator should never return larger job payloads.
         try await body.collect(upTo: 8 * 1024 * 1024)
+    }
+
+    private func escape(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
+    }
+
+    private func normalizedRecommendation(_ value: String) -> String {
+        switch value.lowercased() {
+        case "approve", "allow", "allowed": return "approve"
+        case "reject", "block", "blocked": return "reject"
+        default: return "review"
+        }
     }
 }

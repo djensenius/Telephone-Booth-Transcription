@@ -7,16 +7,17 @@ import TranscriptionCore
 import Speech
 #endif
 
+// swiftlint:disable:next type_body_length
 struct SettingsView: View {
     @EnvironmentObject var host: ServerHost
     @State private var auth = AuthManager.shared
 
     @State private var transcriptionModels: [String] = []
     @State private var moderationModels: [String] = []
-    @State private var translationModels: [String] = []
+    @State var translationModels: [String] = []
     @State private var isLoadingTranscriptionModels = false
     @State private var isLoadingModerationModels = false
-    @State private var isLoadingTranslationModels = false
+    @State var isLoadingTranslationModels = false
 
     private enum BackendKind: String, CaseIterable, Identifiable {
         case proxy
@@ -191,10 +192,12 @@ struct SettingsView: View {
                 .pickerStyle(.inline)
 
                 if host.config.textTranslationBackend == .onDevice {
-                    Text("Text→English (`/v1/translations`) runs on-device with Apple " +
-                         "Intelligence — no upstream required. Returns " +
-                         "`503 on_device_unavailable` if Apple Intelligence is turned off " +
-                         "or unsupported on this device.")
+                    Text("""
+                         Text→English (`/v1/translations`) runs on-device with \
+                         Apple Intelligence — no upstream required. Returns \
+                         `503 on_device_unavailable` if Apple Intelligence is \
+                         turned off or unsupported on this device.
+                         """)
                         .font(.caption)
                         .foregroundStyle(Theme.Colors.textSecondary)
 
@@ -293,7 +296,7 @@ struct SettingsView: View {
                 }
             }
 
-            operatorPullSection
+            operatorWorkerSection
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -305,7 +308,7 @@ struct SettingsView: View {
         }
     }
 
-    private func reloadTranslationModels() async {
+    func reloadTranslationModels() async {
         isLoadingTranslationModels = true
         defer { isLoadingTranslationModels = false }
         translationModels = await host.fetchModels(
@@ -339,7 +342,7 @@ struct SettingsView: View {
 
     private func nativeLocales(for kind: BackendKind) -> [String] {
         #if canImport(Speech) && os(macOS)
-        // TODO: When `kind == .appleSpeechAnalyzer` we'd ideally surface
+        // Note: when `kind == .appleSpeechAnalyzer` we'd ideally surface
         // `SpeechTranscriber.supportedLocales` here, but that API is async
         // and the picker is built synchronously. As a pragmatic interim we
         // use `SFSpeechRecognizer.supportedLocales()` for both engines —
@@ -360,149 +363,7 @@ struct SettingsView: View {
         let name = Locale.current.localizedString(forIdentifier: identifier) ?? identifier
         return "\(name) (\(loc.identifier))"
     }
-
-    // MARK: - Text translation
-
-    @ViewBuilder
-    private var translationUpstreamFields: some View {
-        TextField("Base URL", text: Binding(
-            get: { host.config.translationUpstream.baseURL },
-            set: { host.config.translationUpstream.baseURL = $0 }
-        ))
-        SecureField("API key (optional)", text: Binding(
-            get: { host.translationAPIKey() },
-            set: { newValue in host.setTranslationAPIKey(newValue) }
-        ))
-        if case .failure = host.config.translationUpstream.validateSecurity() {
-            Label("HTTPS is required for remote upstreams with an API key. "
-                  + "The key will not be sent over this connection.",
-                  systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
-                .font(.caption)
-        }
-        HStack {
-            Picker("Default model", selection: Binding(
-                get: { host.config.defaultTranslationModel },
-                set: { host.config.defaultTranslationModel = $0 }
-            )) {
-                Text("(none — pass `model` per request)").tag("")
-                ForEach(translationModels, id: \.self) { Text($0).tag($0) }
-                if !host.config.defaultTranslationModel.isEmpty,
-                   !translationModels.contains(host.config.defaultTranslationModel) {
-                    Text(host.config.defaultTranslationModel)
-                        .tag(host.config.defaultTranslationModel)
-                }
-            }
-            Button {
-                Task { await reloadTranslationModels() }
-            } label: {
-                if isLoadingTranslationModels {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                }
-            }
-            .help("Refresh model list from upstream")
-        }
-        Text("Audio→English translation (`/v1/audio/translations`) always uses " +
-             "this upstream — there is no on-device audio-translation engine. " +
-             "Text translation uses it only when the backend above is set to " +
-             "Proxy. Default points at the same faster-whisper-server (`:8000`) " +
-             "as transcription.")
-            .font(.caption)
-            .foregroundStyle(Theme.Colors.textSecondary)
-    }
-
-    // MARK: - Operator pull worker
-
-    @ViewBuilder
-    private var operatorPullSection: some View {
-        Section("Operator pull worker") {
-            Toggle("Enable polling", isOn: Binding(
-                get: { host.config.operatorPolling.enabled },
-                set: { host.config.operatorPolling.enabled = $0 }
-            ))
-            Text("When on, this app periodically asks the Operator for "
-                 + "transcription, translation, and moderation jobs and posts "
-                 + "results back. Use this when the Operator can't reach the Mac "
-                 + "directly.")
-                .font(.caption)
-                .foregroundStyle(Theme.Colors.textSecondary)
-
-            if auth.isSignedIn {
-                Label("Polling as your signed-in Operator account", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
-            } else {
-                Label("Sign in (Account, above) to enable polling — the worker "
-                      + "authenticates as your Operator account.",
-                      systemImage: "person.crop.circle.badge.exclamationmark")
-                    .foregroundStyle(.orange)
-                    .font(.caption)
-            }
-
-            Stepper(value: Binding(
-                get: { host.config.operatorPolling.pollIntervalSeconds },
-                set: { host.config.operatorPolling.pollIntervalSeconds = $0 }
-            ), in: OperatorPollingConfig.minPollInterval...OperatorPollingConfig.maxPollInterval) {
-                LabeledContent("Poll interval",
-                               value: "\(host.config.operatorPolling.pollIntervalSeconds) s")
-            }
-
-            Stepper(value: Binding(
-                get: { host.config.operatorPolling.leaseSeconds },
-                set: { host.config.operatorPolling.leaseSeconds = $0 }
-            ), in: OperatorPollingConfig.minLease...OperatorPollingConfig.maxLease, step: 10) {
-                LabeledContent("Lease window",
-                               value: "\(host.config.operatorPolling.leaseSeconds) s")
-            }
-
-            Toggle("Handle transcription jobs", isOn: Binding(
-                get: { host.config.operatorPolling.transcriptionEnabled },
-                set: { host.config.operatorPolling.transcriptionEnabled = $0 }
-            ))
-            Toggle("Handle translation jobs", isOn: Binding(
-                get: { host.config.operatorPolling.translationEnabled },
-                set: { host.config.operatorPolling.translationEnabled = $0 }
-            ))
-            Toggle("Handle moderation jobs", isOn: Binding(
-                get: { host.config.operatorPolling.moderationEnabled },
-                set: { host.config.operatorPolling.moderationEnabled = $0 }
-            ))
-
-            workerStatusRow
-        }
-    }
-
-    @ViewBuilder
-    private var workerStatusRow: some View {
-        if let status = host.operatorWorkerStatus {
-            LabeledContent("Worker status", value: statusDescription(status))
-            if let code = status.lastErrorCode {
-                LabeledContent("Last error", value: code)
-                    .foregroundStyle(.red)
-            }
-            if let jobID = status.lastJobID {
-                LabeledContent("Last job",
-                               value: "\(status.lastJobKind?.rawValue ?? "?") · \(jobID)")
-            }
-        } else {
-            LabeledContent("Worker status", value: "stopped")
-                .foregroundStyle(Theme.Colors.textSecondary)
-        }
-    }
-
-    private func statusDescription(_ status: OperatorWorker.Status) -> String {
-        switch status.phase {
-        case .stopped: return "stopped"
-        case .idle: return "idle"
-        case .polling: return "polling"
-        case .running: return "running"
-        case .error: return "error"
-        }
-    }
 }
-
 #Preview {
     SettingsView()
         .environmentObject(ServerHost(demo: true))
@@ -511,7 +372,7 @@ struct SettingsView: View {
 #else
 
 /// iOS settings: account-only. The transcription server, upstreams, and the
-/// Operator pull worker are macOS ("Pro") features, so on iOS the app is a
+/// Operator push worker are macOS ("Pro") features, so on iOS the app is a
 /// review/translation client that just needs an Operator sign-in to poll.
 struct SettingsView: View {
     var body: some View {

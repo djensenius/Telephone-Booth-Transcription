@@ -19,7 +19,7 @@ import TranscriptionShared
 ///
 /// This is **not** an OpenAI-standard endpoint. The OpenAI-compatible audio
 /// translation lives at `POST /v1/audio/translations`. The text endpoint
-/// exists for callers (e.g. the planned operator-pull worker) that already
+/// exists for callers (e.g. the operator push worker) that already
 /// have a transcript and want English text without re-uploading audio.
 public struct TextTranslationRoute<Context: RequestContext>: Sendable {
     public let translator: TextTranslator

@@ -3,7 +3,7 @@ import Logging
 import TranscriptionShared
 
 /// `OperatorJobDispatcher` that runs jobs entirely in-process against injected
-/// on-device services — no loopback HTTP. Used by pull/sync clients (and usable
+/// on-device services — no loopback HTTP. Used by sync clients (and usable
 /// on macOS). For transcription it streams the audio to a verified temp file
 /// first; translation and moderation operate on the inline payload text.
 ///

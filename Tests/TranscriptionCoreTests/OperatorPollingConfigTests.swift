@@ -14,22 +14,22 @@ struct OperatorPollingConfigTests {
         #expect(cfg.moderationEnabled)
     }
 
-    @Test func validatedClampsPollAndLease() {
+    @Test func validatedClampsReconnectDelayAndLegacyLease() {
         var cfg = OperatorPollingConfig(
             enabled: true,
             baseURL: "https://operator.example.com",
             pollIntervalSeconds: 9999,
             leaseSeconds: 1
         )
-        let v = cfg.validated()
-        #expect(v.pollIntervalSeconds == OperatorPollingConfig.maxPollInterval)
-        #expect(v.leaseSeconds == OperatorPollingConfig.minLease)
+        let validated = cfg.validated()
+        #expect(validated.pollIntervalSeconds == OperatorPollingConfig.maxPollInterval)
+        #expect(validated.leaseSeconds == OperatorPollingConfig.minLease)
 
         cfg.pollIntervalSeconds = 0
         cfg.leaseSeconds = 100_000
-        let v2 = cfg.validated()
-        #expect(v2.pollIntervalSeconds == OperatorPollingConfig.minPollInterval)
-        #expect(v2.leaseSeconds == OperatorPollingConfig.maxLease)
+        let clamped = cfg.validated()
+        #expect(clamped.pollIntervalSeconds == OperatorPollingConfig.minPollInterval)
+        #expect(clamped.leaseSeconds == OperatorPollingConfig.maxLease)
     }
 
     @Test func isRunnableRequiresHTTPBaseURL() {
@@ -43,6 +43,27 @@ struct OperatorPollingConfigTests {
         #expect(cfg.isRunnableWithToken)
         cfg.enabled = false
         #expect(cfg.isRunnableWithToken == false)
+    }
+
+    @Test func remoteHTTPIsNotRunnableWithOperatorToken() {
+        let remote = OperatorPollingConfig(enabled: true, baseURL: "http://operator.example.com")
+        #expect(remote.isRunnableWithToken == false)
+        #expect(remote.validated().baseURL == "")
+
+        let loopback = OperatorPollingConfig(enabled: true, baseURL: "http://localhost:8080")
+        #expect(loopback.isRunnableWithToken)
+        #expect(loopback.validated().baseURL == "http://localhost:8080")
+
+        let ipv6Loopback = OperatorPollingConfig(enabled: true, baseURL: "http://[::1]:8080")
+        #expect(ipv6Loopback.isRunnableWithToken)
+    }
+
+    @Test func authorizationHeaderUsesBearerSchemeWithoutDoublePrefixing() {
+        let tokenHeader = OperatorPollingConfig.bearerAuthorizationHeader(for: "operator-token")
+        let existingHeader = OperatorPollingConfig.bearerAuthorizationHeader(for: "  Bearer operator-token  ")
+        #expect(tokenHeader == "Bearer operator-token")
+        #expect(existingHeader == "Bearer operator-token")
+        #expect(OperatorPollingConfig.bearerAuthorizationHeader(for: "") == nil)
     }
 
     @Test func requestedKindsFollowsToggles() {
