@@ -25,12 +25,28 @@ public final class URLSessionAudioFetcher: AudioFetching {
     private let allowInsecureURLs: Bool
     private let logger: Logger
 
+    /// Ephemeral, non-caching, credential-free session.
+    ///
+    /// `URLSession.shared` keeps a persistent URL cache and shared
+    /// cookie/credential storage, so a cacheable audio response could survive on
+    /// disk after `AudioFileStaging` deleted its temp file — audio outliving the
+    /// staging lifecycle is exactly what that cleanup exists to prevent.
+    private static func makeDefaultSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        return URLSession(configuration: configuration)
+    }
+
     public init(
-        urlSession: URLSession = .shared,
+        urlSession: URLSession? = nil,
         allowInsecureURLs: Bool = false,
         logger: Logger = Logger(label: "audio-fetcher-urlsession")
     ) {
-        self.urlSession = urlSession
+        self.urlSession = urlSession ?? Self.makeDefaultSession()
         self.allowInsecureURLs = allowInsecureURLs
         self.logger = logger
     }
