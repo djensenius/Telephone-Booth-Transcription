@@ -57,6 +57,8 @@ public struct OperatorWorkInput: Sendable, Equatable, Decodable {
     public struct Transcription: Sendable, Equatable, Decodable {
         public var id: String
         public var text: String
+        /// Row status when the Operator reports it (`pending`, `succeeded`, …).
+        public var status: String?
         public var language: String?
         public var model: String?
         public var translationStatus: String?
@@ -65,9 +67,10 @@ public struct OperatorWorkInput: Sendable, Equatable, Decodable {
 
         public init(id: String, text: String, language: String? = nil, model: String? = nil,
                     translationStatus: String? = nil, translatedText: String? = nil,
-                    moderationText: String? = nil) {
+                    moderationText: String? = nil, status: String? = nil) {
             self.id = id
             self.text = text
+            self.status = status
             self.language = language
             self.model = model
             self.translationStatus = translationStatus

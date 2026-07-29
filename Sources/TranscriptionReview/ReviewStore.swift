@@ -67,6 +67,9 @@ public final class ReviewStore {
 
     private struct QueuedTranscription {
         var baseline: String?
+        /// Status of the baseline row, so an Operator that fills a pre-created
+        /// pending row in place (same id, pending → succeeded) still clears.
+        var baselineStatus: TranscriptionStatus?
         var queuedAt: Date
     }
 
@@ -155,10 +158,15 @@ public final class ReviewStore {
         // reconciler compares transcript timestamps so such a poll can't clear
         // the marker early either.
         let baseline = message.latestTranscription?.id
+        let baselineStatus = message.latestTranscription?.status
         let queuedAt = now()
         if await rerunner.requestTranscription(messageID: message.id) {
             queuedTranscriptions.insert(message.id)
-            queuedTranscriptionState[message.id] = .init(baseline: baseline, queuedAt: queuedAt)
+            queuedTranscriptionState[message.id] = .init(
+                baseline: baseline,
+                baselineStatus: baselineStatus,
+                queuedAt: queuedAt
+            )
         } else {
             actionError = "Couldn’t start transcription: the worker isn’t running, "
                 + "this message is already queued, or the worker points at a "
@@ -249,11 +257,16 @@ public final class ReviewStore {
             // postdates the request is taken as this request's result. In the
             // worst case the button re-enables a little early — the marker is a
             // UI affordance, and a second deliberate re-run is always allowed.
-            if let latest = message.latestTranscription,
-               latest.status == .succeeded,
-               latest.id != state.baseline,
-               latest.createdAt >= state.queuedAt.addingTimeInterval(-Self.clockSkewAllowance) {
-                clearQueuedTranscription(id)
+            if let latest = message.latestTranscription, latest.status == .succeeded {
+                // Either a genuinely newer row, or the baseline row itself
+                // finishing in place (the pre-created pending row path).
+                let isNewRow = latest.id != state.baseline
+                let baselineFinished = latest.id == state.baseline && state.baselineStatus != .succeeded
+                if baselineFinished
+                    || (isNewRow
+                        && latest.createdAt >= state.queuedAt.addingTimeInterval(-Self.clockSkewAllowance)) {
+                    clearQueuedTranscription(id)
+                }
             }
         }
     }

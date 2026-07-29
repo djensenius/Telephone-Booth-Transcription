@@ -547,6 +547,31 @@ struct OperatorWorkerDiscoveryTests {
         #expect(pushes.map(\.transcriptionID) == ["pending-row"])
     }
 
+    @Test func aDeliberateRerunNeverFillsAnExistingRowIn() async throws {
+        let client = DiscoveryClient(pages: [OperatorWorkListPage(items: [])])
+        // A succeeded but silent transcript looks empty; a re-run must still
+        // create a new history row rather than overwrite it.
+        await client.setInput(
+            OperatorWorkInput(
+                id: "s1",
+                status: "pending",
+                audio: .init(url: "https://example.invalid/audio.flac",
+                             sha256: String(repeating: "b", count: 64)),
+                transcription: .init(id: "silent-row", text: "", status: "succeeded")
+            ),
+            for: "s1"
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        _ = await worker.requestTranscription(messageID: "s1")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        #expect(await client.pushes().map(\.transcriptionID) == [nil])
+    }
+
     @Test func discoveryFollowsPaginationCursors() async throws {
         let client = DiscoveryClient(pages: [
             OperatorWorkListPage(items: [OperatorWorkListItem(id: "p1", status: "pending")], nextCursor: "c1"),

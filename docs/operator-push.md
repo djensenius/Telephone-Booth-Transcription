@@ -112,13 +112,17 @@ rather than overwrite the previous one. The Operator keeps the history and the
 newest succeeded row wins downstream.
 
 The one exception is backwards compatibility: if the fetched work input still
-carries a transcription row whose `text` is empty, the Operator pre-created a
-pending row for this job, and the result is posted with that `transcriptionId`
-so the row is filled in. That keeps this app working against an Operator that
-hasn't shipped the unsolicited-post change yet.
+carries a pending transcription row (reported `status`, or an empty row when the
+Operator reports no status), that row was pre-created for this job and the
+result is posted with its `transcriptionId` so the row is filled in. That keeps
+this app working against an Operator that hasn't shipped the unsolicited-post
+change yet. A deliberate re-run never fills a row in — it always posts a new
+succeeded row.
 
 ## Discovery pass
 
+- Envelope work is queued ahead of discovered work, but only three times in a
+  row, so a busy Operator can't starve the discovery queue.
 - Interval: the configured **Reconnect / discovery delay**, with its own capped
   exponential backoff (up to 300 s) on failure. Discovery failures don't disturb
   the WebSocket reconnect schedule or its backoff.

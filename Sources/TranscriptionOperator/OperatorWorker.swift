@@ -389,14 +389,25 @@ public actor OperatorWorker {
         return true
     }
 
-    /// Envelope work goes ahead of any discovered work already waiting.
+    /// Envelope work goes ahead of any discovered work already waiting, but
+    /// only `maxEnvelopeJumps` times in a row: a steady stream of envelopes must
+    /// not starve discovered uploads, which are the whole point of the pass.
     private func insert(_ job: QueuedJob) {
-        if job.source == .envelope, let first = jobQueue.firstIndex(where: { $0.source == .discovery }) {
-            jobQueue.insert(job, at: first)
-        } else {
+        guard job.source == .envelope,
+              envelopeJumps < Self.maxEnvelopeJumps,
+              let first = jobQueue.firstIndex(where: { $0.source == .discovery }) else {
             jobQueue.append(job)
+            if job.source == .discovery { envelopeJumps = 0 }
+            return
         }
+        envelopeJumps += 1
+        jobQueue.insert(job, at: first)
     }
+
+    /// Consecutive envelope jobs that have jumped the queue ahead of a
+    /// discovered one; reset whenever a discovered job is queued or dequeued.
+    private var envelopeJumps = 0
+    private static let maxEnvelopeJumps = 3
 
     private var queuedDiscoveryCount: Int {
         jobQueue.reduce(0) { $0 + ($1.source == .discovery ? 1 : 0) }
@@ -411,7 +422,7 @@ public actor OperatorWorker {
 
     private func drain() async {
         while !stopRequested && !Task.isCancelled, let job = dequeue() {
-            await runNeed(job.kind, messageID: job.messageID)
+            await runNeed(job.kind, messageID: job.messageID, force: job.force)
             runningKey = nil
             if let deferred = deferredJobs.removeValue(forKey: job.key) {
                 enqueue(deferred)
@@ -424,12 +435,13 @@ public actor OperatorWorker {
     private func dequeue() -> QueuedJob? {
         guard !jobQueue.isEmpty else { return nil }
         let job = jobQueue.removeFirst()
+        if job.source == .discovery { envelopeJumps = 0 }
         queuedKeys.remove(job.key)
         runningKey = job.key
         return job
     }
 
-    private func runNeed(_ need: OperatorJob.Kind, messageID: String) async {
+    private func runNeed(_ need: OperatorJob.Kind, messageID: String, force: Bool = false) async {
         jobInFlight = true
         defer { jobInFlight = false }
         setPhase(.running, jobID: messageID, kind: need)
@@ -442,7 +454,7 @@ public actor OperatorWorker {
             let result = try await dispatcher.execute(job: job)
             try await client.pushResult(
                 messageID: messageID,
-                transcriptionId: transcriptionID(for: need, input: input),
+                transcriptionId: transcriptionID(for: need, input: input, force: force),
                 result: result
             )
             recordSuccess(jobID: messageID, kind: need)
@@ -459,14 +471,21 @@ public actor OperatorWorker {
     /// A transcription result is normally unsolicited — the Operator no longer
     /// pre-creates a pending row, and a re-run deliberately creates a new
     /// succeeded row rather than overwriting the old one. The exception is an
-    /// Operator that still pre-creates an empty pending row: filling that row in
-    /// keeps this app working against a deployment that hasn't shipped the
-    /// unsolicited-post change yet.
-    private func transcriptionID(for need: OperatorJob.Kind, input: OperatorWorkInput) -> String? {
+    /// Operator that still pre-creates a pending row: filling that row in keeps
+    /// this app working against a deployment that hasn't shipped the
+    /// unsolicited-post change yet. A deliberate re-run never fills a row in.
+    private func transcriptionID(for need: OperatorJob.Kind,
+                                 input: OperatorWorkInput,
+                                 force: Bool) -> String? {
         guard need == .transcription else { return input.transcription?.id }
-        guard let existing = input.transcription,
-              existing.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return existing.id
+        guard !force, let existing = input.transcription else { return nil }
+        if let status = existing.status?.lowercased(), !status.isEmpty {
+            return status == "pending" ? existing.id : nil
+        }
+        // No status reported: an empty row can only be one awaiting a result,
+        // since a succeeded silent row is filtered out of discovery and a
+        // re-run is already excluded above.
+        return existing.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? existing.id : nil
     }
 
     private func sleepBackoff() async {

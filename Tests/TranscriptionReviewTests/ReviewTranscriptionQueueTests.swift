@@ -158,6 +158,37 @@ struct ReviewTranscriptionQueueTests {
         #expect(untranscribed?.needsTranscription == true)
     }
 
+    /// A message whose transcription row was pre-created by a legacy Operator:
+    /// the same row id transitions from `pending` to `succeeded` in place.
+    private static let seedPendingRow = """
+    {"items":[{"id":"inplace","status":"pending","questionId":null,"notes":null,"createdAt":"2026-01-02T03:04:05Z","receivedAt":null,"audio":{"url":"https://e.com/i.flac","sha256":"i","durationMs":null},"latestTranscription":{"id":"tp","messageId":"inplace","provider":"mac_app","model":null,"status":"pending","text":null,"language":null,"durationMs":null,"latencyMs":null,"error":null,"requestedById":null,"createdAt":"2026-01-02T03:04:07Z","completedAt":null,"translationStatus":null,"translatedText":null,"translatedLanguage":null,"translationProvider":null,"translationModel":null,"translationError":null,"translationLatencyMs":null,"translationCompletedAt":null},"latestModeration":null}]}
+    """
+
+    private static let seedPendingRowSucceeded = """
+    {"items":[{"id":"inplace","status":"pending","questionId":null,"notes":null,"createdAt":"2026-01-02T03:04:05Z","receivedAt":null,"audio":{"url":"https://e.com/i.flac","sha256":"i","durationMs":null},"latestTranscription":{"id":"tp","messageId":"inplace","provider":"mac_app","model":null,"status":"succeeded","text":"hola","language":null,"durationMs":null,"latencyMs":null,"error":null,"requestedById":null,"createdAt":"2026-01-02T03:04:07Z","completedAt":null,"translationStatus":null,"translatedText":null,"translatedLanguage":null,"translationProvider":null,"translationModel":null,"translationError":null,"translationLatencyMs":null,"translationCompletedAt":null},"latestModeration":null}]}
+    """
+
+    @Test("a pre-created row that succeeds in place clears the queued state")
+    @MainActor
+    func inPlaceTranscriptionClearsTheQueuedState() async {
+        let client = QueueClient(seed: Self.seedPendingRow)
+        // The clock sits well after the row's createdAt, so only the recorded
+        // baseline status can tell the store the run finished.
+        let store = ReviewStore(client: client, pollInterval: .seconds(1),
+                                now: { Date(timeIntervalSince1970: 1_800_000_000) })
+        let rerunner = StubRerunner()
+        store.transcriptionRerunner = rerunner
+        await store.refresh()
+
+        let target = try! #require(store.messages.first)
+        await store.requestTranscription(target)
+        #expect(store.isTranscriptionQueued("inplace"))
+
+        client.seed = Self.seedPendingRowSucceeded
+        await store.refresh()
+        #expect(store.isTranscriptionQueued("inplace") == false)
+    }
+
     @Test("requesting transcription marks the message queued until a newer transcript lands")
     @MainActor
     func requestTranscriptionQueuesAndClears() async {
