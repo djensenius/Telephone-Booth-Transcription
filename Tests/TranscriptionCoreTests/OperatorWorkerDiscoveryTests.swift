@@ -478,6 +478,48 @@ struct OperatorWorkerDiscoveryTests {
         #expect(ids.filter { $0 == "r2" }.count == 1)
     }
 
+    @Test func aManualRerunWorksWhileTranscriptionDiscoveryIsDisabled() async throws {
+        let client = DiscoveryClient()
+        await client.setInput(audioInput(id: "d1"), for: "d1")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel(),
+                                kinds: [.translation, .moderation])
+
+        await worker.start()
+        let accepted = await worker.requestTranscription(messageID: "d1")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        // Forced work bypasses the per-kind enable filter, so the Review button
+        // keeps working even with the transcription realm switched off.
+        #expect(accepted)
+        #expect(await dispatcher.recorded().map(\.id) == ["d1"])
+        #expect(await client.calls().isEmpty)
+    }
+
+    @Test func aManualRerunBypassesAnExhaustedDiscoveryBudget() async throws {
+        let client = DiscoveryClient()
+        await client.setRepeatingPage(
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "e1", status: "pending")])
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        // Every discovered attempt fails (no scripted input), so the budget runs
+        // out; the manual re-run must still be accepted afterwards.
+        try await Task.sleep(nanoseconds: 4_500_000_000)
+        let capped = await client.attempts(for: "e1")
+        await client.setInput(audioInput(id: "e1"), for: "e1")
+        let accepted = await worker.requestTranscription(messageID: "e1")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        #expect(capped == 3)
+        #expect(accepted)
+        #expect(await dispatcher.recorded().map(\.id) == ["e1"])
+    }
+
     @Test func discoveryFollowsPaginationCursors() async throws {
         let client = DiscoveryClient(pages: [
             OperatorWorkListPage(items: [OperatorWorkListItem(id: "p1", status: "pending")], nextCursor: "c1"),

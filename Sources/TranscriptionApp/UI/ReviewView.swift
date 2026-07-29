@@ -406,7 +406,8 @@ private struct ReviewRow: View {
     private var transcriptionStateText: String {
         if message.transcriptionIsSilent { return "Silent" }
         if message.hasSucceededTranscription { return "Transcribed" }
-        if message.transcriptionIsUnfinished { return "Transcription unfinished" }
+        if message.transcriptionFailed { return "Transcription failed" }
+        if message.transcriptionIsUnfinished { return "Transcribing…" }
         return "No transcription"
     }
 

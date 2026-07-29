@@ -274,6 +274,12 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
         return latest.status != .succeeded
     }
 
+    /// True when the newest transcription attempt failed. Distinct from a run
+    /// still in progress: this one is finished and can be retried now.
+    public var transcriptionFailed: Bool {
+        latestTranscription?.status == .failed
+    }
+
     /// True when transcription succeeded but produced no text — a silent
     /// recording, which is meaningfully different from "not transcribed yet".
     public var transcriptionIsSilent: Bool {
