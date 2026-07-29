@@ -1,0 +1,658 @@
+import Foundation
+import Logging
+import Testing
+import TranscriptionOperator
+import TranscriptionShared
+
+/// Covers the app-initiated transcription path: the Operator no longer
+/// broadcasts `work` envelopes for new uploads, so the worker discovers
+/// messages itself and posts results unsolicited.
+@Suite("OperatorWorker discovery")
+struct OperatorWorkerDiscoveryTests {
+    actor DiscoveryClient: OperatorClient {
+        var pages: [OperatorWorkListPage]
+        var inputs: [String: OperatorWorkInput] = [:]
+        var pushCalls: [PushCall] = []
+        var listCalls: [OperatorWorkNeeds] = []
+        var listCursors: [String?] = []
+        var fetchAttempts: [String: Int] = [:]
+        /// When set, every pass lists this page again — the Operator has not
+        /// stopped advertising the message.
+        var repeatingPage: OperatorWorkListPage?
+        var listError: (any Error)?
+
+        init(pages: [OperatorWorkListPage] = []) {
+            self.pages = pages
+        }
+
+        func setInput(_ input: OperatorWorkInput, for id: String) { inputs[id] = input }
+        func setListError(_ error: any Error) { listError = error }
+        func calls() -> [OperatorWorkNeeds] { listCalls }
+        func cursors() -> [String?] { listCursors }
+        func attempts(for id: String) -> Int { fetchAttempts[id] ?? 0 }
+        func setRepeatingPage(_ page: OperatorWorkListPage) { repeatingPage = page }
+        func pushes() -> [PushCall] { pushCalls }
+
+        nonisolated func listWork(
+            needs: OperatorWorkNeeds,
+            limit: Int,
+            cursor: String?
+        ) async throws -> OperatorWorkListPage {
+            try await self.nextPage(needs: needs, cursor: cursor)
+        }
+
+        func nextPage(needs: OperatorWorkNeeds, cursor: String?) throws -> OperatorWorkListPage {
+            listCalls.append(needs)
+            listCursors.append(cursor)
+            if let listError { throw listError }
+            guard !pages.isEmpty else { return repeatingPage ?? OperatorWorkListPage(items: []) }
+            return pages.removeFirst()
+        }
+
+        nonisolated func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput {
+            try await self.scriptedInput(messageID: messageID)
+        }
+
+        func scriptedInput(messageID: String) throws -> OperatorWorkInput {
+            fetchAttempts[messageID, default: 0] += 1
+            guard let input = inputs[messageID] else {
+                throw OperatorClientError.malformedResponse("missing scripted input")
+            }
+            return input
+        }
+
+        nonisolated func pushResult(
+            messageID: String,
+            transcriptionId: String?,
+            result: OperatorJobResult
+        ) async throws {
+            await self.record(messageID: messageID, transcriptionId: transcriptionId, result: result)
+        }
+
+        func record(messageID: String, transcriptionId: String?, result: OperatorJobResult) {
+            pushCalls.append(.init(messageID: messageID, transcriptionID: transcriptionId, result: result))
+        }
+    }
+
+    /// A channel that connects but never yields a `work` envelope on its own —
+    /// exactly the new Operator behaviour for a freshly landed upload. Envelopes
+    /// pushed before `connect()` are buffered so tests can't race the loop.
+    actor SilentChannel: OperatorWorkChannel {
+        var continuation: AsyncStream<OperatorWorkEnvelope>.Continuation?
+        var pending: [OperatorWorkEnvelope] = []
+
+        nonisolated func connect() async throws -> AsyncStream<OperatorWorkEnvelope> {
+            await self.openStream()
+        }
+
+        func openStream() -> AsyncStream<OperatorWorkEnvelope> {
+            let pair = AsyncStream<OperatorWorkEnvelope>.makeStream(of: OperatorWorkEnvelope.self)
+            continuation = pair.continuation
+            for envelope in pending { pair.continuation.yield(envelope) }
+            pending.removeAll()
+            return pair.stream
+        }
+
+        func yield(_ envelope: OperatorWorkEnvelope) {
+            if let continuation {
+                continuation.yield(envelope)
+            } else {
+                pending.append(envelope)
+            }
+        }
+
+        nonisolated func disconnect() async { await self.close() }
+        func close() {
+            continuation?.finish()
+            continuation = nil
+        }
+    }
+
+    actor RecordingDispatcher: OperatorJobDispatcher {
+        var jobs: [OperatorJob] = []
+        var result: OperatorJobResult = .transcription(text: "bonjour", language: "fr", model: nil)
+        /// Lets a test hold a job in flight long enough to observe queue order.
+        var delayNanos: UInt64 = 0
+        private var startWaiters: [(threshold: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+        func setResult(_ value: OperatorJobResult) { result = value }
+        func setDelay(nanos: UInt64) { delayNanos = nanos }
+        func recorded() -> [OperatorJob] { jobs }
+
+        nonisolated func execute(job: OperatorJob) async throws -> OperatorJobResult {
+            await self.run(job: job)
+        }
+
+        /// Suspends until at least `count` jobs have entered execution, so tests
+        /// can act on an in-flight job without relying on wall-clock timing.
+        func waitForJobStart(count: Int = 1) async {
+            guard jobs.count < count else { return }
+            await withCheckedContinuation { continuation in
+                startWaiters.append((count, continuation))
+            }
+        }
+
+        func run(job: OperatorJob) async -> OperatorJobResult {
+            jobs.append(job)
+            let started = jobs.count
+            startWaiters.removeAll { waiter in
+                guard started >= waiter.threshold else { return false }
+                waiter.continuation.resume()
+                return true
+            }
+            if delayNanos > 0 { try? await Task.sleep(nanoseconds: delayNanos) }
+            return result
+        }
+    }
+
+    private func audioInput(id: String, transcriptionID: String? = nil) -> OperatorWorkInput {
+        OperatorWorkInput(
+            id: id,
+            status: "pending",
+            audio: .init(url: "https://example.invalid/audio.flac", sha256: String(repeating: "a", count: 64)),
+            transcription: transcriptionID.map { .init(id: $0, text: "bonjour", language: "fr") }
+        )
+    }
+
+    private func makeWorker(
+        client: any OperatorClient,
+        dispatcher: any OperatorJobDispatcher,
+        channel: any OperatorWorkChannel,
+        kinds: Set<OperatorJob.Kind> = Set(OperatorJob.Kind.allCases),
+        clock: (@Sendable () -> Date)? = nil
+    ) -> OperatorWorker {
+        OperatorWorker(
+            client: client,
+            dispatcher: dispatcher,
+            workChannel: channel,
+            reconnectBaseSeconds: 1,
+            enabledKinds: kinds,
+            logger: Logger(label: "test"),
+            clock: clock ?? { Date() }
+        )
+    }
+
+    /// A clock a test can move forward without waiting.
+    final class TestClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = Date(timeIntervalSince1970: 1_800_000_000)
+
+        var now: Date {
+            lock.lock(); defer { lock.unlock() }
+            return value
+        }
+
+        func advance(by seconds: TimeInterval) {
+            lock.lock(); defer { lock.unlock() }
+            value = value.addingTimeInterval(seconds)
+        }
+    }
+
+    @Test func aRepeatedlyFailingMessageIsCappedThenRetriedAfterTheCooldown() async throws {
+        let clock = TestClock()
+        let client = DiscoveryClient()
+        // The message is listed on every pass but its input always fails, so the
+        // job never succeeds and the attempt cap is what stops the hot loop.
+        await client.setRepeatingPage(
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "f1", status: "pending")])
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel(),
+                                clock: { clock.now })
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 4_500_000_000)
+        let capped = await client.attempts(for: "f1")
+        #expect(capped == 3)
+
+        clock.advance(by: 1801)
+        try await Task.sleep(nanoseconds: 2_500_000_000)
+        let afterCooldown = await client.attempts(for: "f1")
+        await worker.stop()
+
+        #expect(afterCooldown > capped)
+    }
+
+    @Test func discoveryTranscribesWithoutAnyWorkEnvelope() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "m1", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "m1"), for: "m1")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.map(\.kind) == [.transcription])
+        let pushes = await client.pushes()
+        #expect(pushes.count == 1)
+        #expect(pushes.first?.messageID == "m1")
+        // Unsolicited: no pending transcription row exists to update.
+        #expect(pushes.first?.transcriptionID == nil)
+        let needs = await client.calls()
+        #expect(needs.allSatisfy { $0 == .transcription })
+
+        let status = await worker.currentStatus()
+        #expect(status.lastDiscoveredCount == 1)
+        #expect(status.lastDiscoveryAt != nil)
+    }
+
+    @Test func discoverySkipsMessagesThatAlreadyHaveATranscription() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [
+                OperatorWorkListItem(id: "done", status: "pending", latestTranscriptionStatus: "succeeded"),
+                OperatorWorkListItem(id: "todo", status: "received", latestTranscriptionStatus: "failed")
+            ])
+        ])
+        await client.setInput(audioInput(id: "todo"), for: "todo")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.map(\.id) == ["todo"])
+    }
+
+    @Test func manualRerunTranscribesAnAlreadyTranscribedMessage() async throws {
+        let client = DiscoveryClient()
+        await client.setInput(audioInput(id: "m9", transcriptionID: "tr-old"), for: "m9")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        let accepted = await worker.requestTranscription(messageID: "m9")
+        #expect(accepted)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.map(\.kind) == [.transcription])
+        let pushes = await client.pushes()
+        #expect(pushes.count == 1)
+        // A re-run creates a new succeeded row rather than updating `tr-old`.
+        #expect(pushes.first?.transcriptionID == nil)
+    }
+
+    @Test func manualRerunIsRejectedWhenTheWorkerIsNotRunning() async throws {
+        let worker = makeWorker(
+            client: DiscoveryClient(),
+            dispatcher: RecordingDispatcher(),
+            channel: SilentChannel()
+        )
+        let accepted = await worker.requestTranscription(messageID: "m1")
+        #expect(!accepted)
+    }
+
+    @Test func envelopeAndDiscoveryForTheSameMessageRunOnce() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "dup", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "dup"), for: "dup")
+        let dispatcher = RecordingDispatcher()
+        let channel = SilentChannel()
+        // Buffered before the worker starts, so the envelope is guaranteed to be
+        // delivered the moment the socket loop connects — racing the discovery
+        // pass for the same message, which is exactly what's under test.
+        await channel.yield(.init(messageId: "dup", needs: [.transcription]))
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.count == 1)
+    }
+
+    @Test func aTranslationEnvelopeStillRunsAlongsideDiscovery() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "m1", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "m1"), for: "m1")
+        await client.setInput(audioInput(id: "m2", transcriptionID: "tr-m2"), for: "m2")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setResult(
+            .translation(translatedText: "hello", sourceLanguage: "fr", targetLanguage: "en", model: nil)
+        )
+        let channel = SilentChannel()
+        await channel.yield(.init(messageId: "m2", needs: [.translation]))
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let kinds = Set(await dispatcher.recorded().map(\.kind))
+        #expect(kinds == [.transcription, .translation])
+        // Translation results still reference the fetched transcription row.
+        let pushes = await client.pushes()
+        let translation = pushes.first { $0.messageID == "m2" }
+        #expect(translation?.transcriptionID == "tr-m2")
+    }
+
+    @Test func discoveryDoesNotRunWhenTranscriptionIsDisabled() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "m1", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "m1"), for: "m1")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(
+            client: client,
+            dispatcher: dispatcher,
+            channel: SilentChannel(),
+            kinds: [.translation, .moderation]
+        )
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let calls = await client.calls()
+        #expect(calls.isEmpty)
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.isEmpty)
+    }
+
+    @Test func discoveryFailureIsRecordedWithoutDisturbingTheSocketBackoff() async throws {
+        let client = DiscoveryClient()
+        await client.setListError(OperatorClientError.http(404))
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let status = await worker.currentStatus()
+        await worker.stop()
+
+        #expect(status.lastDiscoveryErrorCode == "operator_http_404")
+        // Discovery health is tracked on its own fields so unrelated socket or
+        // job success can't clear it.
+        #expect(status.lastErrorCode == nil)
+        #expect(status.consecutiveFailures == 0)
+        #expect(status.lastDiscoveryAt == nil)
+    }
+
+    @Test func envelopeWorkIsNotStarvedByADiscoveryBacklog() async throws {
+        var backlog: [OperatorWorkListItem] = []
+        for index in 0..<10 {
+            backlog.append(OperatorWorkListItem(id: "b\(index)", status: "pending"))
+        }
+        let client = DiscoveryClient(pages: [OperatorWorkListPage(items: backlog)])
+        for item in backlog { await client.setInput(audioInput(id: item.id), for: item.id) }
+        await client.setInput(audioInput(id: "urgent", transcriptionID: "t-urgent"), for: "urgent")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setDelay(nanos: 40_000_000)
+        let channel = SilentChannel()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        // The first backlog job starting proves the whole page is queued: the
+        // discovery loop enqueues a page without suspending.
+        await dispatcher.waitForJobStart()
+        await channel.yield(OperatorWorkEnvelope(messageId: "urgent", needs: [.translation]))
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        let translationIndex = try #require(jobs.firstIndex { $0.kind == .translation })
+        // The envelope must jump the queued discovery backlog rather than wait
+        // behind all ten transcriptions.
+        #expect(translationIndex < backlog.count)
+    }
+
+    @Test func anEnvelopePromotesAJobDiscoveryAlreadyQueued() async throws {
+        var backlog: [OperatorWorkListItem] = []
+        for index in 0..<8 {
+            backlog.append(OperatorWorkListItem(id: "q\(index)", status: "pending"))
+        }
+        let client = DiscoveryClient(pages: [OperatorWorkListPage(items: backlog)])
+        for item in backlog { await client.setInput(audioInput(id: item.id), for: item.id) }
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setDelay(nanos: 40_000_000)
+        let channel = SilentChannel()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        await dispatcher.waitForJobStart()
+        await channel.yield(OperatorWorkEnvelope(messageId: "q6", needs: [.transcription]))
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let ids = await dispatcher.recorded().map(\.id)
+        let index = try #require(ids.firstIndex(of: "q6"))
+        // The envelope must promote the already-queued discovery job instead of
+        // being dropped by de-duplication and left at the back of the queue.
+        #expect(index < 6)
+        #expect(ids.filter { $0 == "q6" }.count == 1)
+    }
+
+    @Test func aTranslationEnvelopeArrivingMidJobIsReplayedOnce() async throws {
+        let client = DiscoveryClient()
+        await client.setInput(audioInput(id: "r1", transcriptionID: "t1"), for: "r1")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setResult(
+            .translation(translatedText: "hello", sourceLanguage: "fr", targetLanguage: "en", model: nil)
+        )
+        await dispatcher.setDelay(nanos: 200_000_000)
+        let channel = SilentChannel()
+        await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.translation]))
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel,
+                                kinds: [.translation])
+
+        await worker.start()
+        // A second envelope lands while the first translation is still running;
+        // the running job already fetched the older input, so it must re-run.
+        await dispatcher.waitForJobStart()
+        await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.translation]))
+        try await Task.sleep(nanoseconds: 500_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.filter { $0.kind == .translation }.count == 2)
+    }
+
+    @Test func aTranscriptionEnvelopeArrivingMidJobIsNotReplayed() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "r2", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "r2"), for: "r2")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setDelay(nanos: 200_000_000)
+        let channel = SilentChannel()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        await dispatcher.waitForJobStart()
+        await channel.yield(OperatorWorkEnvelope(messageId: "r2", needs: [.transcription]))
+        try await Task.sleep(nanoseconds: 500_000_000)
+        await worker.stop()
+
+        let ids = await dispatcher.recorded().map(\.id)
+        // Replaying transcription would post a second transcript row.
+        #expect(ids.filter { $0 == "r2" }.count == 1)
+    }
+
+    @Test func aManualRerunWorksWhileTranscriptionDiscoveryIsDisabled() async throws {
+        let client = DiscoveryClient()
+        await client.setInput(audioInput(id: "d1"), for: "d1")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel(),
+                                kinds: [.translation, .moderation])
+
+        await worker.start()
+        let accepted = await worker.requestTranscription(messageID: "d1")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        // Forced work bypasses the per-kind enable filter, so the Review button
+        // keeps working even with the transcription realm switched off.
+        #expect(accepted)
+        #expect(await dispatcher.recorded().map(\.id) == ["d1"])
+        #expect(await client.calls().isEmpty)
+    }
+
+    @Test func aManualRerunBypassesAnExhaustedDiscoveryBudget() async throws {
+        let client = DiscoveryClient()
+        await client.setRepeatingPage(
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "e1", status: "pending")])
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        // Every discovered attempt fails (no scripted input), so the budget runs
+        // out; the manual re-run must still be accepted afterwards.
+        try await Task.sleep(nanoseconds: 4_500_000_000)
+        let capped = await client.attempts(for: "e1")
+        await client.setInput(audioInput(id: "e1"), for: "e1")
+        let accepted = await worker.requestTranscription(messageID: "e1")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        #expect(capped == 3)
+        #expect(accepted)
+        #expect(await dispatcher.recorded().map(\.id) == ["e1"])
+    }
+
+    @Test func aPreCreatedPendingRowIsFilledInRatherThanDuplicated() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "p0", status: "pending")])
+        ])
+        // An Operator that still pre-creates an empty pending row: the result
+        // must target that row instead of posting unsolicited.
+        await client.setInput(
+            OperatorWorkInput(
+                id: "p0",
+                status: "pending",
+                audio: .init(url: "https://example.invalid/audio.flac",
+                             sha256: String(repeating: "a", count: 64)),
+                transcription: .init(id: "pending-row", text: "")
+            ),
+            for: "p0"
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let pushes = await client.pushes()
+        #expect(pushes.map(\.transcriptionID) == ["pending-row"])
+    }
+
+    @Test func aDeliberateRerunNeverFillsAnExistingRowIn() async throws {
+        let client = DiscoveryClient(pages: [OperatorWorkListPage(items: [])])
+        // A succeeded but silent transcript looks empty; a re-run must still
+        // create a new history row rather than overwrite it.
+        await client.setInput(
+            OperatorWorkInput(
+                id: "s1",
+                status: "pending",
+                audio: .init(url: "https://example.invalid/audio.flac",
+                             sha256: String(repeating: "b", count: 64)),
+                transcription: .init(id: "silent-row", text: "", status: "succeeded")
+            ),
+            for: "s1"
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        _ = await worker.requestTranscription(messageID: "s1")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        #expect(await client.pushes().map(\.transcriptionID) == [nil])
+    }
+
+    @Test func discoveryFollowsPaginationCursors() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "p1", status: "pending")], nextCursor: "c1"),
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "p2", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "p1"), for: "p1")
+        await client.setInput(audioInput(id: "p2"), for: "p2")
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 400_000_000)
+        await worker.stop()
+
+        let ids = await dispatcher.recorded().map(\.id).sorted()
+        #expect(ids == ["p1", "p2"])
+        // The second request must carry the cursor the first page returned.
+        let cursors = await client.cursors()
+        #expect(cursors.prefix(2).map { $0 ?? "nil" } == ["nil", "c1"])
+    }
+}
+
+@Suite("Operator work list decoding")
+struct OperatorWorkListDecodingTests {
+    @Test func decodesTheProposedShape() throws {
+        let json = Data("""
+        {
+          "items": [
+            {
+              "id": "m1",
+              "status": "pending",
+              "receivedAt": "2026-07-29T04:12:49.000Z",
+              "durationMs": 4200,
+              "latestTranscriptionStatus": "succeeded"
+            }
+          ],
+          "nextCursor": "abc"
+        }
+        """.utf8)
+        let page = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        #expect(page.items.count == 1)
+        #expect(page.nextCursor == "abc")
+        let item = try #require(page.items.first)
+        #expect(item.id == "m1")
+        #expect(item.status == "pending")
+        #expect(item.durationMs == 4200)
+        #expect(item.receivedAt != nil)
+        #expect(item.hasSucceededTranscription)
+    }
+
+    @Test func toleratesMissingAndUnknownFields() throws {
+        let json = Data("""
+        { "items": [ { "id": "m2", "status": "received" }, { "status": "pending" } ] }
+        """.utf8)
+        let page = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        // The entry with no id is dropped; historical `received` still decodes.
+        #expect(page.items.map(\.id) == ["m2"])
+        #expect(page.nextCursor == nil)
+        #expect(page.items[0].hasSucceededTranscription == false)
+        #expect(page.items[0].receivedAt == nil)
+    }
+
+    @Test func rejectsAPageWithoutItems() {
+        let json = Data(#"{ "nextCursor": "abc" }"#.utf8)
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        }
+    }
+
+    @Test func rejectsAMalformedCursor() {
+        let json = Data(#"{ "items": [], "nextCursor": 12 }"#.utf8)
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        }
+    }
+
+    @Test func decodesTimestampsWithoutFractionalSeconds() throws {
+        let json = Data("""
+        { "items": [ { "id": "m3", "status": "pending", "receivedAt": "2026-07-29T04:12:49Z" } ] }
+        """.utf8)
+        let page = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        #expect(page.items.first?.receivedAt != nil)
+    }
+}

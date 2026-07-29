@@ -86,6 +86,10 @@ final class ServerHost: ObservableObject {
     /// depends on) the HTTP server because the worker dispatches via
     /// loopback.
     private var operatorWorker: OperatorWorker?
+    /// Operator base URL the running worker was built with. Compared against the
+    /// Review client's before a manual re-run is allowed.
+    private var operatorWorkerBaseURL: String?
+    private var reconcileTask: Task<Void, Never>?
 
     /// Observer for OIDC auth-state changes; retained so account changes also
     /// reconcile background Operator-related work.
@@ -333,8 +337,22 @@ final class ServerHost: ObservableObject {
     // Starts, stops, or restarts the Operator push worker based on the
     // current configuration, token presence, and server state. Idempotent
     // — safe to call from `didSet` observers and lifecycle transitions.
-    // swiftlint:disable:next function_body_length
+    //
+    // Reconciliations are serialized: each one chains onto the previous, so
+    // overlapping calls can never leave two workers running (and polling the
+    // same Operator) at once.
     func reconcileOperatorWorker() async {
+        let previous = reconcileTask
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            await self?.performOperatorWorkerReconcile()
+        }
+        reconcileTask = task
+        await task.value
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func performOperatorWorkerReconcile() async {
         guard case .running(let host, let port) = state else {
             await stopOperatorWorker()
             return
@@ -386,14 +404,51 @@ final class ServerHost: ObservableObject {
             }
         )
         self.operatorWorker = worker
+        self.operatorWorkerBaseURL = cfg.baseURL
         await worker.start()
     }
 
     private func stopOperatorWorker() async {
+        operatorWorkerBaseURL = nil
         guard let worker = operatorWorker else { return }
         operatorWorker = nil
         await worker.stop()
         operatorWorkerStatus = nil
+    }
+}
+
+/// Lets the Review surface hand a message to the local push worker for
+/// transcription — both for messages that were never transcribed and as a
+/// deliberate re-run of one that already has a transcript.
+extension ServerHost: TranscriptionRerunRequesting {
+    func requestTranscription(messageID: String) async -> Bool {
+        guard let worker = operatorWorker, workerTargetsReviewedOperator else { return false }
+        return await worker.requestTranscription(messageID: messageID)
+    }
+
+    /// Review and the worker are configured independently, so a re-run must be
+    /// refused unless both target the same Operator — otherwise the app would
+    /// transcribe against a different backend than the one being reviewed.
+    private var workerTargetsReviewedOperator: Bool {
+        // Compare the URL the *running* worker captured, not the latest edited
+        // configuration: reconciliation is asynchronous, so an edit that hasn't
+        // restarted the worker yet must not authorize a re-run against the new
+        // Operator.
+        guard let raw = operatorWorkerBaseURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let workerURL = URL(string: raw) else { return false }
+        // Scheme and host are case-insensitive; the path is not, so a tenant
+        // prefix like `/TenantA` must not match `/tenanta`.
+        func normalized(_ url: URL) -> String {
+            var path = url.path
+            while path.hasSuffix("/") { path.removeLast() }
+            let scheme = (url.scheme ?? "").lowercased()
+            let host = (url.host ?? "").lowercased()
+            let defaultPort = scheme == "https" ? 443 : (scheme == "http" ? 80 : nil)
+            let explicitPort = url.port.flatMap { $0 == defaultPort ? nil : $0 }
+            let port = explicitPort.map { ":\($0)" } ?? ""
+            return "\(scheme)://\(host)\(port)\(path)"
+        }
+        return normalized(workerURL) == normalized(OperatorAPIConfig.shared.baseURL)
     }
 }
 

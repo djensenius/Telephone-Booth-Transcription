@@ -13,8 +13,9 @@ extension SettingsView {
                 set: { host.config.operatorPolling.enabled = $0 }
             ))
             Text("When on, this app subscribes to the Operator status WebSocket, "
-                 + "runs requested transcription, translation, and moderation "
-                 + "work locally, then posts results back.")
+                 + "runs requested translation and moderation work locally, and "
+                 + "polls the Operator for messages that still need a "
+                 + "transcription. Results are posted back as they finish.")
                 .font(.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
@@ -34,7 +35,7 @@ extension SettingsView {
                 get: { host.config.operatorPolling.pollIntervalSeconds },
                 set: { host.config.operatorPolling.pollIntervalSeconds = $0 }
             ), in: OperatorPollingConfig.minPollInterval...OperatorPollingConfig.maxPollInterval) {
-                LabeledContent("Reconnect base delay",
+                LabeledContent("Reconnect / discovery delay",
                                value: "\(host.config.operatorPolling.pollIntervalSeconds) s")
             }
 
@@ -66,6 +67,22 @@ extension SettingsView {
             if let jobID = status.lastJobID {
                 LabeledContent("Last job",
                                value: "\(status.lastJobKind?.rawValue ?? "?") · \(jobID)")
+            }
+            if let discoveredAt = status.lastDiscoveryAt {
+                LabeledContent(
+                    "Last discovery",
+                    value: "\(discoveredAt.formatted(date: .omitted, time: .standard))"
+                        + " · \(status.lastDiscoveredCount ?? 0) queued"
+                )
+            }
+            if let code = status.lastDiscoveryErrorCode {
+                LabeledContent(
+                    "Discovery error",
+                    value: status.lastDiscoveryErrorAt.map {
+                        "\(code) · \($0.formatted(date: .omitted, time: .standard))"
+                    } ?? code
+                )
+                .foregroundStyle(Theme.Colors.error)
             }
         } else {
             LabeledContent("Worker status", value: "stopped")

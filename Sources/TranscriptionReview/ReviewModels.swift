@@ -246,11 +246,58 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// True when the message is still awaiting a human moderation decision.
-    public var awaitingModerationDecision: Bool {
+    public var awaitingModerationDecision: Bool { isReviewable }
+
+    /// True when the message sits in the review queue. A freshly landed upload
+    /// reports `pending`; `received` still exists for historical rows, so both
+    /// count — and this is the single source of truth for that status set.
+    public var isReviewable: Bool {
         switch status {
         case .received, .pending: return true
         default: return false
         }
+    }
+
+    /// True when the newest transcription row succeeded. The review payload
+    /// only carries the newest row, so a re-run that is still pending (or that
+    /// failed) masks an older successful transcript — which is why a message
+    /// with any transcription row stays in the re-run bucket rather than the
+    /// "needs transcription" one.
+    public var hasSucceededTranscription: Bool {
+        latestTranscription?.status == .succeeded
+    }
+
+    /// True when a transcription row exists but hasn't succeeded: still running
+    /// on some worker, or failed outright.
+    public var transcriptionIsUnfinished: Bool {
+        guard let latest = latestTranscription else { return false }
+        return latest.status != .succeeded
+    }
+
+    /// True when the newest transcription attempt failed. Distinct from a run
+    /// still in progress: this one is finished and can be retried now.
+    public var transcriptionFailed: Bool {
+        latestTranscription?.status == .failed
+    }
+
+    /// True when transcription succeeded but produced no text — a silent
+    /// recording, which is meaningfully different from "not transcribed yet".
+    public var transcriptionIsSilent: Bool {
+        guard hasSucceededTranscription else { return false }
+        let text = latestTranscription?.text ?? ""
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// True when the message is reviewable and the Operator holds no
+    /// transcription row at all. Transcription is optional enrichment on the
+    /// Operator side, so these messages are visible to operators but not yet
+    /// enriched. A message whose newest row is pending or failed is deliberately
+    /// excluded from this bucket — it already has transcription history, which
+    /// the newest row can mask — and is offered for a manual re-run instead.
+    /// This describes Review bucketing only; the worker's discovery pass has its
+    /// own rules and may still retry such a message.
+    public var needsTranscription: Bool {
+        isReviewable && latestTranscription == nil
     }
 }
 

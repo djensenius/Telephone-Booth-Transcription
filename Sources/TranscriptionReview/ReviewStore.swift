@@ -7,10 +7,20 @@ import Foundation
 import Observation
 import os
 
+/// Requests a local transcription run for one message. Implemented by the app
+/// over its Operator push worker, keeping this module free of any dependency on
+/// the worker stack.
+public protocol TranscriptionRerunRequesting: Sendable {
+    /// Enqueues a transcription for `messageID`, regardless of whether the
+    /// Operator already holds a transcript. Returns `false` when the worker
+    /// isn't running or the job is already queued.
+    func requestTranscription(messageID: String) async -> Bool
+}
+
 /// Drives the review queue: periodically polls the Operator for recent
-/// messages and exposes the two work buckets the operator cares about —
-/// messages awaiting a moderation decision and messages whose transcription
-/// still needs translation.
+/// messages and exposes the work buckets the operator cares about — messages
+/// with no transcription yet, messages whose transcription still needs
+/// translation, and messages awaiting a moderation decision.
 @Observable
 @MainActor
 public final class ReviewStore {
@@ -25,6 +35,13 @@ public final class ReviewStore {
     private let client: any OperatorReviewClient
     @ObservationIgnored
     private let pollInterval: Duration
+    /// How long a queued transcription may sit unfulfilled before the UI lets
+    /// the operator try again. Local runs can fail (audio fetch, upstream, the
+    /// result POST) without the app ever seeing a new transcript.
+    @ObservationIgnored
+    private let queuedTranscriptionTimeout: TimeInterval
+    @ObservationIgnored
+    private let now: @Sendable () -> Date
     @ObservationIgnored
     private let logger = Logger(
         subsystem: "org.davidjensenius.TelephoneBoothTranscription.review",
@@ -36,6 +53,25 @@ public final class ReviewStore {
     /// resolves after it can be discarded instead of resurrecting the old row.
     @ObservationIgnored
     private var writeGeneration = 0
+    /// State for each queued re-run: the transcription id it started from (so
+    /// the marker clears only once a genuinely newer transcript lands) and when
+    /// it was queued (so a failed run can't disable the button forever).
+    @ObservationIgnored
+    private var queuedTranscriptionState: [String: QueuedTranscription] = [:]
+
+    /// `createdAt` comes from the Operator and `queuedAt` from this Mac, so the
+    /// comparison between them tolerates a couple of minutes of clock skew. It
+    /// only needs to be coarse enough to reject a transcript that predates the
+    /// request by a poll interval or two.
+    private static let clockSkewAllowance: TimeInterval = 120
+
+    private struct QueuedTranscription {
+        var baseline: String?
+        /// Status of the baseline row, so an Operator that fills a pre-created
+        /// pending row in place (same id, pending → succeeded) still clears.
+        var baselineStatus: TranscriptionStatus?
+        var queuedAt: Date
+    }
 
     public private(set) var messages: [Message] = []
     public private(set) var state: LoadState = .idle
@@ -45,10 +81,41 @@ public final class ReviewStore {
     public private(set) var pendingActions: Set<String> = []
     /// Human-readable message for the most recent failed write action, if any.
     public private(set) var actionError: String?
+    /// IDs of messages whose transcription has been handed to the local worker
+    /// and hasn't come back yet. Cleared once a newer transcript lands.
+    public private(set) var queuedTranscriptions: Set<String> = []
 
-    public init(client: any OperatorReviewClient, pollInterval: Duration = .seconds(30)) {
+    /// Supplies local transcription re-runs. Set by the app once the worker
+    /// host is available; `nil` disables the re-run affordance.
+    @ObservationIgnored
+    public var transcriptionRerunner: (any TranscriptionRerunRequesting)?
+
+    public init(
+        client: any OperatorReviewClient,
+        pollInterval: Duration = .seconds(30),
+        queuedTranscriptionTimeout: TimeInterval = 300,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.client = client
         self.pollInterval = pollInterval
+        self.queuedTranscriptionTimeout = queuedTranscriptionTimeout
+        self.now = now
+    }
+
+    /// Reviewable messages with no transcription row at all — the primary
+    /// enrichment queue now that the Operator no longer solicits transcription.
+    /// Messages whose newest row is pending or failed belong to
+    /// `withTranscriptionHistory`, because re-running those is a human decision.
+    public var awaitingTranscription: [Message] {
+        messages.filter(\.needsTranscription)
+    }
+
+    /// Reviewable messages that already have transcription history — succeeded,
+    /// still running, or failed — offered separately so an operator can
+    /// deliberately re-run the AI over them. Decided (approved/rejected)
+    /// messages are out of scope.
+    public var withTranscriptionHistory: [Message] {
+        messages.filter { $0.isReviewable && $0.latestTranscription != nil }
     }
 
     /// Messages whose latest transcription has source text but no translation.
@@ -64,6 +131,47 @@ public final class ReviewStore {
     /// True when the given message has a write action in flight.
     public func isActing(on messageID: String) -> Bool {
         pendingActions.contains(messageID)
+    }
+
+    /// True when a local transcription run has been queued for this message and
+    /// no newer transcript has landed yet.
+    public func isTranscriptionQueued(_ messageID: String) -> Bool {
+        queuedTranscriptions.contains(messageID)
+    }
+
+    /// Hands a message to the local worker for transcription. Works both for
+    /// messages that have never been transcribed and as a deliberate re-run of
+    /// one that already has a transcript — the Operator keeps the history and
+    /// the newest succeeded row wins downstream.
+    public func requestTranscription(_ message: Message) async {
+        guard !pendingActions.contains(message.id) else { return }
+        guard let rerunner = transcriptionRerunner else {
+            actionError = "Couldn’t start transcription: the Operator worker isn’t running."
+            return
+        }
+        pendingActions.insert(message.id)
+        actionError = nil
+        defer { pendingActions.remove(message.id) }
+        // Both the baseline and the queue time are read before awaiting the
+        // worker: a poll landing mid-request must not become this request's
+        // baseline (which would hold the marker until it times out), and the
+        // reconciler compares transcript timestamps so such a poll can't clear
+        // the marker early either.
+        let baseline = message.latestTranscription?.id
+        let baselineStatus = message.latestTranscription?.status
+        let queuedAt = now()
+        if await rerunner.requestTranscription(messageID: message.id) {
+            queuedTranscriptions.insert(message.id)
+            queuedTranscriptionState[message.id] = .init(
+                baseline: baseline,
+                baselineStatus: baselineStatus,
+                queuedAt: queuedAt
+            )
+        } else {
+            actionError = "Couldn’t start transcription: the worker isn’t running, "
+                + "this message is already queued, or the worker points at a "
+                + "different Operator than the one being reviewed."
+        }
     }
 
     /// Clears any surfaced write-action error.
@@ -127,6 +235,47 @@ public final class ReviewStore {
         }
     }
 
+    /// Clears the "queued" marker for any message whose transcript is now newer
+    /// than the one the re-run started from, that has left the window, or whose
+    /// run has been outstanding long enough to assume it failed — otherwise a
+    /// failed run would disable the retry button forever.
+    private func reconcileQueuedTranscriptions() {
+        guard !queuedTranscriptions.isEmpty else { return }
+        let byID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let cutoff = now().addingTimeInterval(-queuedTranscriptionTimeout)
+        for id in queuedTranscriptions {
+            guard let message = byID[id], let state = queuedTranscriptionState[id] else {
+                clearQueuedTranscription(id)
+                continue
+            }
+            if state.queuedAt <= cutoff {
+                clearQueuedTranscription(id)
+                continue
+            }
+            // Best effort: the review payload carries only the newest row and no
+            // per-request identifier, so a different succeeded transcript that
+            // postdates the request is taken as this request's result. In the
+            // worst case the button re-enables a little early — the marker is a
+            // UI affordance, and a second deliberate re-run is always allowed.
+            if let latest = message.latestTranscription, latest.status == .succeeded {
+                // Either a genuinely newer row, or the baseline row itself
+                // finishing in place (the pre-created pending row path).
+                let isNewRow = latest.id != state.baseline
+                let baselineFinished = latest.id == state.baseline && state.baselineStatus != .succeeded
+                if baselineFinished
+                    || (isNewRow
+                        && latest.createdAt >= state.queuedAt.addingTimeInterval(-Self.clockSkewAllowance)) {
+                    clearQueuedTranscription(id)
+                }
+            }
+        }
+    }
+
+    private func clearQueuedTranscription(_ messageID: String) {
+        queuedTranscriptions.remove(messageID)
+        queuedTranscriptionState.removeValue(forKey: messageID)
+    }
+
     private static func describe(_ error: any Error, verb: String) -> String {
         switch error {
         case OperatorReviewError.unauthenticated, OperatorReviewError.unauthorized:
@@ -186,6 +335,7 @@ public final class ReviewStore {
             // applied write) already reflects the newer state.
             guard generation == writeGeneration else { return }
             messages = list.items
+            reconcileQueuedTranscriptions()
             lastUpdated = Date()
             state = .loaded
         } catch OperatorReviewError.unauthenticated, OperatorReviewError.unauthorized {

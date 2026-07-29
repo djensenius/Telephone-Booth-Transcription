@@ -16,9 +16,29 @@ struct OperatorWorkerTests {
         var inputs: [String: OperatorWorkInput] = [:]
         var fetchError: (any Error)?
         var pushCalls: [PushCall] = []
+        var listPages: [OperatorWorkListPage] = []
+        var listError: (any Error)?
+        var listCalls: [OperatorWorkNeeds] = []
 
         func setInput(_ input: OperatorWorkInput, for id: String) { inputs[id] = input }
         func setFetchError(_ err: any Error) { fetchError = err }
+        func setListPages(_ pages: [OperatorWorkListPage]) { listPages = pages }
+        func setListError(_ err: any Error) { listError = err }
+
+        nonisolated func listWork(
+            needs: OperatorWorkNeeds,
+            limit: Int,
+            cursor: String?
+        ) async throws -> OperatorWorkListPage {
+            try await self.nextListPage(needs: needs)
+        }
+
+        func nextListPage(needs: OperatorWorkNeeds) throws -> OperatorWorkListPage {
+            listCalls.append(needs)
+            if let listError { throw listError }
+            guard !listPages.isEmpty else { return OperatorWorkListPage(items: []) }
+            return listPages.removeFirst()
+        }
 
         nonisolated func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput {
             try await self.fetchScriptedWorkInput(messageID: messageID)
