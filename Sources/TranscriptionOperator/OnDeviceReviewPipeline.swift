@@ -97,6 +97,13 @@ public final class OnDeviceReviewPipeline {
 
     // MARK: - Running
 
+    /// False when the device can transcribe but has no language model (Apple
+    /// Intelligence disabled or still downloading). `run` would fail; only
+    /// `transcribeOnly` is usable, so the UI hides the translate affordance.
+    public var supportsTranslation: Bool {
+        dispatcher.supportedKinds.contains(.translation)
+    }
+
     public func stage(for messageID: String) -> Stage {
         stages[messageID] ?? .idle
     }
@@ -202,7 +209,7 @@ public final class OnDeviceReviewPipeline {
         stages[message.id] = .translating
         let translation: String
         do {
-            translation = try await translate(trimmed)
+            translation = try await translate(trimmed, sourceLanguage: message.language)
         } catch {
             guard isCurrent(message.id, generation) else { return nil }
             fail(message.id, error, verb: "translate that transcript")
@@ -251,12 +258,16 @@ public final class OnDeviceReviewPipeline {
         return text
     }
 
-    private func translate(_ input: String) async throws -> String {
+    /// `sourceLanguage` is the hint the Operator already recorded for the
+    /// message. The networked worker path sends it, so omitting it here would
+    /// make the in-process path force a re-detection and translate less
+    /// accurately for the same input.
+    private func translate(_ input: String, sourceLanguage: String?) async throws -> String {
         let job = OperatorJob(
             id: UUID().uuidString,
             leaseToken: "",
             kind: .translation,
-            payload: .translation(.init(input: input))
+            payload: .translation(.init(input: input, sourceLanguage: sourceLanguage))
         )
         guard case .translation(let translated, _, _, _) = try await dispatcher.execute(job: job) else {
             throw OperatorJobError(code: "translation_failed", message: "local translation failed")

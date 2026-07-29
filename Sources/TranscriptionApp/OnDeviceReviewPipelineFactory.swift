@@ -6,7 +6,7 @@ import TranscriptionShared
 
 extension OnDeviceReviewPipeline {
     /// Builds a pipeline backed by Apple Intelligence, or returns `nil` when
-    /// this device can't run the on-device engines — callers hide the entry
+    /// this device can't transcribe on-device at all — callers hide the entry
     /// point entirely rather than offering a button that always fails.
     ///
     /// The capability probe matters beyond the `@available` checks below: a
@@ -14,17 +14,22 @@ extension OnDeviceReviewPipeline {
     /// disabled, be ineligible, or not have finished downloading the model. The
     /// engines re-check at use time too, since availability can change after
     /// this returns.
+    ///
+    /// Speech and Foundation Models are gated **separately**: transcription
+    /// needs only the former, so a device with Apple Intelligence turned off
+    /// still gets the transcription queues. The pipeline reports
+    /// `supportsTranslation == false` in that case and the UI hides just the
+    /// translate/moderate affordance.
     static func makeAppleIntelligence(locale: Locale = .current) -> OnDeviceReviewPipeline? {
-        guard OnDeviceCapability.isFullPipelineAvailable else { return nil }
-        guard let transcriber = makeTranscriber(locale: locale),
-              let translator = makeTranslator(),
-              let moderator = makeModerator() else {
+        guard OnDeviceCapability.isSpeechTranscriptionAvailable,
+              let transcriber = makeTranscriber(locale: locale) else {
             return nil
         }
+        let foundationModels = OnDeviceCapability.isFoundationModelAvailable
         let dispatcher = InProcessOperatorJobDispatcher(
             transcriber: transcriber,
-            translator: translator,
-            moderator: moderator,
+            translator: foundationModels ? makeTranslator() : nil,
+            moderator: foundationModels ? makeModerator() : nil,
             audioFetcher: URLSessionAudioFetcher()
         )
         return OnDeviceReviewPipeline(dispatcher: dispatcher)

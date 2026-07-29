@@ -17,6 +17,12 @@ struct ReviewView: View {
     )
     /// Nil when this device can't run the on-device engines — the entry point
     /// is then hidden rather than offered and always failing.
+    /// Nil when this device can't transcribe on-device.
+    ///
+    /// Re-probed when the view appears: Apple Intelligence can be enabled, or a
+    /// model finish downloading, while the app stays open. A use-time recheck
+    /// can't rescue that case, because with no pipeline there is no button to
+    /// press in the first place.
     @State private var onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
 
     var body: some View {
@@ -33,6 +39,20 @@ struct ReviewView: View {
             if auth.isSignedIn {
                 await store.poll()
             }
+        }
+        .onAppear { refreshOnDeviceCapability() }
+    }
+
+    /// Re-probes Apple Intelligence when the queue appears, so enabling it (or
+    /// finishing a model download) while the app is running surfaces the
+    /// affordance without a relaunch. Only ever upgrades: an existing pipeline
+    /// is replaced solely when the probe gains a capability, so an in-flight
+    /// run is never discarded.
+    private func refreshOnDeviceCapability() {
+        guard onDevice == nil || onDevice?.supportsTranslation == false else { return }
+        guard let refreshed = OnDeviceReviewPipeline.makeAppleIntelligence() else { return }
+        if onDevice == nil || refreshed.supportsTranslation {
+            onDevice = refreshed
         }
     }
 
@@ -417,14 +437,21 @@ private struct ReviewRow: View {
     /// the operator still reviews and taps Submit.
     @ViewBuilder
     private var onDeviceActions: some View {
-        if let onDevice {
+        if let onDevice, onDevice.supportsTranslation {
             let stage = onDevice.stage(for: message.id)
             let running = onDevice.isRunning(message.id)
 
             HStack(spacing: Theme.Spacing.small) {
                 Button {
                     Task {
-                        if let translation = await onDevice.run(for: message) {
+                        let translation = await onDevice.run(for: message)
+                        // `reset` can land between `run` returning and this
+                        // continuation resuming, so re-check against the
+                        // pipeline's current output rather than trusting the
+                        // returned value — otherwise a cleared draft gets
+                        // repopulated with a superseded translation.
+                        if let translation,
+                           onDevice.outputs[message.id]?.translation == translation {
                             translationDraft = translation
                         }
                     }

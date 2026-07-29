@@ -63,6 +63,16 @@ struct OnDeviceReviewPipelineTests {
         }
     }
 
+    /// Records the source-language hint the pipeline forwards.
+    final class SpyTranslator: TextTranslationService, @unchecked Sendable {
+        private(set) var receivedSourceLanguage: String?
+        func translate(_ input: String, sourceLanguage: String?) async throws -> TranslationResult {
+            receivedSourceLanguage = sourceLanguage
+            return TranslationResult(translatedText: "hello", sourceLanguage: "fr",
+                                     targetLanguage: "en", model: "apple-foundation-models")
+        }
+    }
+
     /// A one-shot async gate, so tests can hold a stage open deterministically
     /// instead of sleeping.
     actor Gate {
@@ -83,8 +93,8 @@ struct OnDeviceReviewPipelineTests {
 
     private func makePipeline(
         transcriber: StubTranscriber = StubTranscriber(),
-        translator: StubTranslator = StubTranslator(),
-        moderator: StubModerator = StubModerator(),
+        translator: StubTranslator? = StubTranslator(),
+        moderator: StubModerator? = StubModerator(),
         fetcher: StubAudioFetcher = StubAudioFetcher()
     ) -> OnDeviceReviewPipeline {
         OnDeviceReviewPipeline(
@@ -150,6 +160,36 @@ struct OnDeviceReviewPipelineTests {
         _ = await pipeline.run(for: input("a"))
         #expect(pipeline.stage(for: "a") == .finished)
         #expect(pipeline.stage(for: "b") == .idle)
+    }
+
+    @Test func passesTheLanguageHintToTranslation() async {
+        let translator = SpyTranslator()
+        let pipeline = OnDeviceReviewPipeline(
+            dispatcher: InProcessOperatorJobDispatcher(
+                transcriber: StubTranscriber(),
+                translator: translator,
+                moderator: StubModerator(),
+                audioFetcher: StubAudioFetcher()
+            )
+        )
+        _ = await pipeline.run(for: input())
+        // Dropping it would force Foundation Models to re-detect the language
+        // the Operator already knows.
+        #expect(translator.receivedSourceLanguage == "fr")
+    }
+
+    /// A device that can transcribe but has no language model (Apple
+    /// Intelligence off or still downloading) must still be able to serve the
+    /// "needs transcription" queues.
+    @Test func transcriptionWorksWithoutALanguageModel() async {
+        let pipeline = makePipeline(translator: nil, moderator: nil)
+        #expect(pipeline.supportsTranslation == false)
+        #expect(await pipeline.transcribeOnly(for: input()) == "bonjour")
+        #expect(pipeline.stage(for: "m1") == .finished)
+    }
+
+    @Test func supportsTranslationWhenTheModelIsPresent() {
+        #expect(makePipeline().supportsTranslation)
     }
 
     // MARK: - Failure handling

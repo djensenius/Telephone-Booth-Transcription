@@ -206,7 +206,12 @@ The consequences are worth stating plainly:
   OS-version check alone is not enough, since a device can run iOS 26 and still
   be ineligible, have Apple Intelligence turned off, or not have finished
   downloading the model. The engines re-check at use time as well, because
-  availability can change after the probe.
+  availability can change after the probe, and the review queue re-probes on
+  appear so enabling Apple Intelligence mid-session surfaces the affordance
+  without a relaunch. Speech and Foundation Models are gated separately:
+  transcription needs only the former, so a device with Apple Intelligence off
+  still gets the transcription queues, with `supportsTranslation == false`
+  hiding just the translate affordance.
 
 #### Transcripts are read-only on iOS
 

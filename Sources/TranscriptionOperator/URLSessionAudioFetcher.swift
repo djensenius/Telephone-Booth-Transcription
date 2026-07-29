@@ -25,6 +25,11 @@ public final class URLSessionAudioFetcher: AudioFetching {
     private let allowInsecureURLs: Bool
     private let logger: Logger
 
+    /// Total wall-clock budget for one audio fetch, matching
+    /// `HTTPClientAudioFetcher`'s deadline so both fetchers bound a run the
+    /// same way.
+    static let fetchTimeout: TimeInterval = 120
+
     /// Ephemeral, non-caching, credential-free session.
     ///
     /// `URLSession.shared` keeps a persistent URL cache and shared
@@ -38,6 +43,11 @@ public final class URLSessionAudioFetcher: AudioFetching {
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpShouldSetCookies = false
         configuration.urlCredentialStorage = nil
+        // `timeoutIntervalForResource` defaults to seven days, so a response
+        // that trickles bytes would otherwise pin a review row (and its staging
+        // task) effectively forever.
+        configuration.timeoutIntervalForRequest = fetchTimeout
+        configuration.timeoutIntervalForResource = fetchTimeout
         return URLSession(configuration: configuration)
     }
 
