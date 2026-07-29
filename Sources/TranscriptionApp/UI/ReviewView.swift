@@ -7,6 +7,7 @@ import TranscriptionReview
 /// decision, alongside the AI's recommendation, and lets the operator act:
 /// submit a translation, or approve / reject a message.
 struct ReviewView: View {
+    @EnvironmentObject private var host: ServerHost
     @State private var auth = AuthManager.shared
     @State private var isSigningIn = false
     @State private var signInError: String?
@@ -24,6 +25,7 @@ struct ReviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task(id: auth.isSignedIn) {
+            store.transcriptionRerunner = host
             if auth.isSignedIn {
                 await store.poll()
             }
@@ -94,6 +96,14 @@ struct ReviewView: View {
                 }
 
                 bucket(
+                    title: "Needs transcription",
+                    systemImage: "waveform",
+                    messages: store.awaitingTranscription,
+                    emptyText: "Every message in the queue has a transcription.",
+                    kind: .transcription
+                )
+
+                bucket(
                     title: "Needs translation",
                     systemImage: "character.book.closed",
                     messages: store.awaitingTranslation,
@@ -107,6 +117,14 @@ struct ReviewView: View {
                     messages: store.awaitingModeration,
                     emptyText: "No messages waiting on a decision.",
                     kind: .moderation
+                )
+
+                bucket(
+                    title: "Transcribed",
+                    systemImage: "arrow.clockwise.circle",
+                    messages: store.alreadyTranscribed,
+                    emptyText: "Nothing has been transcribed yet.",
+                    kind: .retranscription
                 )
             }
             .padding(Theme.Spacing.large)
@@ -152,7 +170,13 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
             Label("\(title) (\(messages.count))", systemImage: systemImage)
                 .font(Theme.Fonts.headerLarge())
-                .foregroundStyle(Theme.Colors.textPrimary)
+                .foregroundStyle(kind.accent)
+
+            if let subtitle = kind.subtitle {
+                Text(subtitle)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
 
             if messages.isEmpty {
                 Text(emptyText)
@@ -168,6 +192,14 @@ struct ReviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+        .overlay(alignment: .leading) {
+            // A coloured spine keeps the "not transcribed yet" queue visually
+            // distinct from the deliberate re-run set.
+            RoundedRectangle(cornerRadius: 2)
+                .fill(kind.accent.opacity(0.5))
+                .frame(width: 3)
+                .padding(.vertical, Theme.Spacing.small)
+        }
     }
 
     private func banner(_ text: String, systemImage: String, tint: Color) -> some View {
@@ -181,7 +213,29 @@ struct ReviewView: View {
 }
 
 private struct ReviewRow: View {
-    enum Kind { case translation, moderation }
+    enum Kind {
+        case transcription, translation, moderation, retranscription
+
+        /// Tint used for the bucket header and spine.
+        var accent: Color {
+            switch self {
+            case .transcription: return Theme.Colors.warning
+            case .translation, .moderation: return Theme.Colors.textPrimary
+            case .retranscription: return Theme.Colors.info
+            }
+        }
+
+        var subtitle: String? {
+            switch self {
+            case .transcription:
+                return "Reviewable messages the AI hasn’t transcribed yet."
+            case .retranscription:
+                return "Already transcribed. Re-running keeps the old transcript; the newest one wins."
+            case .translation, .moderation:
+                return nil
+            }
+        }
+    }
 
     let message: Message
     let kind: Kind
@@ -191,11 +245,13 @@ private struct ReviewRow: View {
     @State private var notesDraft = ""
 
     private var isActing: Bool { store.isActing(on: message.id) }
+    private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
             HStack(spacing: Theme.Spacing.small) {
                 StatusPill(text: message.status.displayName, tint: statusTint)
+                StatusPill(text: transcriptionStateText, tint: transcriptionStateTint)
                 if let recommendation = message.latestModeration?.recommendation {
                     StatusPill(
                         text: "AI: \(recommendation.displayName)",
@@ -221,6 +277,8 @@ private struct ReviewRow: View {
             }
 
             switch kind {
+            case .transcription: transcriptionActions(title: "Transcribe")
+            case .retranscription: transcriptionActions(title: "Re-run transcription")
             case .translation: translationActions
             case .moderation: moderationActions
             }
@@ -229,6 +287,29 @@ private struct ReviewRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Colors.tertiaryBackground.opacity(0.4),
                     in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+    }
+
+    @ViewBuilder
+    private func transcriptionActions(title: String) -> some View {
+        HStack(spacing: Theme.Spacing.small) {
+            if isQueued {
+                Label("Queued for the local worker", systemImage: "clock.arrow.circlepath")
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+            Spacer()
+            #if os(macOS)
+            // Only the Mac runs the local push worker, so only the Mac can
+            // start a transcription. iOS still shows the state.
+            Button {
+                Task { await store.requestTranscription(message) }
+            } label: {
+                actionLabel(title, systemImage: "waveform")
+            }
+            .buttonStyle(.tbtGlass)
+            .disabled(isActing || isQueued)
+            #endif
+        }
     }
 
     @ViewBuilder
@@ -313,7 +394,22 @@ private struct ReviewRow: View {
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text
         }
-        return "No transcription yet."
+        return message.transcriptionIsSilent
+            ? "Silent recording — the transcription returned no speech."
+            : "No transcription yet."
+    }
+
+    /// Distinguishes "never transcribed" from "transcribed but silent" so an
+    /// operator can tell an unenriched message from an empty one.
+    private var transcriptionStateText: String {
+        if message.transcriptionIsSilent { return "Silent" }
+        if message.hasSucceededTranscription { return "Transcribed" }
+        return "No transcription"
+    }
+
+    private var transcriptionStateTint: Color {
+        if message.transcriptionIsSilent { return Theme.Colors.info }
+        return message.hasSucceededTranscription ? Theme.Colors.success : Theme.Colors.warning
     }
 
     private var statusTint: Color {

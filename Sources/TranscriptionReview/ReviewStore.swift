@@ -7,10 +7,20 @@ import Foundation
 import Observation
 import os
 
+/// Requests a local transcription run for one message. Implemented by the app
+/// over its Operator push worker, keeping this module free of any dependency on
+/// the worker stack.
+public protocol TranscriptionRerunRequesting: Sendable {
+    /// Enqueues a transcription for `messageID`, regardless of whether the
+    /// Operator already holds a transcript. Returns `false` when the worker
+    /// isn't running or the job is already queued.
+    func requestTranscription(messageID: String) async -> Bool
+}
+
 /// Drives the review queue: periodically polls the Operator for recent
-/// messages and exposes the two work buckets the operator cares about —
-/// messages awaiting a moderation decision and messages whose transcription
-/// still needs translation.
+/// messages and exposes the work buckets the operator cares about — messages
+/// with no transcription yet, messages whose transcription still needs
+/// translation, and messages awaiting a moderation decision.
 @Observable
 @MainActor
 public final class ReviewStore {
@@ -36,6 +46,10 @@ public final class ReviewStore {
     /// resolves after it can be discarded instead of resurrecting the old row.
     @ObservationIgnored
     private var writeGeneration = 0
+    /// Transcription id each queued re-run started from, so the "queued" state
+    /// clears only once a genuinely newer transcript lands.
+    @ObservationIgnored
+    private var queuedTranscriptionBaselines: [String: String?] = [:]
 
     public private(set) var messages: [Message] = []
     public private(set) var state: LoadState = .idle
@@ -45,10 +59,30 @@ public final class ReviewStore {
     public private(set) var pendingActions: Set<String> = []
     /// Human-readable message for the most recent failed write action, if any.
     public private(set) var actionError: String?
+    /// IDs of messages whose transcription has been handed to the local worker
+    /// and hasn't come back yet. Cleared once a newer transcript lands.
+    public private(set) var queuedTranscriptions: Set<String> = []
+
+    /// Supplies local transcription re-runs. Set by the app once the worker
+    /// host is available; `nil` disables the re-run affordance.
+    @ObservationIgnored
+    public var transcriptionRerunner: (any TranscriptionRerunRequesting)?
 
     public init(client: any OperatorReviewClient, pollInterval: Duration = .seconds(30)) {
         self.client = client
         self.pollInterval = pollInterval
+    }
+
+    /// Reviewable messages with no succeeded transcription — the primary
+    /// enrichment queue now that the Operator no longer solicits transcription.
+    public var awaitingTranscription: [Message] {
+        messages.filter(\.needsTranscription)
+    }
+
+    /// Messages that already have a transcript, offered separately so an
+    /// operator can deliberately re-run the AI over them.
+    public var alreadyTranscribed: [Message] {
+        messages.filter(\.hasSucceededTranscription)
     }
 
     /// Messages whose latest transcription has source text but no translation.
@@ -64,6 +98,35 @@ public final class ReviewStore {
     /// True when the given message has a write action in flight.
     public func isActing(on messageID: String) -> Bool {
         pendingActions.contains(messageID)
+    }
+
+    /// True when a local transcription run has been queued for this message and
+    /// no newer transcript has landed yet.
+    public func isTranscriptionQueued(_ messageID: String) -> Bool {
+        queuedTranscriptions.contains(messageID)
+    }
+
+    /// Hands a message to the local worker for transcription. Works both for
+    /// messages that have never been transcribed and as a deliberate re-run of
+    /// one that already has a transcript — the Operator keeps the history and
+    /// the newest succeeded row wins downstream.
+    public func requestTranscription(_ message: Message) async {
+        guard !pendingActions.contains(message.id) else { return }
+        guard let rerunner = transcriptionRerunner else {
+            actionError = "Couldn’t start transcription: the Operator worker isn’t running."
+            return
+        }
+        pendingActions.insert(message.id)
+        actionError = nil
+        defer { pendingActions.remove(message.id) }
+        let baseline = message.latestTranscription?.id
+        if await rerunner.requestTranscription(messageID: message.id) {
+            queuedTranscriptions.insert(message.id)
+            queuedTranscriptionBaselines[message.id] = baseline
+        } else {
+            actionError = "Couldn’t start transcription: the worker isn’t running, "
+                + "or this message is already queued."
+        }
     }
 
     /// Clears any surfaced write-action error.
@@ -127,6 +190,27 @@ public final class ReviewStore {
         }
     }
 
+    /// Clears the "queued" marker for any message whose transcript is now newer
+    /// than the one the re-run started from, or that has left the window.
+    private func reconcileQueuedTranscriptions() {
+        guard !queuedTranscriptions.isEmpty else { return }
+        let byID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for id in queuedTranscriptions {
+            guard let message = byID[id] else {
+                queuedTranscriptions.remove(id)
+                queuedTranscriptionBaselines.removeValue(forKey: id)
+                continue
+            }
+            let baseline = queuedTranscriptionBaselines[id] ?? nil
+            if let latest = message.latestTranscription,
+               latest.status == .succeeded,
+               latest.id != baseline {
+                queuedTranscriptions.remove(id)
+                queuedTranscriptionBaselines.removeValue(forKey: id)
+            }
+        }
+    }
+
     private static func describe(_ error: any Error, verb: String) -> String {
         switch error {
         case OperatorReviewError.unauthenticated, OperatorReviewError.unauthorized:
@@ -186,6 +270,7 @@ public final class ReviewStore {
             // applied write) already reflects the newer state.
             guard generation == writeGeneration else { return }
             messages = list.items
+            reconcileQueuedTranscriptions()
             lastUpdated = Date()
             state = .loaded
         } catch OperatorReviewError.unauthenticated, OperatorReviewError.unauthorized {

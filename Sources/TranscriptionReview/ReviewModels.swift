@@ -252,6 +252,36 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
         default: return false
         }
     }
+
+    /// True when the message sits in the review queue. A freshly landed upload
+    /// reports `pending`; `received` still exists for historical rows, so both
+    /// count and neither value is hard-coded anywhere else.
+    public var isReviewable: Bool {
+        switch status {
+        case .received, .pending: return true
+        default: return false
+        }
+    }
+
+    /// True when the Operator holds a succeeded transcription for this message.
+    public var hasSucceededTranscription: Bool {
+        latestTranscription?.status == .succeeded
+    }
+
+    /// True when transcription succeeded but produced no text — a silent
+    /// recording, which is meaningfully different from "not transcribed yet".
+    public var transcriptionIsSilent: Bool {
+        guard hasSucceededTranscription else { return false }
+        let text = latestTranscription?.text ?? ""
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// True when the message is reviewable and no succeeded transcription
+    /// exists yet. Transcription is optional enrichment on the Operator side,
+    /// so these messages are visible to operators but not yet enriched.
+    public var needsTranscription: Bool {
+        isReviewable && !hasSucceededTranscription
+    }
 }
 
 extension Message {

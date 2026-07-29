@@ -2,9 +2,15 @@ import Foundation
 import Logging
 import TranscriptionShared
 
-/// Long-running background worker that subscribes to the Operator status
-/// WebSocket, fetches message work inputs on demand, runs one local job at a
-/// time, and pushes results back to the Operator.
+/// Long-running background worker that keeps the Mac supplied with Operator
+/// work. Two independent sources feed one serialized job queue:
+///
+/// 1. the status WebSocket, which still solicits translation and moderation
+///    (and transcription when an operator presses "Re-run transcription");
+/// 2. a **discovery pass** that polls `GET /v1/worker/messages` for reviewable
+///    messages with no succeeded transcription. Transcription is optional
+///    enrichment on the Operator side and is no longer broadcast for new
+///    uploads, so the app has to find that work itself.
 ///
 /// **Privacy:** the worker never logs audio bytes, transcripts, translated
 /// text, or moderation input. Status snapshots include sanitized error codes
@@ -26,8 +32,22 @@ public actor OperatorWorker {
         public var lastErrorCode: String?
         public var lastErrorAt: Date?
         public var consecutiveFailures: Int = 0
+        /// When the discovery pass last completed a successful listing.
+        public var lastDiscoveryAt: Date?
+        /// How many messages that listing enqueued for transcription.
+        public var lastDiscoveredCount: Int?
 
         public init() {}
+    }
+
+    /// One queued unit of work. `force` marks a deliberate human re-run, which
+    /// bypasses the per-kind enable filter.
+    private struct QueuedJob: Sendable, Equatable {
+        var messageID: String
+        var kind: OperatorJob.Kind
+        var force: Bool
+
+        var key: String { "\(kind.rawValue):\(messageID)" }
     }
     // swiftlint:enable nesting
 
@@ -35,6 +55,8 @@ public actor OperatorWorker {
     private let dispatcher: any OperatorJobDispatcher
     private let workChannel: any OperatorWorkChannel
     private let reconnectBaseSeconds: Int
+    /// Discovery poll interval. Reuses the worker's configured base delay.
+    private var discoveryBaseSeconds: Int { reconnectBaseSeconds }
     private let enabledKinds: Set<OperatorJob.Kind>
     private let logger: Logger
     private let clock: @Sendable () -> Date
@@ -43,7 +65,23 @@ public actor OperatorWorker {
 
     private var status = Status()
     private var task: Task<Void, Never>?
+    private var discoveryTask: Task<Void, Never>?
+    private var drainTask: Task<Void, Never>?
+    private var jobQueue: [QueuedJob] = []
+    private var queuedKeys: Set<String> = []
+    private var runningKey: String?
+    private var discoveryFailures = 0
+    /// How many times the discovery pass has enqueued each message this
+    /// session. Caps repeated attempts so a message the Operator keeps listing
+    /// (because a push failed, say) can't spin in a hot loop.
+    private var discoveryAttempts: [String: Int] = [:]
     private var stopRequested = false
+
+    /// Page size for the discovery listing, and how many pages one pass will
+    /// follow before waiting for the next interval.
+    private let discoveryPageLimit = 50
+    private let discoveryMaxPages = 10
+    private let maxDiscoveryAttempts = 3
 
     public init(
         client: any OperatorClient,
@@ -68,7 +106,7 @@ public actor OperatorWorker {
 
     public func currentStatus() -> Status { status }
 
-    /// Starts the WebSocket subscription loop. Idempotent.
+    /// Starts the WebSocket subscription loop and the discovery pass. Idempotent.
     public func start() {
         guard task == nil else { return }
         stopRequested = false
@@ -76,19 +114,43 @@ public actor OperatorWorker {
         task = Task { [weak self] in
             await self?.runLoop()
         }
+        guard enabledKinds.contains(.transcription) else { return }
+        discoveryTask = Task { [weak self] in
+            await self?.discoveryLoop()
+        }
     }
 
-    /// Signals the loop to stop and awaits teardown. Idempotent.
+    /// Signals the loops to stop and awaits teardown. Idempotent.
     public func stop() async {
         stopRequested = true
         let runningTask = task
+        let discovery = discoveryTask
+        let drain = drainTask
         task = nil
+        discoveryTask = nil
+        drainTask = nil
+        jobQueue.removeAll()
+        queuedKeys.removeAll()
         await workChannel.disconnect()
+        discovery?.cancel()
+        drain?.cancel()
         if let runningTask {
             runningTask.cancel()
             await runningTask.value
         }
+        await discovery?.value
+        await drain?.value
         setPhase(.stopped)
+    }
+
+    /// Deliberately re-runs transcription for one message, regardless of
+    /// whether the Operator already holds a transcript for it. Returns `false`
+    /// when the worker isn't running or the job is already queued.
+    @discardableResult
+    public func requestTranscription(messageID: String) -> Bool {
+        let trimmed = messageID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, task != nil, !stopRequested else { return false }
+        return enqueue(.init(messageID: trimmed, kind: .transcription, force: true))
     }
 
     private func runLoop() async {
@@ -105,7 +167,7 @@ public actor OperatorWorker {
                         recordConnectionHealthy()
                         confirmedHealthy = true
                     }
-                    await handle(envelope)
+                    handle(envelope)
                 }
                 if !stopRequested && !Task.isCancelled {
                     let connectedSeconds = clock().timeIntervalSince(connectedAt)
@@ -123,13 +185,105 @@ public actor OperatorWorker {
         }
     }
 
-    private func handle(_ envelope: OperatorWorkEnvelope) async {
-        let needs = envelope.needs.filter(enabledKinds.contains)
-        guard !needs.isEmpty else { return }
-        for need in needs {
-            if stopRequested || Task.isCancelled { break }
-            await runNeed(need, messageID: envelope.messageId)
+    private func handle(_ envelope: OperatorWorkEnvelope) {
+        for need in envelope.needs {
+            enqueue(.init(messageID: envelope.messageId, kind: need, force: false))
         }
+    }
+
+    // MARK: - Discovery
+
+    /// Polls the worker listing endpoint for reviewable messages that have no
+    /// succeeded transcription and enqueues one transcription job per message.
+    /// Runs independently of the WebSocket so a dropped or absent `work` event
+    /// can never stall transcription.
+    private func discoveryLoop() async {
+        while !stopRequested && !Task.isCancelled {
+            await runDiscoveryPass()
+            if stopRequested || Task.isCancelled { break }
+            await sleepDiscoveryInterval()
+        }
+    }
+
+    private func runDiscoveryPass() async {
+        var cursor: String?
+        var enqueued = 0
+        var pages = 0
+        repeat {
+            if stopRequested || Task.isCancelled { return }
+            do {
+                let page = try await client.listWork(
+                    needs: .transcription,
+                    limit: discoveryPageLimit,
+                    cursor: cursor
+                )
+                for item in page.items where !item.hasSucceededTranscription {
+                    guard discoveryAttempts[item.id, default: 0] < maxDiscoveryAttempts else { continue }
+                    if enqueue(.init(messageID: item.id, kind: .transcription, force: false)) {
+                        discoveryAttempts[item.id, default: 0] += 1
+                        enqueued += 1
+                    }
+                }
+                cursor = page.nextCursor
+                pages += 1
+            } catch {
+                recordDiscoveryError(code: errorCode(for: error))
+                return
+            }
+        } while cursor != nil && pages < discoveryMaxPages
+
+        discoveryFailures = 0
+        status.lastDiscoveryAt = clock()
+        status.lastDiscoveredCount = enqueued
+        emitStatus()
+    }
+
+    private func sleepDiscoveryInterval() async {
+        let exp = min(5, discoveryFailures)
+        let seconds = discoveryFailures == 0
+            ? discoveryBaseSeconds
+            : min(300, max(discoveryBaseSeconds, discoveryBaseSeconds * Int(pow(2.0, Double(exp)))))
+        try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+    }
+
+    // MARK: - Job queue
+
+    /// Enqueues a job unless the same `(message, kind)` pair is already queued
+    /// or in flight, so a `work` envelope and a discovery hit for the same
+    /// message run exactly once. Returns whether it was actually enqueued.
+    @discardableResult
+    private func enqueue(_ job: QueuedJob) -> Bool {
+        guard job.force || enabledKinds.contains(job.kind) else { return false }
+        guard !job.messageID.isEmpty else { return false }
+        guard !queuedKeys.contains(job.key), runningKey != job.key else { return false }
+        queuedKeys.insert(job.key)
+        jobQueue.append(job)
+        startDrainIfNeeded()
+        return true
+    }
+
+    private func startDrainIfNeeded() {
+        guard drainTask == nil, !stopRequested else { return }
+        drainTask = Task { [weak self] in
+            await self?.drain()
+        }
+    }
+
+    private func drain() async {
+        while !stopRequested && !Task.isCancelled, let job = dequeue() {
+            await runNeed(job.kind, messageID: job.messageID)
+            runningKey = nil
+        }
+        runningKey = nil
+        drainTask = nil
+    }
+
+    private func dequeue() -> QueuedJob? {
+        guard !jobQueue.isEmpty else { return nil }
+        let job = jobQueue.removeFirst()
+        queuedKeys.remove(job.key)
+        runningKey = job.key
+        return job
     }
 
     private func runNeed(_ need: OperatorJob.Kind, messageID: String) async {
@@ -143,7 +297,10 @@ public actor OperatorWorker {
             let result = try await dispatcher.execute(job: job)
             try await client.pushResult(
                 messageID: messageID,
-                transcriptionId: input.transcription?.id,
+                // Transcription results are unsolicited: the Operator no longer
+                // pre-creates a pending row, and a re-run intentionally creates
+                // a new succeeded row rather than updating the old one.
+                transcriptionId: need == .transcription ? nil : input.transcription?.id,
                 result: result
             )
             recordSuccess(jobID: messageID, kind: need)
@@ -186,6 +343,11 @@ public actor OperatorWorker {
         status.lastJobID = jobID
         status.lastJobKind = kind
         status.phase = .subscribed
+        if kind == .transcription {
+            // The Operator will stop listing this message; allow a fresh round
+            // of discovery attempts if it ever comes back.
+            discoveryAttempts[jobID] = 0
+        }
         emitStatus()
     }
 
@@ -195,6 +357,16 @@ public actor OperatorWorker {
         status.lastErrorCode = code
         status.phase = .error
         logger.warning("operator worker error code=\(code) detail=\(message)")
+        emitStatus()
+    }
+
+    /// Discovery failures back off on their own schedule and must not disturb
+    /// the WebSocket reconnect backoff or the phase the socket loop publishes.
+    private func recordDiscoveryError(code: String) {
+        discoveryFailures += 1
+        status.lastErrorAt = clock()
+        status.lastErrorCode = code
+        logger.warning("operator discovery error code=\(code)")
         emitStatus()
     }
 

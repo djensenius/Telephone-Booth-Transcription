@@ -66,7 +66,11 @@ Lives next to the rest of the [Telephone-Booth][tb] family:
 Optionally, the app can also run an **Operator push worker** that subscribes to
 a remote Operator backend, runs requested work locally through the same routes,
 and posts results back — handy when the Operator can't reach the Mac directly.
-See [`docs/operator-push.md`](docs/operator-push.md).
+Transcription is _discovered_ rather than solicited: the worker polls the
+Operator for messages that still need one, so a message is never stranded
+waiting on an event. The **Review** tab shows which messages have no
+transcription yet and lets an operator re-run the AI over one that already
+does. See [`docs/operator-push.md`](docs/operator-push.md).
 
 ## Quickstart
 

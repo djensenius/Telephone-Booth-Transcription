@@ -13,6 +13,14 @@ struct OperatorWorkerPushFilterTests {
         func setInput(_ input: OperatorWorkInput, for id: String) { inputs[id] = input }
         func pushCount() -> Int { pushes }
 
+        nonisolated func listWork(
+            needs: OperatorWorkNeeds,
+            limit: Int,
+            cursor: String?
+        ) async throws -> OperatorWorkListPage {
+            OperatorWorkListPage(items: [])
+        }
+
         nonisolated func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput {
             await inputs[messageID] ?? OperatorWorkInput(id: messageID, status: "missing")
         }

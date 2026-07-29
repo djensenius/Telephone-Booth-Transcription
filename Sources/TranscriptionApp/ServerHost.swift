@@ -397,4 +397,14 @@ final class ServerHost: ObservableObject {
     }
 }
 
+/// Lets the Review surface hand a message to the local push worker for
+/// transcription — both for messages that were never transcribed and as a
+/// deliberate re-run of one that already has a transcript.
+extension ServerHost: TranscriptionRerunRequesting {
+    func requestTranscription(messageID: String) async -> Bool {
+        guard let worker = operatorWorker else { return false }
+        return await worker.requestTranscription(messageID: messageID)
+    }
+}
+
 #endif

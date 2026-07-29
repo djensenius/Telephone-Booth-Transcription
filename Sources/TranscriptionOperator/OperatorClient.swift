@@ -9,6 +9,9 @@ import TranscriptionShared
 /// message IDs from the status WebSocket, fetches per-message work input, then
 /// posts one local result per requested need.
 public protocol OperatorClient: Sendable {
+    /// Lists reviewable messages the worker may act on. Used by the discovery
+    /// pass, which no longer depends on `work` envelopes for transcription.
+    func listWork(needs: OperatorWorkNeeds, limit: Int, cursor: String?) async throws -> OperatorWorkListPage
     func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput
     func pushResult(messageID: String, transcriptionId: String?, result: OperatorJobResult) async throws
 }
@@ -62,8 +65,27 @@ public final class HTTPOperatorClient: OperatorClient {
         )
     }
 
+    public func listWork(
+        needs: OperatorWorkNeeds,
+        limit: Int,
+        cursor: String?
+    ) async throws -> OperatorWorkListPage {
+        var path = "/v1/worker/messages?needs=\(needs.rawValue)&limit=\(max(1, min(200, limit)))"
+        if let cursor, !cursor.isEmpty {
+            path += "&cursor=\(escapeQuery(cursor))"
+        }
+        return try await getJSON(path: path, label: "work list")
+    }
+
     public func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput {
-        var request = try await makeRequest(method: .GET, path: "/v1/worker/messages/\(escape(messageID))/work")
+        try await getJSON(
+            path: "/v1/worker/messages/\(escape(messageID))/work",
+            label: "work input"
+        )
+    }
+
+    private func getJSON<Response: Decodable>(path: String, label: String) async throws -> Response {
+        var request = try await makeRequest(method: .GET, path: path)
         request.headers.add(name: "Accept", value: "application/json")
         let response = try await execute(request)
         switch response.status.code {
@@ -71,9 +93,9 @@ public final class HTTPOperatorClient: OperatorClient {
             let buffer = try await collect(response.body)
             let bytes = buffer.getBytes(at: buffer.readerIndex, length: buffer.readableBytes) ?? []
             do {
-                return try JSONDecoder().decode(OperatorWorkInput.self, from: Data(bytes))
+                return try JSONDecoder().decode(Response.self, from: Data(bytes))
             } catch {
-                throw OperatorClientError.malformedResponse("work input: \(type(of: error))")
+                throw OperatorClientError.malformedResponse("\(label): \(type(of: error))")
             }
         case 401, 403:
             _ = try? await collect(response.body)
@@ -159,6 +181,10 @@ public final class HTTPOperatorClient: OperatorClient {
 
     private func escape(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
+    }
+
+    private func escapeQuery(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? value
     }
 
     private func normalizedRecommendation(_ value: String) -> String {
