@@ -59,13 +59,25 @@ public struct OperatorWorkListItem: Sendable, Equatable, Decodable {
         }
     }
 
+    /// Formatter construction is far more expensive than parsing, and a
+    /// discovery pass decodes hundreds of items on a short interval, so both
+    /// variants are built once (mirroring `OperatorJSON`).
+    /// `ISO8601DateFormatter` is documented as thread-safe for reads once
+    /// configured; these are configured here and never mutated again.
+    private nonisolated(unsafe) static let fractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private nonisolated(unsafe) static let plainFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     private static func parseTimestamp(_ value: String) -> Date? {
-        let withFractional = ISO8601DateFormatter()
-        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFractional.date(from: value) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: value)
+        fractionalFormatter.date(from: value) ?? plainFormatter.date(from: value)
     }
 }
 
@@ -85,9 +97,12 @@ public struct OperatorWorkListPage: Sendable, Equatable, Decodable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decoded = (try? container.decode([OperatorWorkListItem].self, forKey: .items)) ?? []
-        items = decoded.filter { !$0.id.isEmpty }
-        let cursor = try? container.decodeIfPresent(String.self, forKey: .nextCursor)
+        // The page's collection is required: a malformed 200 must surface as a
+        // decode failure so the worker records it and retries, rather than
+        // masquerading as an empty — and therefore "successful" — pass.
+        items = try container.decode([OperatorWorkListItem].self, forKey: .items)
+            .filter { !$0.id.isEmpty }
+        let cursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
         nextCursor = (cursor?.isEmpty == false) ? cursor : nil
     }
 }

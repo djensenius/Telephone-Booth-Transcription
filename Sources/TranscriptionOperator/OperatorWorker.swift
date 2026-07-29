@@ -253,6 +253,10 @@ public actor OperatorWorker {
     /// message run exactly once. Returns whether it was actually enqueued.
     @discardableResult
     private func enqueue(_ job: QueuedJob) -> Bool {
+        // Teardown can interleave with an in-flight discovery response; without
+        // this guard a late enqueue would leave stale keys behind after `stop()`
+        // has already drained the queue.
+        guard !stopRequested, !Task.isCancelled else { return false }
         guard job.force || enabledKinds.contains(job.kind) else { return false }
         guard !job.messageID.isEmpty else { return false }
         guard !queuedKeys.contains(job.key), runningKey != job.key else { return false }
@@ -344,9 +348,10 @@ public actor OperatorWorker {
         status.lastJobKind = kind
         status.phase = .subscribed
         if kind == .transcription {
-            // The Operator will stop listing this message; allow a fresh round
-            // of discovery attempts if it ever comes back.
-            discoveryAttempts[jobID] = 0
+            // The Operator will stop listing this message; drop the counter so
+            // it doesn't accumulate for the worker's whole lifetime, which also
+            // restores a full attempt budget if the message ever comes back.
+            discoveryAttempts.removeValue(forKey: jobID)
         }
         emitStatus()
     }

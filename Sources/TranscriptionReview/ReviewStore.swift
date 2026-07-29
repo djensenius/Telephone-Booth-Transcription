@@ -35,6 +35,13 @@ public final class ReviewStore {
     private let client: any OperatorReviewClient
     @ObservationIgnored
     private let pollInterval: Duration
+    /// How long a queued transcription may sit unfulfilled before the UI lets
+    /// the operator try again. Local runs can fail (audio fetch, upstream, the
+    /// result POST) without the app ever seeing a new transcript.
+    @ObservationIgnored
+    private let queuedTranscriptionTimeout: TimeInterval
+    @ObservationIgnored
+    private let now: @Sendable () -> Date
     @ObservationIgnored
     private let logger = Logger(
         subsystem: "org.davidjensenius.TelephoneBoothTranscription.review",
@@ -46,10 +53,16 @@ public final class ReviewStore {
     /// resolves after it can be discarded instead of resurrecting the old row.
     @ObservationIgnored
     private var writeGeneration = 0
-    /// Transcription id each queued re-run started from, so the "queued" state
-    /// clears only once a genuinely newer transcript lands.
+    /// State for each queued re-run: the transcription id it started from (so
+    /// the marker clears only once a genuinely newer transcript lands) and when
+    /// it was queued (so a failed run can't disable the button forever).
     @ObservationIgnored
-    private var queuedTranscriptionBaselines: [String: String?] = [:]
+    private var queuedTranscriptionState: [String: QueuedTranscription] = [:]
+
+    private struct QueuedTranscription {
+        var baseline: String?
+        var queuedAt: Date
+    }
 
     public private(set) var messages: [Message] = []
     public private(set) var state: LoadState = .idle
@@ -68,9 +81,16 @@ public final class ReviewStore {
     @ObservationIgnored
     public var transcriptionRerunner: (any TranscriptionRerunRequesting)?
 
-    public init(client: any OperatorReviewClient, pollInterval: Duration = .seconds(30)) {
+    public init(
+        client: any OperatorReviewClient,
+        pollInterval: Duration = .seconds(30),
+        queuedTranscriptionTimeout: TimeInterval = 300,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.client = client
         self.pollInterval = pollInterval
+        self.queuedTranscriptionTimeout = queuedTranscriptionTimeout
+        self.now = now
     }
 
     /// Reviewable messages with no succeeded transcription — the primary
@@ -79,10 +99,11 @@ public final class ReviewStore {
         messages.filter(\.needsTranscription)
     }
 
-    /// Messages that already have a transcript, offered separately so an
-    /// operator can deliberately re-run the AI over them.
+    /// Reviewable messages that already have a transcript, offered separately
+    /// so an operator can deliberately re-run the AI over them. Decided
+    /// (approved/rejected) messages are out of scope.
     public var alreadyTranscribed: [Message] {
-        messages.filter(\.hasSucceededTranscription)
+        messages.filter { $0.isReviewable && $0.hasSucceededTranscription }
     }
 
     /// Messages whose latest transcription has source text but no translation.
@@ -122,7 +143,7 @@ public final class ReviewStore {
         let baseline = message.latestTranscription?.id
         if await rerunner.requestTranscription(messageID: message.id) {
             queuedTranscriptions.insert(message.id)
-            queuedTranscriptionBaselines[message.id] = baseline
+            queuedTranscriptionState[message.id] = .init(baseline: baseline, queuedAt: now())
         } else {
             actionError = "Couldn’t start transcription: the worker isn’t running, "
                 + "or this message is already queued."
@@ -191,24 +212,33 @@ public final class ReviewStore {
     }
 
     /// Clears the "queued" marker for any message whose transcript is now newer
-    /// than the one the re-run started from, or that has left the window.
+    /// than the one the re-run started from, that has left the window, or whose
+    /// run has been outstanding long enough to assume it failed — otherwise a
+    /// failed run would disable the retry button forever.
     private func reconcileQueuedTranscriptions() {
         guard !queuedTranscriptions.isEmpty else { return }
         let byID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let cutoff = now().addingTimeInterval(-queuedTranscriptionTimeout)
         for id in queuedTranscriptions {
-            guard let message = byID[id] else {
-                queuedTranscriptions.remove(id)
-                queuedTranscriptionBaselines.removeValue(forKey: id)
+            guard let message = byID[id], let state = queuedTranscriptionState[id] else {
+                clearQueuedTranscription(id)
                 continue
             }
-            let baseline = queuedTranscriptionBaselines[id] ?? nil
+            if state.queuedAt <= cutoff {
+                clearQueuedTranscription(id)
+                continue
+            }
             if let latest = message.latestTranscription,
                latest.status == .succeeded,
-               latest.id != baseline {
-                queuedTranscriptions.remove(id)
-                queuedTranscriptionBaselines.removeValue(forKey: id)
+               latest.id != state.baseline {
+                clearQueuedTranscription(id)
             }
         }
+    }
+
+    private func clearQueuedTranscription(_ messageID: String) {
+        queuedTranscriptions.remove(messageID)
+        queuedTranscriptionState.removeValue(forKey: messageID)
     }
 
     private static func describe(_ error: any Error, verb: String) -> String {

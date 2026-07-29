@@ -246,16 +246,11 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// True when the message is still awaiting a human moderation decision.
-    public var awaitingModerationDecision: Bool {
-        switch status {
-        case .received, .pending: return true
-        default: return false
-        }
-    }
+    public var awaitingModerationDecision: Bool { isReviewable }
 
     /// True when the message sits in the review queue. A freshly landed upload
     /// reports `pending`; `received` still exists for historical rows, so both
-    /// count and neither value is hard-coded anywhere else.
+    /// count — and this is the single source of truth for that status set.
     public var isReviewable: Bool {
         switch status {
         case .received, .pending: return true

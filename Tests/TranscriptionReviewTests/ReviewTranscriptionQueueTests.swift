@@ -90,6 +90,33 @@ struct ReviewTranscriptionQueueTests {
     ]}
     """
 
+    /// A decided message that still carries a transcript, alongside a reviewable
+    /// one, to prove the re-run bucket only offers reviewable rows.
+    private static let seedWithDecided = """
+    {"items":[
+      {"id":"approved","status":"approved","questionId":null,"notes":null,
+       "createdAt":"2026-01-02T03:04:05Z","receivedAt":null,
+       "audio":{"url":"https://e.com/a.flac","sha256":"a","durationMs":null},
+       "latestTranscription":{"id":"ta","messageId":"approved","provider":"mac_app","model":null,
+         "status":"succeeded","text":"hola","language":"es","durationMs":null,"latencyMs":null,
+         "error":null,"requestedById":null,"createdAt":"2026-01-02T03:04:07Z","completedAt":null,
+         "translationStatus":null,"translatedText":null,"translatedLanguage":null,
+         "translationProvider":null,"translationModel":null,"translationError":null,
+         "translationLatencyMs":null,"translationCompletedAt":null},
+       "latestModeration":null},
+      {"id":"spoken","status":"pending","questionId":null,"notes":null,
+       "createdAt":"2026-01-02T03:04:05Z","receivedAt":null,
+       "audio":{"url":"https://e.com/t.flac","sha256":"t","durationMs":null},
+       "latestTranscription":{"id":"tt","messageId":"spoken","provider":"mac_app","model":null,
+         "status":"succeeded","text":"hola","language":"es","durationMs":null,"latencyMs":null,
+         "error":null,"requestedById":null,"createdAt":"2026-01-02T03:04:07Z","completedAt":null,
+         "translationStatus":null,"translatedText":null,"translatedLanguage":null,
+         "translationProvider":null,"translationModel":null,"translationError":null,
+         "translationLatencyMs":null,"translationCompletedAt":null},
+       "latestModeration":null}
+    ]}
+    """
+
     /// Same page, but `untranscribed` now carries a succeeded transcript.
     private static let seedAfterTranscription = """
     {"items":[
@@ -197,5 +224,57 @@ struct ReviewTranscriptionQueueTests {
 
         #expect(store.actionError != nil)
         #expect(store.isTranscriptionQueued("untranscribed") == false)
+    }
+
+    @Test("decided messages are excluded from the re-run bucket")
+    @MainActor
+    func decidedMessagesAreNotOfferedForRerun() async {
+        let store = ReviewStore(client: QueueClient(seed: Self.seedWithDecided), pollInterval: .seconds(1))
+        await store.refresh()
+
+        #expect(store.messages.count == 2)
+        #expect(store.alreadyTranscribed.map(\.id) == ["spoken"])
+        #expect(store.awaitingTranscription.isEmpty)
+    }
+
+    @Test("a queued transcription that never lands expires so it can be retried")
+    @MainActor
+    func queuedTranscriptionExpires() async {
+        let clock = MutableClock()
+        let store = ReviewStore(
+            client: QueueClient(seed: Self.seed),
+            pollInterval: .seconds(1),
+            queuedTranscriptionTimeout: 60,
+            now: { clock.now }
+        )
+        let rerunner = StubRerunner()
+        store.transcriptionRerunner = rerunner
+        await store.refresh()
+
+        let target = try! #require(store.awaitingTranscription.first)
+        await store.requestTranscription(target)
+        #expect(store.isTranscriptionQueued("untranscribed"))
+
+        // The local run failed silently: no newer transcript ever arrives.
+        await store.refresh()
+        #expect(store.isTranscriptionQueued("untranscribed"))
+
+        clock.advance(by: 61)
+        await store.refresh()
+        #expect(store.isTranscriptionQueued("untranscribed") == false)
+    }
+
+    private final class MutableClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        var now: Date {
+            lock.lock(); defer { lock.unlock() }
+            return _now
+        }
+
+        func advance(by seconds: TimeInterval) {
+            lock.withLock { _now = _now.addingTimeInterval(seconds) }
+        }
     }
 }

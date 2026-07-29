@@ -64,10 +64,12 @@ struct OperatorWorkerDiscoveryTests {
         }
     }
 
-    /// A channel that connects but never yields a `work` envelope — exactly the
-    /// new Operator behaviour for a freshly landed upload.
+    /// A channel that connects but never yields a `work` envelope on its own —
+    /// exactly the new Operator behaviour for a freshly landed upload. Envelopes
+    /// pushed before `connect()` are buffered so tests can't race the loop.
     actor SilentChannel: OperatorWorkChannel {
         var continuation: AsyncStream<OperatorWorkEnvelope>.Continuation?
+        var pending: [OperatorWorkEnvelope] = []
 
         nonisolated func connect() async throws -> AsyncStream<OperatorWorkEnvelope> {
             await self.openStream()
@@ -76,10 +78,18 @@ struct OperatorWorkerDiscoveryTests {
         func openStream() -> AsyncStream<OperatorWorkEnvelope> {
             let pair = AsyncStream<OperatorWorkEnvelope>.makeStream(of: OperatorWorkEnvelope.self)
             continuation = pair.continuation
+            for envelope in pending { pair.continuation.yield(envelope) }
+            pending.removeAll()
             return pair.stream
         }
 
-        func yield(_ envelope: OperatorWorkEnvelope) { continuation?.yield(envelope) }
+        func yield(_ envelope: OperatorWorkEnvelope) {
+            if let continuation {
+                continuation.yield(envelope)
+            } else {
+                pending.append(envelope)
+            }
+        }
 
         nonisolated func disconnect() async { await self.close() }
         func close() {
@@ -213,15 +223,44 @@ struct OperatorWorkerDiscoveryTests {
         await client.setInput(audioInput(id: "dup"), for: "dup")
         let dispatcher = RecordingDispatcher()
         let channel = SilentChannel()
+        // Buffered before the worker starts, so the envelope is guaranteed to be
+        // delivered the moment the socket loop connects — racing the discovery
+        // pass for the same message, which is exactly what's under test.
+        await channel.yield(.init(messageId: "dup", needs: [.transcription]))
         let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
 
         await worker.start()
-        await channel.yield(.init(messageId: "dup", needs: [.transcription]))
         try await Task.sleep(nanoseconds: 300_000_000)
         await worker.stop()
 
         let jobs = await dispatcher.recorded()
         #expect(jobs.count == 1)
+    }
+
+    @Test func aTranslationEnvelopeStillRunsAlongsideDiscovery() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "m1", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "m1"), for: "m1")
+        await client.setInput(audioInput(id: "m2", transcriptionID: "tr-m2"), for: "m2")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setResult(
+            .translation(translatedText: "hello", sourceLanguage: "fr", targetLanguage: "en", model: nil)
+        )
+        let channel = SilentChannel()
+        await channel.yield(.init(messageId: "m2", needs: [.translation]))
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let kinds = Set(await dispatcher.recorded().map(\.kind))
+        #expect(kinds == [.transcription, .translation])
+        // Translation results still reference the fetched transcription row.
+        let pushes = await client.pushes()
+        let translation = pushes.first { $0.messageID == "m2" }
+        #expect(translation?.transcriptionID == "tr-m2")
     }
 
     @Test func discoveryDoesNotRunWhenTranscriptionIsDisabled() async throws {
@@ -320,6 +359,20 @@ struct OperatorWorkListDecodingTests {
         #expect(page.nextCursor == nil)
         #expect(page.items[0].hasSucceededTranscription == false)
         #expect(page.items[0].receivedAt == nil)
+    }
+
+    @Test func rejectsAPageWithoutItems() {
+        let json = Data(#"{ "nextCursor": "abc" }"#.utf8)
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        }
+    }
+
+    @Test func rejectsAMalformedCursor() {
+        let json = Data(#"{ "items": [], "nextCursor": 12 }"#.utf8)
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(OperatorWorkListPage.self, from: json)
+        }
     }
 
     @Test func decodesTimestampsWithoutFractionalSeconds() throws {
