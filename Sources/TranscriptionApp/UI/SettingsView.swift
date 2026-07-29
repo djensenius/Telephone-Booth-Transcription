@@ -57,9 +57,13 @@ struct SettingsView: View {
     private var allLocalSection: some View {
         Section("Privacy mode") {
             if host.config.isFullyLocal {
+                // Deliberately scoped to the AI routes: `isFullyLocal` says
+                // nothing about the Operator worker, which still polls and
+                // posts over the network when enabled. Promising "no request
+                // leaves the machine" would be a privacy claim we can't keep.
                 Label("All local — transcription, translation, and moderation "
-                      + "run on this Mac with Apple Intelligence. No request "
-                      + "leaves the machine.",
+                      + "run on this Mac. No audio or text is sent to a "
+                      + "configured upstream.",
                       systemImage: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                     .font(.caption)
@@ -71,11 +75,12 @@ struct SettingsView: View {
                 Button("Switch everything to on-device") {
                     host.config = host.config.withAllLocalBackends()
                 }
-                Text("Sets transcription to the macOS 26 Speech Analyzer and "
-                     + "moderation, text translation, and audio translation to "
-                     + "Apple Intelligence. Upstream URLs are kept so you can "
-                     + "switch back. Requires Apple Intelligence to be enabled "
-                     + "in System Settings.")
+                Text("Sets moderation, text translation, and audio translation "
+                     + "to Apple Intelligence, and proxied transcription to the "
+                     + "macOS 26 Speech Analyzer. A legacy Speech Recognizer "
+                     + "selection is kept, since it's already on-device. "
+                     + "Upstream URLs are kept so you can switch back. Requires "
+                     + "Apple Intelligence to be enabled in System Settings.")
                     .font(.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }

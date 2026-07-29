@@ -213,23 +213,23 @@ The consequences are worth stating plainly:
   still gets the transcription queues, with `supportsTranslation == false`
   hiding just the translate affordance.
 
-#### Transcripts are read-only on iOS
+#### Transcripts are read-only on iOS (client limitation)
 
 The transcription queues added by the discovery worker are actionable on macOS,
 which hands the job to its worker and gets the transcript posted back to the
 Operator. iOS can run the same transcription locally via `transcribeOnly`, but
-it cannot submit the result: the only Operator endpoint that accepts transcript
-text (`POST /v1/worker/messages/{id}/transcription`) is gated on a worker-scoped
-API token, and the iOS app authenticates solely as a human operator over OIDC.
-`POST /v1/messages/{id}/transcribe` is operator-authenticated but takes no body
-— it triggers the Operator's own server-side pipeline, which is the opposite of
-what an on-device run is for.
+does not yet submit the result — it is shown to the operator and goes no
+further.
 
-Rather than issue the phone a worker token (a broad privilege for a single
-write, and one the iOS app has nowhere to persist), the local transcript is
-shown to the operator and goes no further. Lifting this needs an
-operator-authenticated submit endpoint, tracked in
-[Operator #121](https://github.com/djensenius/Telephone-Booth-Operator/issues/121).
+This started as an API constraint: the only endpoint accepting transcript text
+was `POST /v1/worker/messages/{id}/transcription`, gated on a worker-scoped API
+token that the iOS app (an OIDC human operator) has no business holding.
+[Operator #122][op122] has since shipped an operator-authenticated
+`POST /v1/messages/{id}/transcription`, so the constraint is now purely on this
+side: the client work is simply not written yet. Tracked in [#68][submit].
+
+[op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
+[submit]: https://github.com/djensenius/Telephone-Booth-Transcription/issues/68
 
 ---
 

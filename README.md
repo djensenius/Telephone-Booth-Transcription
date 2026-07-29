@@ -124,13 +124,14 @@ rather than over HTTP:
   transcription" buckets offer a transcribe-only version of the same run.
 - **Human in the loop** — a translation result pre-fills the draft. Nothing is
   submitted automatically; the operator reviews and taps Submit.
-- **Transcripts stay on the phone.** iOS can transcribe locally but can't send
-  the transcript to the Operator: the only endpoint accepting transcript text
-  is worker-token gated, and the iOS app holds just an OIDC operator token.
-  Tracked in [Operator #121][op121]. macOS is unaffected — it posts transcripts
-  back through its worker as before.
+- **Transcripts stay on the phone, for now.** iOS can transcribe locally but
+  doesn't yet submit the transcript to the Operator. The endpoint to do so
+  exists as of [Operator #122][op122]; wiring it up is client-side work tracked
+  in [#68][submit]. macOS is unaffected — it posts transcripts back through its
+  worker as before.
 
-[op121]: https://github.com/djensenius/Telephone-Booth-Operator/issues/121
+[op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
+[submit]: https://github.com/djensenius/Telephone-Booth-Transcription/issues/68
 
 Audio is fetched with no `Authorization` header: the Operator hands out
 pre-signed, short-lived URLs, so attaching the operator's token would leak it to

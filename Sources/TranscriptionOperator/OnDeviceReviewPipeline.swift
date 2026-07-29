@@ -136,6 +136,22 @@ public final class OnDeviceReviewPipeline {
         generations[messageID] == generation
     }
 
+    /// Drops all state for messages that are no longer in the review queue.
+    ///
+    /// `stages` and `outputs` hold complete transcripts and translations, and
+    /// `reset` only fires when a row's transcription id changes — so without
+    /// this, deciding on a message leaves its text resident for as long as the
+    /// app runs, and a long session accumulates every message it ever touched.
+    /// In-flight runs for pruned ids are superseded, not left to repopulate.
+    public func prune(keeping activeIDs: Set<String>) {
+        for id in stages.keys where !activeIDs.contains(id) {
+            reset(id)
+        }
+        for id in outputs.keys where !activeIDs.contains(id) {
+            reset(id)
+        }
+    }
+
     /// Clears any surfaced result/error for a message, and supersedes any run
     /// still in flight for it.
     public func reset(_ messageID: String) {
@@ -148,10 +164,11 @@ public final class OnDeviceReviewPipeline {
     /// transcription" queues. Returns the local transcript, or `nil` on
     /// failure.
     ///
-    /// The result stays on this device. The Operator exposes no
-    /// operator-authenticated endpoint that accepts transcript text — the only
-    /// one that does is worker-token gated — so there is deliberately no submit
-    /// path here yet. See the `transcriptionSubmissionUnsupported` note below.
+    /// The result stays on this device: there is no submit path wired up yet.
+    /// This began as an API gap (only a worker-token endpoint accepted
+    /// transcript text), but Operator #122 has since added an
+    /// operator-authenticated `POST /v1/messages/{id}/transcription`, so it is
+    /// now just client work that hasn't been done. Tracked in #68.
     @discardableResult
     public func transcribeOnly(for message: Input) async -> String? {
         guard !isRunning(message.id) else { return nil }

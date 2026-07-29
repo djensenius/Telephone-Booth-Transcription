@@ -262,10 +262,18 @@ public struct ServerConfig: Sendable, Equatable {
             && audioTranslationBackend == .onDevice
     }
 
-    /// Returns a copy configured for fully-local operation: Apple's on-device
-    /// `SpeechAnalyzer` for transcription and Apple Foundation Models for
-    /// moderation and both translation routes. Upstream URLs are left intact so
-    /// switching back to proxy mode doesn't lose the user's settings.
+    /// Returns a copy configured for fully-local operation: Apple Foundation
+    /// Models for moderation and both translation routes, and an on-device
+    /// speech engine for transcription.
+    ///
+    /// Transcription only switches to `SpeechAnalyzer` when it was proxied. An
+    /// existing `.nativeMacOS` selection is preserved, since it is already
+    /// on-device (it fails closed rather than reaching Apple's servers) and
+    /// overriding it would silently discard a deliberate choice — Speech
+    /// Analyzer needs per-locale assets the user may not have downloaded.
+    ///
+    /// Upstream URLs are left intact so switching back to proxy mode doesn't
+    /// lose the user's settings.
     public func withAllLocalBackends() -> ServerConfig {
         var copy = self
         if case .proxy = copy.transcriptionBackend {

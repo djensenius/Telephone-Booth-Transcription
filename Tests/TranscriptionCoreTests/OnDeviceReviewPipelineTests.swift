@@ -264,6 +264,34 @@ struct OnDeviceReviewPipelineTests {
 
     // MARK: - Reset and concurrency
 
+    @Test func pruneDropsStateForMessagesNoLongerInTheQueue() async {
+        let pipeline = makePipeline()
+        _ = await pipeline.run(for: input("keep"))
+        _ = await pipeline.run(for: input("gone"))
+
+        pipeline.prune(keeping: ["keep"])
+
+        // Transcripts must not stay resident once a message leaves the queue.
+        #expect(pipeline.outputs["gone"] == nil)
+        #expect(pipeline.stage(for: "gone") == .idle)
+        #expect(pipeline.outputs["keep"]?.transcript == "bonjour")
+        #expect(pipeline.stage(for: "keep") == .finished)
+    }
+
+    @Test func pruneSupersedesAnInFlightRun() async {
+        let gate = Gate()
+        let pipeline = makePipeline(transcriber: StubTranscriber(gate: gate))
+
+        let task = Task { await pipeline.run(for: input("gone")) }
+        while !pipeline.isRunning("gone") { await Task.yield() }
+
+        pipeline.prune(keeping: [])
+        await gate.open()
+
+        #expect(await task.value == nil)
+        #expect(pipeline.outputs["gone"] == nil)
+    }
+
     @Test func resetClearsResult() async {
         let pipeline = makePipeline()
         _ = await pipeline.run(for: input())

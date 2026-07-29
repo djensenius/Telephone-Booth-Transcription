@@ -154,6 +154,20 @@ struct ReviewView: View {
             .padding(Theme.Spacing.large)
         }
         .refreshable { await store.refresh() }
+        .onChange(of: visibleMessageIDs) { _, ids in
+            // Transcripts and translations live in the pipeline until pruned;
+            // drop anything that has left the queue.
+            onDevice?.prune(keeping: ids)
+        }
+    }
+
+    /// Every message id currently rendered in any bucket.
+    private var visibleMessageIDs: Set<String> {
+        var ids = Set(store.awaitingTranscription.map(\.id))
+        ids.formUnion(store.awaitingTranslation.map(\.id))
+        ids.formUnion(store.awaitingModeration.map(\.id))
+        ids.formUnion(store.withTranscriptionHistory.map(\.id))
+        return ids
     }
 
     private var header: some View {
@@ -488,7 +502,11 @@ private struct ReviewRow: View {
                             .font(Theme.Fonts.caption)
                             .foregroundStyle(Theme.Colors.textSecondary)
                     }
-                    Text("Nothing left this device. Review the draft before submitting.")
+                    // The audio itself *was* downloaded from blob storage, so
+                    // don't claim nothing left the device — only that no
+                    // content reached an AI processor.
+                    Text("Processed on this device — no audio or text was sent "
+                         + "to an AI service. Review the draft before submitting.")
                         .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
