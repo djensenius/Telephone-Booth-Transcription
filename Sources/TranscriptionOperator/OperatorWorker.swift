@@ -121,10 +121,11 @@ public actor OperatorWorker {
     /// upstream outage self-heals without restarting the app.
     private let discoveryRetryCooldown: TimeInterval = 1800
     /// Upper bound on the remembered-message caches, so a long-running worker's
-    /// memory doesn't grow with historical traffic. Sized so that eviction only
-    /// happens after thousands of successes: an evicted ID is only reachable
-    /// again if the Operator is still listing that message as untranscribed,
-    /// which costs at most one extra transcript row.
+    /// memory doesn't grow with historical traffic. Retirement is therefore a
+    /// bounded guarantee, not an absolute one: past this many successes the
+    /// oldest IDs are evicted, and an evicted message the Operator still lists
+    /// as untranscribed can be picked up again — at which point the ordinary
+    /// per-message attempt cap and cooldown bound how often that can happen.
     private let maxRememberedMessages = 5000
     /// Upper bound on discovered jobs waiting in the queue, so a large backlog
     /// can't crowd out envelope-driven translation and moderation.
@@ -295,6 +296,10 @@ public actor OperatorWorker {
                 pages += 1
                 if atCapacity { break }
             } catch {
+                // A rejected or expired continuation cursor must not stick: drop
+                // it so the next pass restarts from page one. De-duplication
+                // makes the rescan harmless.
+                discoveryCursor = nil
                 recordDiscoveryError(code: errorCode(for: error))
                 return
             }
@@ -511,7 +516,9 @@ public actor OperatorWorker {
         status.consecutiveFailures += 1
         status.lastErrorAt = clock()
         status.lastErrorCode = code
-        status.phase = .error
+        // A socket error while a job runs must not hide the running job; the
+        // error code above still reports the socket's health.
+        if !(socket && jobInFlight) { status.phase = .error }
         logger.warning("operator worker error code=\(code) detail=\(message)")
         emitStatus()
     }

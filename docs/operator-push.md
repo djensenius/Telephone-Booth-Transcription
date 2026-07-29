@@ -121,9 +121,10 @@ the newest succeeded row wins downstream.
 - A message is enqueued by discovery at most 3 times per 30-minute window, so a
   message the Operator keeps listing can't spin in a hot loop, while a transient
   upstream outage still self-heals once the window rolls over. A successful
-  transcription retires the message from discovery for the rest of the session,
-  so a stale listing can never cause it to be transcribed over and over. A
-  deliberate re-run from the app is forced and ignores both rules.
+  transcription retires the message from discovery, so a stale listing doesn't
+  cause it to be transcribed over and over; retirement is remembered for the
+  5,000 most recent successes, after which the attempt cap above is what bounds
+  it. A deliberate re-run from the app is forced and ignores both rules.
 - At most 25 discovered jobs wait in the queue at once, so a large backlog
   can't crowd out translation and moderation.
 - Runs only when the transcription realm is enabled.

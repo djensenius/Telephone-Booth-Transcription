@@ -143,8 +143,11 @@ public final class ReviewStore {
         pendingActions.insert(message.id)
         actionError = nil
         defer { pendingActions.remove(message.id) }
-        let baseline = message.latestTranscription?.id
         if await rerunner.requestTranscription(messageID: message.id) {
+            // Read the baseline after the await: a poll may have replaced this
+            // row while the request was suspended, and treating that newer
+            // transcript as this request's result would clear the marker early.
+            let baseline = messages.first { $0.id == message.id }?.latestTranscription?.id
             queuedTranscriptions.insert(message.id)
             queuedTranscriptionState[message.id] = .init(baseline: baseline, queuedAt: now())
         } else {
