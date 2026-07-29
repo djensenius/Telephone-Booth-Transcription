@@ -32,6 +32,9 @@ public struct OperatorPollingConfig: Sendable, Equatable {
     public var moderationEnabled: Bool
 
     /// User-Agent string sent with every Operator request.
+    ///
+    /// The Operator records this alongside every write in its audit trail, so
+    /// it is worth keeping it honest about which build posted a result.
     public var userAgent: String
 
     public init(
@@ -42,7 +45,7 @@ public struct OperatorPollingConfig: Sendable, Equatable {
         transcriptionEnabled: Bool = true,
         translationEnabled: Bool = true,
         moderationEnabled: Bool = true,
-        userAgent: String = "Telephone-Booth-Transcription/1.0"
+        userAgent: String = OperatorPollingConfig.defaultUserAgent
     ) {
         self.enabled = enabled
         self.baseURL = baseURL
@@ -53,6 +56,18 @@ public struct OperatorPollingConfig: Sendable, Equatable {
         self.moderationEnabled = moderationEnabled
         self.userAgent = userAgent
     }
+
+    /// Product name reported in the User-Agent, without the version.
+    public static let userAgentProduct = "Telephone-Booth-Transcription"
+
+    /// `Telephone-Booth-Transcription/<app version>`, matching what
+    /// `docs/operator-push.md` promises. Falls back to `0.0.0` outside an app
+    /// bundle (unit tests, `swift run`), where there is no marketing version.
+    public static let defaultUserAgent: String = {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let trimmed = version?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return "\(userAgentProduct)/\(trimmed.isEmpty ? "0.0.0" : trimmed)"
+    }()
 
     public static let minPollInterval = 1
     public static let maxPollInterval = 300

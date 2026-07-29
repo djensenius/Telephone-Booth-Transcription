@@ -12,6 +12,17 @@ struct OperatorPollingConfigTests {
         #expect(cfg.transcriptionEnabled)
         #expect(cfg.translationEnabled)
         #expect(cfg.moderationEnabled)
+        #expect(cfg.userAgent == OperatorPollingConfig.defaultUserAgent)
+    }
+
+    @Test func defaultUserAgentCarriesProductAndVersion() {
+        let userAgent = OperatorPollingConfig.defaultUserAgent
+        let parts = userAgent.split(separator: "/", maxSplits: 1)
+        #expect(parts.count == 2)
+        #expect(String(parts[0]) == OperatorPollingConfig.userAgentProduct)
+        // The Operator stores this string on every audit entry, so it must
+        // never be an empty or dangling version.
+        #expect(parts.count == 2 && !parts[1].isEmpty)
     }
 
     @Test func validatedClampsReconnectDelayAndLegacyLease() {
