@@ -113,6 +113,7 @@ struct OperatorWorkerDiscoveryTests {
         var result: OperatorJobResult = .transcription(text: "bonjour", language: "fr", model: nil)
         /// Lets a test hold a job in flight long enough to observe queue order.
         var delayNanos: UInt64 = 0
+        private var startWaiters: [(threshold: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
         func setResult(_ value: OperatorJobResult) { result = value }
         func setDelay(nanos: UInt64) { delayNanos = nanos }
@@ -122,8 +123,23 @@ struct OperatorWorkerDiscoveryTests {
             await self.run(job: job)
         }
 
+        /// Suspends until at least `count` jobs have entered execution, so tests
+        /// can act on an in-flight job without relying on wall-clock timing.
+        func waitForJobStart(count: Int = 1) async {
+            guard jobs.count < count else { return }
+            await withCheckedContinuation { continuation in
+                startWaiters.append((count, continuation))
+            }
+        }
+
         func run(job: OperatorJob) async -> OperatorJobResult {
             jobs.append(job)
+            let started = jobs.count
+            startWaiters.removeAll { waiter in
+                guard started >= waiter.threshold else { return false }
+                waiter.continuation.resume()
+                return true
+            }
             if delayNanos > 0 { try? await Task.sleep(nanoseconds: delayNanos) }
             return result
         }
@@ -376,9 +392,9 @@ struct OperatorWorkerDiscoveryTests {
         let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
 
         await worker.start()
-        // Let discovery queue the whole backlog and start the first job, then
-        // deliver a translation envelope behind it.
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // The first backlog job starting proves the whole page is queued: the
+        // discovery loop enqueues a page without suspending.
+        await dispatcher.waitForJobStart()
         await channel.yield(OperatorWorkEnvelope(messageId: "urgent", needs: [.translation]))
         try await Task.sleep(nanoseconds: 300_000_000)
         await worker.stop()
@@ -403,7 +419,7 @@ struct OperatorWorkerDiscoveryTests {
         let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
 
         await worker.start()
-        try await Task.sleep(nanoseconds: 100_000_000)
+        await dispatcher.waitForJobStart()
         await channel.yield(OperatorWorkEnvelope(messageId: "q6", needs: [.transcription]))
         try await Task.sleep(nanoseconds: 300_000_000)
         await worker.stop()
@@ -432,7 +448,7 @@ struct OperatorWorkerDiscoveryTests {
         await worker.start()
         // A second envelope lands while the first translation is still running;
         // the running job already fetched the older input, so it must re-run.
-        try await Task.sleep(nanoseconds: 80_000_000)
+        await dispatcher.waitForJobStart()
         await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.translation]))
         try await Task.sleep(nanoseconds: 500_000_000)
         await worker.stop()
@@ -452,7 +468,7 @@ struct OperatorWorkerDiscoveryTests {
         let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
 
         await worker.start()
-        try await Task.sleep(nanoseconds: 80_000_000)
+        await dispatcher.waitForJobStart()
         await channel.yield(OperatorWorkEnvelope(messageId: "r2", needs: [.transcription]))
         try await Task.sleep(nanoseconds: 500_000_000)
         await worker.stop()
