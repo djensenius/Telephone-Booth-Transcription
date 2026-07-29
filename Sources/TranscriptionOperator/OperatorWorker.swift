@@ -442,10 +442,7 @@ public actor OperatorWorker {
             let result = try await dispatcher.execute(job: job)
             try await client.pushResult(
                 messageID: messageID,
-                // Transcription results are unsolicited: the Operator no longer
-                // pre-creates a pending row, and a re-run intentionally creates
-                // a new succeeded row rather than updating the old one.
-                transcriptionId: need == .transcription ? nil : input.transcription?.id,
+                transcriptionId: transcriptionID(for: need, input: input),
                 result: result
             )
             recordSuccess(jobID: messageID, kind: need)
@@ -454,6 +451,22 @@ public actor OperatorWorker {
         } catch {
             recordError(code: errorCode(for: error), message: "work failed: \(type(of: error))")
         }
+    }
+
+    /// Which transcription row a result belongs to.
+    ///
+    /// Translation and moderation always target the row their input came from.
+    /// A transcription result is normally unsolicited — the Operator no longer
+    /// pre-creates a pending row, and a re-run deliberately creates a new
+    /// succeeded row rather than overwriting the old one. The exception is an
+    /// Operator that still pre-creates an empty pending row: filling that row in
+    /// keeps this app working against a deployment that hasn't shipped the
+    /// unsolicited-post change yet.
+    private func transcriptionID(for need: OperatorJob.Kind, input: OperatorWorkInput) -> String? {
+        guard need == .transcription else { return input.transcription?.id }
+        guard let existing = input.transcription,
+              existing.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return existing.id
     }
 
     private func sleepBackoff() async {

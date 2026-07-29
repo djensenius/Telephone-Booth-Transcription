@@ -520,6 +520,33 @@ struct OperatorWorkerDiscoveryTests {
         #expect(await dispatcher.recorded().map(\.id) == ["e1"])
     }
 
+    @Test func aPreCreatedPendingRowIsFilledInRatherThanDuplicated() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "p0", status: "pending")])
+        ])
+        // An Operator that still pre-creates an empty pending row: the result
+        // must target that row instead of posting unsolicited.
+        await client.setInput(
+            OperatorWorkInput(
+                id: "p0",
+                status: "pending",
+                audio: .init(url: "https://example.invalid/audio.flac",
+                             sha256: String(repeating: "a", count: 64)),
+                transcription: .init(id: "pending-row", text: "")
+            ),
+            for: "p0"
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel())
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let pushes = await client.pushes()
+        #expect(pushes.map(\.transcriptionID) == ["pending-row"])
+    }
+
     @Test func discoveryFollowsPaginationCursors() async throws {
         let client = DiscoveryClient(pages: [
             OperatorWorkListPage(items: [OperatorWorkListItem(id: "p1", status: "pending")], nextCursor: "c1"),

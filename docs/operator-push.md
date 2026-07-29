@@ -106,10 +106,16 @@ job from this input. Transcription uses
 `transcription.moderationText`. Translation and moderation result posts include
 the fetched `transcription.id`.
 
-Transcription result posts deliberately **omit** `transcriptionId`: no pending
-row is created for them any more, and a re-run is meant to add a new succeeded
-row rather than overwrite the previous one. The Operator keeps the history and
-the newest succeeded row wins downstream.
+Transcription result posts normally **omit** `transcriptionId`: no pending row
+is created for them any more, and a re-run is meant to add a new succeeded row
+rather than overwrite the previous one. The Operator keeps the history and the
+newest succeeded row wins downstream.
+
+The one exception is backwards compatibility: if the fetched work input still
+carries a transcription row whose `text` is empty, the Operator pre-created a
+pending row for this job, and the result is posted with that `transcriptionId`
+so the row is filled in. That keeps this app working against an Operator that
+hasn't shipped the unsolicited-post change yet.
 
 ## Discovery pass
 
