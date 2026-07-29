@@ -49,14 +49,22 @@
 This app exposes three OpenAI-compatible upstream realms:
 
 - **Transcription** — `POST /v1/audio/transcriptions`, proxied to a
-  Whisper-compatible server (faster-whisper-server, OpenAI, or the native
-  macOS Speech engines).
+  Whisper-compatible server (faster-whisper-server, OpenAI) or served by the
+  on-device macOS Speech engines.
 - **Translation** — `POST /v1/audio/translations` (audio → English) and the
-  custom `POST /v1/translations` (text → English). Proxied to an
-  independently-configured upstream because a deployment may want a larger
-  translation model than its transcription model.
+  custom `POST /v1/translations` (text → English). Each has its own backend
+  setting: proxy to an independently-configured upstream (a deployment may want
+  a larger translation model than its transcription model), or on-device via
+  Apple Foundation Models. On-device audio translation is a composition —
+  transcribe with the Speech engine, then translate that text — because Apple
+  ships no direct speech→English model.
 - **Moderation** — `POST /v1/moderations`, proxied to LM Studio (or any
-  chat-completions server) with a best-effort local classifier fallback.
+  chat-completions server) with a best-effort local classifier fallback, or
+  served on-device by Foundation Models.
+
+Setting every realm to its on-device backend ("all-local mode",
+`ServerConfig.isFullyLocal`) means no request the server handles reaches the
+network.
 
 ## Key decisions
 
@@ -149,6 +157,46 @@ HTTPS/WebSocket access to the Operator is required.
 
 See [`operator-push.md`](operator-push.md) for setup, wire format, and
 status semantics.
+
+### iOS: in-process, no server
+
+The iOS target is deliberately **not** a second copy of the server. It links
+`TranscriptionShared`, `TranscriptionOnDevice`, and `TranscriptionOperator`,
+but not `TranscriptionCore` — there is no Hummingbird listener, no GRDB request
+log, and no `ConfigPersistence` (that file is `#if os(macOS)` in its entirety).
+`ServerHostIOS` is an empty shim that exists only so the shared SwiftUI code
+compiles.
+
+Instead, the iOS review UI runs the same pipeline **in-process**.
+`OnDeviceReviewPipeline` (in `TranscriptionApp`) wraps
+`InProcessOperatorJobDispatcher` — the identical type the macOS push worker
+uses — with:
+
+- `URLSessionAudioFetcher` for the audio fetch, so we get ATS, cellular policy,
+  and proxy support from the platform rather than standing up a NIO event-loop
+  group inside a phone app. It delegates hashing, byte-capping, temp-file
+  staging, and cleanup to the shared `AudioFileStaging`, so its observable
+  behavior matches `HTTPClientAudioFetcher` exactly.
+- `SpeechAnalyzerTranscriber` and the FoundationModels translation/moderation
+  services, constructed directly rather than reached through HTTP.
+
+The consequences are worth stating plainly:
+
+- **No HTTP hop.** The transcript never leaves the process, so there is no
+  loopback listener to secure and no bearer token to manage on iOS.
+- **Same error vocabulary.** Because the dispatcher is shared, iOS surfaces the
+  same sanitized `OperatorJobError` codes (`audio_fetch_failed`,
+  `audio_sha256_mismatch`, `*_unavailable`, `*_timeout`) as the macOS worker.
+  `OnDeviceReviewPipeline` maps those codes — never the underlying error — to
+  operator-facing copy, preserving the metadata-only logging rule.
+- **Manual and advisory.** The pipeline runs only when the operator taps the
+  button, and its output _pre-fills_ the translation draft. It never submits.
+  The human stays in the loop, which also means a bad on-device transcript is a
+  correctable draft rather than a published result.
+- **Graceful absence.** `makeAppleIntelligence` returns `nil` when the engines
+  are unavailable (older device, simulator, Apple Intelligence disabled), and
+  the UI hides the affordance entirely rather than offering a button that
+  always fails.
 
 ---
 

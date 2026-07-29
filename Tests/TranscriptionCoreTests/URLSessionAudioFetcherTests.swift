@@ -1,0 +1,254 @@
+import Crypto
+import Foundation
+import NIOCore
+import Testing
+import TranscriptionOperator
+import TranscriptionShared
+
+/// Stubs the network for `URLSessionAudioFetcher` so the tests exercise the
+/// real fetcher (header, status handling, chunking, staging, cleanup) without
+/// opening a socket.
+final class StubAudioURLProtocol: URLProtocol, @unchecked Sendable {
+    struct Stub: Sendable {
+        var status: Int = 200
+        var body: Data = Data()
+        /// Set to advertise a Content-Length that differs from `body`, to test
+        /// the fail-fast cap independently of the streaming cap.
+        var advertisedLength: Int?
+    }
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var stub = Stub()
+    nonisolated(unsafe) private static var observedAuthorization: String?
+
+    static func install(_ newStub: Stub) {
+        lock.lock()
+        defer { lock.unlock() }
+        stub = newStub
+        observedAuthorization = nil
+    }
+
+    static func lastAuthorization() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return observedAuthorization
+    }
+
+    static func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubAudioURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lock.lock()
+        let stub = Self.stub
+        Self.observedAuthorization = request.value(forHTTPHeaderField: "Authorization")
+        Self.lock.unlock()
+
+        let length = stub.advertisedLength ?? stub.body.count
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: stub.status,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Length": String(length)]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if !stub.body.isEmpty {
+            client?.urlProtocol(self, didLoad: stub.body)
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+@Suite("URLSessionAudioFetcher", .serialized)
+struct URLSessionAudioFetcherTests {
+    private static let url = "https://operator.test/audio/msg.flac"
+
+    private func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func makeFetcher(
+        authorizationProvider: URLSessionAudioFetcher.AuthorizationProvider? = nil
+    ) -> URLSessionAudioFetcher {
+        URLSessionAudioFetcher(
+            urlSession: StubAudioURLProtocol.makeSession(),
+            authorizationProvider: authorizationProvider
+        )
+    }
+
+    /// The hash is validated before any connection is opened, matching
+    /// `HTTPClientAudioFetcher`'s ordering — so a bad hash beats a bad scheme.
+    @Test func rejectsInvalidHashBeforeConnecting() async {
+        let fetcher = makeFetcher()
+        await #expect(throws: AudioFetchError.invalidExpectedHash) {
+            _ = try await fetcher.withFetchedAudioFile(
+                url: "http://operator.test/a.flac",
+                expectedSHA256: "not-a-digest",
+                maxBytes: 1_000,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    @Test func rejectsPlaintextHTTP() async {
+        let fetcher = makeFetcher()
+        await #expect(throws: AudioFetchError.insecureURL) {
+            _ = try await fetcher.withFetchedAudioFile(
+                url: "http://operator.test/a.flac",
+                expectedSHA256: String(repeating: "a", count: 64),
+                maxBytes: 1_000,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    @Test func rejectsMalformedURL() async {
+        let fetcher = URLSessionAudioFetcher(
+            urlSession: StubAudioURLProtocol.makeSession(),
+            allowInsecureURLs: true
+        )
+        await #expect(throws: AudioFetchError.fetchFailed) {
+            _ = try await fetcher.withFetchedAudioFile(
+                url: "",
+                expectedSHA256: String(repeating: "b", count: 64),
+                maxBytes: 1_000,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    @Test func fetchesVerifiesAndStagesToTempFile() async throws {
+        let payload = Data("on-device audio bytes".utf8)
+        StubAudioURLProtocol.install(.init(body: payload))
+
+        var stagedPath: URL?
+        let staged: (path: URL, data: Data) = try await makeFetcher().withFetchedAudioFile(
+            url: Self.url,
+            expectedSHA256: digest(payload),
+            maxBytes: 1_000_000,
+            suggestedExtension: "flac"
+        ) { fileURL in
+            (fileURL, try Data(contentsOf: fileURL))
+        }
+        stagedPath = staged.path
+
+        #expect(staged.path.pathExtension == "flac")
+        #expect(staged.data == payload)
+        // The staging helper must delete the temp file once the body returns.
+        #expect(!FileManager.default.fileExists(atPath: stagedPath!.path))
+    }
+
+    /// Exercises `buffered`'s chunk boundary: a payload spanning several 64 KB
+    /// chunks plus a partial trailing chunk must reassemble byte-for-byte.
+    @Test func reassemblesMultiChunkPayload() async throws {
+        let payload = Data((0..<(64 * 1024 * 2 + 517)).map { UInt8($0 % 251) })
+        StubAudioURLProtocol.install(.init(body: payload))
+
+        let staged: Data = try await makeFetcher().withFetchedAudioFile(
+            url: Self.url,
+            expectedSHA256: digest(payload),
+            maxBytes: 1_000_000,
+            suggestedExtension: nil
+        ) { try Data(contentsOf: $0) }
+
+        #expect(staged == payload)
+    }
+
+    @Test func detectsHashMismatch() async {
+        StubAudioURLProtocol.install(.init(body: Data("actual bytes".utf8)))
+        let wrong = digest(Data("different bytes".utf8))
+
+        await #expect(throws: AudioFetchError.hashMismatch) {
+            _ = try await makeFetcher().withFetchedAudioFile(
+                url: Self.url,
+                expectedSHA256: wrong,
+                maxBytes: 1_000_000,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    /// An honest Content-Length over the cap is rejected before streaming.
+    @Test func failsFastOnAdvertisedLengthOverCap() async {
+        StubAudioURLProtocol.install(.init(body: Data(repeating: 0x7A, count: 4096)))
+
+        await #expect(throws: AudioFetchError.tooLarge) {
+            _ = try await makeFetcher().withFetchedAudioFile(
+                url: Self.url,
+                expectedSHA256: String(repeating: "c", count: 64),
+                maxBytes: 128,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    /// A lying (or absent) Content-Length must still be caught mid-stream by
+    /// `AudioFileStaging`.
+    @Test func enforcesCapWhenLengthIsUnderstated() async {
+        StubAudioURLProtocol.install(
+            .init(body: Data(repeating: 0x7A, count: 4096), advertisedLength: 0)
+        )
+
+        await #expect(throws: AudioFetchError.tooLarge) {
+            _ = try await makeFetcher().withFetchedAudioFile(
+                url: Self.url,
+                expectedSHA256: String(repeating: "c", count: 64),
+                maxBytes: 128,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    @Test func nonSuccessStatusFails() async {
+        StubAudioURLProtocol.install(.init(status: 404))
+
+        await #expect(throws: AudioFetchError.fetchFailed) {
+            _ = try await makeFetcher().withFetchedAudioFile(
+                url: Self.url,
+                expectedSHA256: String(repeating: "d", count: 64),
+                maxBytes: 1_000,
+                suggestedExtension: nil
+            ) { _ in 0 }
+        }
+    }
+
+    /// Operator audio URLs are not necessarily pre-signed, so a supplied bearer
+    /// token must reach the request.
+    @Test func forwardsAuthorizationHeader() async throws {
+        let payload = Data("authorized".utf8)
+        StubAudioURLProtocol.install(.init(body: payload))
+
+        let fetcher = makeFetcher(authorizationProvider: { "Bearer test-token" })
+        _ = try await fetcher.withFetchedAudioFile(
+            url: Self.url,
+            expectedSHA256: digest(payload),
+            maxBytes: 1_000_000,
+            suggestedExtension: nil
+        ) { _ in 0 }
+
+        #expect(StubAudioURLProtocol.lastAuthorization() == "Bearer test-token")
+    }
+
+    /// With no provider the request must be unauthenticated — we never invent
+    /// credentials for a pre-signed URL.
+    @Test func omitsAuthorizationHeaderWithoutProvider() async throws {
+        let payload = Data("anonymous".utf8)
+        StubAudioURLProtocol.install(.init(body: payload))
+
+        _ = try await makeFetcher().withFetchedAudioFile(
+            url: Self.url,
+            expectedSHA256: digest(payload),
+            maxBytes: 1_000_000,
+            suggestedExtension: nil
+        ) { _ in 0 }
+
+        #expect(StubAudioURLProtocol.lastAuthorization() == nil)
+    }
+}

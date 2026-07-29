@@ -14,6 +14,11 @@ struct ReviewView: View {
     @State private var store = ReviewStore(
         client: HTTPOperatorReviewClient(tokenProvider: AuthBearerAdapter())
     )
+    /// Nil when this device can't run the on-device engines — the entry point
+    /// is then hidden rather than offered and always failing.
+    @State private var onDevice = OnDeviceReviewPipeline.makeAppleIntelligence(
+        authorizationProvider: { await AuthBearerAdapter().authorizationHeader() }
+    )
 
     var body: some View {
         Group {
@@ -188,7 +193,7 @@ struct ReviewView: View {
                     .padding(.vertical, Theme.Spacing.small)
             } else {
                 ForEach(messages) { message in
-                    ReviewRow(message: message, kind: kind, store: store)
+                    ReviewRow(message: message, kind: kind, store: store, onDevice: onDevice)
                 }
             }
         }
@@ -243,6 +248,7 @@ private struct ReviewRow: View {
     let message: Message
     let kind: Kind
     let store: ReviewStore
+    let onDevice: OnDeviceReviewPipeline?
 
     @State private var translationDraft = ""
     @State private var notesDraft = ""
@@ -318,6 +324,8 @@ private struct ReviewRow: View {
     @ViewBuilder
     private var translationActions: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            onDeviceActions
+
             TextField("English translation", text: $translationDraft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(2...5)
@@ -330,6 +338,7 @@ private struct ReviewRow: View {
                     // A new transcription replaced the one being translated;
                     // drop the draft so it can't be applied to the wrong source.
                     translationDraft = ""
+                    onDevice?.reset(message.id)
                 }
 
             HStack {
@@ -343,6 +352,72 @@ private struct ReviewRow: View {
                 .buttonStyle(.tbtGlass)
                 .disabled(isActing || translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+        }
+    }
+
+    /// Apple Intelligence entry point: re-transcribes the message audio on this
+    /// device, translates it, and pre-fills the draft below. Never submits —
+    /// the operator still reviews and taps Submit.
+    @ViewBuilder
+    private var onDeviceActions: some View {
+        if let onDevice {
+            let stage = onDevice.stage(for: message.id)
+            let running = onDevice.isRunning(message.id)
+
+            HStack(spacing: Theme.Spacing.small) {
+                Button {
+                    Task {
+                        if let translation = await onDevice.run(for: message) {
+                            translationDraft = translation
+                        }
+                    }
+                } label: {
+                    if running {
+                        HStack(spacing: Theme.Spacing.small) {
+                            ProgressView().controlSize(.small)
+                            Text(stageLabel(stage))
+                        }
+                    } else {
+                        Label("Transcribe & translate on device", systemImage: "apple.intelligence")
+                    }
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(running || isActing)
+                Spacer()
+            }
+
+            if case .failed(let reason) = stage {
+                Text(reason)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.error)
+            }
+
+            if let output = onDevice.outputs[message.id] {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("On-device transcript: \(output.transcript)")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .lineLimit(3)
+                    if let recommendation = output.recommendation {
+                        Text("On-device moderation: \(recommendation)"
+                             + ((output.flagged ?? false) ? " (flagged)" : ""))
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                    Text("Nothing left this device. Review the draft before submitting.")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func stageLabel(_ stage: OnDeviceReviewPipeline.Stage) -> String {
+        switch stage {
+        case .fetchingAndTranscribing: return "Transcribing…"
+        case .translating: return "Translating…"
+        case .moderating: return "Checking…"
+        default: return "Working…"
         }
     }
 

@@ -87,7 +87,14 @@ let package = Package(
         ),
         .executableTarget(
             name: "TranscriptionApp",
-            dependencies: ["TranscriptionCore", "TranscriptionAuth", "TranscriptionReview"],
+            dependencies: [
+                "TranscriptionCore",
+                "TranscriptionShared",
+                "TranscriptionOnDevice",
+                "TranscriptionOperator",
+                "TranscriptionAuth",
+                "TranscriptionReview"
+            ],
             swiftSettings: [
                 .enableUpcomingFeature("ExistentialAny")
             ]
