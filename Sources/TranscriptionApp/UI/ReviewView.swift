@@ -16,9 +16,7 @@ struct ReviewView: View {
     )
     /// Nil when this device can't run the on-device engines — the entry point
     /// is then hidden rather than offered and always failing.
-    @State private var onDevice = OnDeviceReviewPipeline.makeAppleIntelligence(
-        authorizationProvider: { await AuthBearerAdapter().authorizationHeader() }
-    )
+    @State private var onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
 
     var body: some View {
         Group {

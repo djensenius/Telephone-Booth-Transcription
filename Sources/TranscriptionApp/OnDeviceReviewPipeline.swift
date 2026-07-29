@@ -63,8 +63,7 @@ public final class OnDeviceReviewPipeline {
     /// this OS/device can't run the on-device engines — callers hide the entry
     /// point entirely rather than offering a button that always fails.
     public static func makeAppleIntelligence(
-        locale: Locale = .current,
-        authorizationProvider: URLSessionAudioFetcher.AuthorizationProvider? = nil
+        locale: Locale = .current
     ) -> OnDeviceReviewPipeline? {
         guard let transcriber = Self.makeTranscriber(locale: locale),
               let translator = Self.makeTranslator(),
@@ -75,7 +74,7 @@ public final class OnDeviceReviewPipeline {
             transcriber: transcriber,
             translator: translator,
             moderator: moderator,
-            audioFetcher: URLSessionAudioFetcher(authorizationProvider: authorizationProvider)
+            audioFetcher: URLSessionAudioFetcher()
         )
         return OnDeviceReviewPipeline(dispatcher: dispatcher)
     }

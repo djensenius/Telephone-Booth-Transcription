@@ -13,25 +13,25 @@ import TranscriptionShared
 ///
 /// **Privacy:** errors are the same content-free `AudioFetchError` cases used
 /// elsewhere. The URL, bytes, and hash never reach a log line.
+///
+/// **No credentials are sent.** The Operator returns `message.audio.url` as a
+/// pre-signed, short-lived Azure Blob SAS URL — the credential is already in
+/// the query string, and the host is blob storage rather than the Operator.
+/// Attaching the operator's bearer token would hand it to a third party for no
+/// benefit, so this fetcher deliberately sends no `Authorization` header, the
+/// same as `HTTPClientAudioFetcher`.
 public final class URLSessionAudioFetcher: AudioFetching {
-    /// Supplies an `Authorization` header value for the audio request, or nil
-    /// when the audio URL is pre-signed and needs no credential.
-    public typealias AuthorizationProvider = @Sendable () async -> String?
-
     private let urlSession: URLSession
     private let allowInsecureURLs: Bool
-    private let authorizationProvider: AuthorizationProvider?
     private let logger: Logger
 
     public init(
         urlSession: URLSession = .shared,
         allowInsecureURLs: Bool = false,
-        authorizationProvider: AuthorizationProvider? = nil,
         logger: Logger = Logger(label: "audio-fetcher-urlsession")
     ) {
         self.urlSession = urlSession
         self.allowInsecureURLs = allowInsecureURLs
-        self.authorizationProvider = authorizationProvider
         self.logger = logger
     }
 
@@ -58,9 +58,6 @@ public final class URLSessionAudioFetcher: AudioFetching {
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = "GET"
-        if let authorizationProvider, let header = await authorizationProvider() {
-            request.setValue(header, forHTTPHeaderField: "Authorization")
-        }
 
         let bytes: URLSession.AsyncBytes
         let response: URLResponse

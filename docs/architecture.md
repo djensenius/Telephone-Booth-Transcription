@@ -176,7 +176,11 @@ uses — with:
   and proxy support from the platform rather than standing up a NIO event-loop
   group inside a phone app. It delegates hashing, byte-capping, temp-file
   staging, and cleanup to the shared `AudioFileStaging`, so its observable
-  behavior matches `HTTPClientAudioFetcher` exactly.
+  behavior matches `HTTPClientAudioFetcher` exactly. It sends **no**
+  `Authorization` header: `message.audio.url` is a pre-signed, short-lived blob
+  URL whose credential is already in the query string, and whose host is
+  storage rather than the Operator — attaching the operator's bearer token
+  would leak it to a third party for no benefit.
 - `SpeechAnalyzerTranscriber` and the FoundationModels translation/moderation
   services, constructed directly rather than reached through HTTP.
 

@@ -74,13 +74,8 @@ struct URLSessionAudioFetcherTests {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    private func makeFetcher(
-        authorizationProvider: URLSessionAudioFetcher.AuthorizationProvider? = nil
-    ) -> URLSessionAudioFetcher {
-        URLSessionAudioFetcher(
-            urlSession: StubAudioURLProtocol.makeSession(),
-            authorizationProvider: authorizationProvider
-        )
+    private func makeFetcher() -> URLSessionAudioFetcher {
+        URLSessionAudioFetcher(urlSession: StubAudioURLProtocol.makeSession())
     }
 
     /// The hash is validated before any connection is opened, matching
@@ -219,31 +214,16 @@ struct URLSessionAudioFetcherTests {
         }
     }
 
-    /// Operator audio URLs are not necessarily pre-signed, so a supplied bearer
-    /// token must reach the request.
-    @Test func forwardsAuthorizationHeader() async throws {
-        let payload = Data("authorized".utf8)
-        StubAudioURLProtocol.install(.init(body: payload))
-
-        let fetcher = makeFetcher(authorizationProvider: { "Bearer test-token" })
-        _ = try await fetcher.withFetchedAudioFile(
-            url: Self.url,
-            expectedSHA256: digest(payload),
-            maxBytes: 1_000_000,
-            suggestedExtension: nil
-        ) { _ in 0 }
-
-        #expect(StubAudioURLProtocol.lastAuthorization() == "Bearer test-token")
-    }
-
-    /// With no provider the request must be unauthenticated — we never invent
-    /// credentials for a pre-signed URL.
-    @Test func omitsAuthorizationHeaderWithoutProvider() async throws {
-        let payload = Data("anonymous".utf8)
+    /// `message.audio.url` is a pre-signed Azure Blob SAS URL: the credential
+    /// is already in the query string and the host is a third party, not the
+    /// Operator. Sending the operator's bearer token there would leak it for no
+    /// benefit, so the fetcher must never attach one.
+    @Test func neverSendsCredentialsToBlobStorage() async throws {
+        let payload = Data("pre-signed".utf8)
         StubAudioURLProtocol.install(.init(body: payload))
 
         _ = try await makeFetcher().withFetchedAudioFile(
-            url: Self.url,
+            url: Self.url + "?sv=2024-01-01&sig=redacted",
             expectedSHA256: digest(payload),
             maxBytes: 1_000_000,
             suggestedExtension: nil
