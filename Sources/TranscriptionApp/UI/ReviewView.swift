@@ -298,24 +298,82 @@ private struct ReviewRow: View {
 
     @ViewBuilder
     private func transcriptionActions(title: String) -> some View {
-        HStack(spacing: Theme.Spacing.small) {
-            if isQueued {
-                Label("Queued for the local worker", systemImage: "clock.arrow.circlepath")
-                    .font(Theme.Fonts.caption)
-                    .foregroundStyle(Theme.Colors.textSecondary)
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            HStack(spacing: Theme.Spacing.small) {
+                if isQueued {
+                    Label("Queued for the local worker", systemImage: "clock.arrow.circlepath")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+                Spacer()
+                #if os(macOS)
+                // Only the Mac runs the Operator worker, so only the Mac can
+                // hand the job off for a transcript that lands back on the
+                // Operator. iOS transcribes on-device instead (below).
+                Button {
+                    Task { await store.requestTranscription(message) }
+                } label: {
+                    actionLabel(title, systemImage: "waveform")
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(isActing || isQueued)
+                #endif
             }
-            Spacer()
-            #if os(macOS)
-            // Only the Mac runs the local push worker, so only the Mac can
-            // start a transcription. iOS still shows the state.
-            Button {
-                Task { await store.requestTranscription(message) }
-            } label: {
-                actionLabel(title, systemImage: "waveform")
-            }
-            .buttonStyle(.tbtGlass)
-            .disabled(isActing || isQueued)
+
+            #if !os(macOS)
+            onDeviceTranscribeActions
             #endif
+        }
+    }
+
+    /// iOS has no Operator worker, but it can still transcribe locally with
+    /// Apple Intelligence. The transcript stays on the device: the Operator
+    /// exposes no operator-authenticated endpoint that accepts transcript text,
+    /// so there is nothing to submit to yet.
+    @ViewBuilder
+    private var onDeviceTranscribeActions: some View {
+        if let onDevice {
+            let stage = onDevice.stage(for: message.id)
+            let running = onDevice.isRunning(message.id)
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                HStack(spacing: Theme.Spacing.small) {
+                    Button {
+                        Task { await onDevice.transcribeOnly(for: message) }
+                    } label: {
+                        if running {
+                            HStack(spacing: Theme.Spacing.small) {
+                                ProgressView().controlSize(.small)
+                                Text(stageLabel(stage))
+                            }
+                        } else {
+                            Label("Transcribe on device", systemImage: "apple.intelligence")
+                        }
+                    }
+                    .buttonStyle(.tbtGlass)
+                    .disabled(running || isActing)
+                    Spacer()
+                }
+
+                if case .failed(let reason) = stage {
+                    Text(reason)
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.error)
+                }
+
+                if let output = onDevice.outputs[message.id] {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(output.transcript)
+                            .font(Theme.Fonts.bodyMedium)
+                            .foregroundStyle(Theme.Colors.textPrimary)
+                            .textSelection(.enabled)
+                        Text("Transcribed on this device. It stays here — this app can't "
+                             + "send a transcript to the Operator yet.")
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                }
+            }
         }
     }
 

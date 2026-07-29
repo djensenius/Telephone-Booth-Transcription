@@ -202,6 +202,24 @@ The consequences are worth stating plainly:
   the UI hides the affordance entirely rather than offering a button that
   always fails.
 
+#### Transcripts are read-only on iOS
+
+The transcription queues added by the discovery worker are actionable on macOS,
+which hands the job to its worker and gets the transcript posted back to the
+Operator. iOS can run the same transcription locally via `transcribeOnly`, but
+it cannot submit the result: the only Operator endpoint that accepts transcript
+text (`POST /v1/worker/messages/{id}/transcription`) is gated on a worker-scoped
+API token, and the iOS app authenticates solely as a human operator over OIDC.
+`POST /v1/messages/{id}/transcribe` is operator-authenticated but takes no body
+— it triggers the Operator's own server-side pipeline, which is the opposite of
+what an on-device run is for.
+
+Rather than issue the phone a worker token (a broad privilege for a single
+write, and one the iOS app has nowhere to persist), the local transcript is
+shown to the operator and goes no further. Lifting this needs an
+operator-authenticated submit endpoint, tracked in
+[Operator #121](https://github.com/djensenius/Telephone-Booth-Operator/issues/121).
+
 ---
 
 ## Network Security & Non-Loopback Binds

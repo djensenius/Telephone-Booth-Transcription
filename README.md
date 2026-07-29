@@ -115,17 +115,28 @@ server** — that's a macOS-only feature. On iOS the app is a review client for
 the Operator, and it does its AI work **in-process with Apple Intelligence**
 rather than over HTTP:
 
-- **Review queue** — polls the Operator for messages needing translation or a
-  moderation decision.
-- **On-device pipeline** — in the "Needs translation" bucket, _Transcribe &
-  translate on device_ downloads the message audio (verifying its SHA-256),
+- **Review queue** — polls the Operator for messages needing transcription,
+  translation, or a moderation decision.
+- **On-device pipeline** — _Transcribe & translate on device_ (in the "Needs
+  translation" bucket) downloads the message audio, verifies its SHA-256,
   re-transcribes it with `SpeechAnalyzer`, translates the transcript with
-  FoundationModels, and computes a local moderation verdict. Only the Operator
-  is contacted, and only to fetch audio you're already authorized to review.
-- **Human in the loop** — the result pre-fills the translation draft. Nothing
-  is submitted automatically; the operator reviews and taps Submit.
+  FoundationModels, and computes a local moderation verdict. The "Needs
+  transcription" buckets offer a transcribe-only version of the same run.
+- **Human in the loop** — a translation result pre-fills the draft. Nothing is
+  submitted automatically; the operator reviews and taps Submit.
+- **Transcripts stay on the phone.** iOS can transcribe locally but can't send
+  the transcript to the Operator: the only endpoint accepting transcript text
+  is worker-token gated, and the iOS app holds just an OIDC operator token.
+  Tracked in [Operator #121][op121]. macOS is unaffected — it posts transcripts
+  back through its worker as before.
 
-The button is hidden entirely when the device can't run the on-device engines.
+[op121]: https://github.com/djensenius/Telephone-Booth-Operator/issues/121
+
+Audio is fetched with no `Authorization` header: the Operator hands out
+pre-signed, short-lived URLs, so attaching the operator's token would leak it to
+blob storage for no benefit.
+
+The on-device buttons are hidden entirely when the device can't run the engines.
 iOS requires iOS 26 and a device with Apple Intelligence support; on-device
 features are unavailable on the simulator. First use prompts for speech
 recognition permission. The app ships Light, Dark, and Tinted home-screen icons.

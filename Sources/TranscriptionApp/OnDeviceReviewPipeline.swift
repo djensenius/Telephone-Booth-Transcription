@@ -25,8 +25,9 @@ public final class OnDeviceReviewPipeline {
     public struct Output: Sendable, Equatable {
         /// Transcript produced locally from the audio.
         public var transcript: String
-        /// English translation of `transcript`.
-        public var translation: String
+        /// English translation of `transcript`. Nil when only transcription was
+        /// requested (the "needs transcription" buckets).
+        public var translation: String?
         /// Local moderation verdict, when moderation ran.
         public var recommendation: String?
         public var flagged: Bool?
@@ -123,6 +124,39 @@ public final class OnDeviceReviewPipeline {
     public func reset(_ messageID: String) {
         stages[messageID] = nil
         outputs[messageID] = nil
+    }
+
+    /// Runs only the transcription stage for `message`, for the "needs
+    /// transcription" queues. Returns the local transcript, or `nil` on
+    /// failure.
+    ///
+    /// The result stays on this device. The Operator exposes no
+    /// operator-authenticated endpoint that accepts transcript text — the only
+    /// one that does is worker-token gated — so there is deliberately no submit
+    /// path here yet. See the `transcriptionSubmissionUnsupported` note below.
+    @discardableResult
+    public func transcribeOnly(for message: Message) async -> String? {
+        guard !isRunning(message.id) else { return nil }
+        outputs[message.id] = nil
+        stages[message.id] = .fetchingAndTranscribing
+
+        let transcript: String
+        do {
+            transcript = try await transcribe(message)
+        } catch {
+            fail(message.id, error, verb: "transcribe that audio")
+            return nil
+        }
+
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            stages[message.id] = .failed("On-device transcription produced no speech.")
+            return nil
+        }
+
+        outputs[message.id] = Output(transcript: trimmed, translation: nil)
+        stages[message.id] = .finished
+        return trimmed
     }
 
     /// Runs transcribe → translate → moderate for `message` and stores the
