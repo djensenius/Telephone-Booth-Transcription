@@ -15,14 +15,16 @@ public enum OperatorWorkNeeds: String, Sendable, Equatable, CaseIterable {
 /// optional so Operator-side additions never break this client.
 public struct OperatorWorkListItem: Sendable, Equatable, Decodable {
     public var id: String
-    public var status: String
+    /// Absent when the Operator omits it; never coerced to an empty string, so
+    /// callers can tell "not reported" from a real value.
+    public var status: String?
     public var receivedAt: Date?
     public var durationMs: Int?
     public var latestTranscriptionStatus: String?
 
     public init(
         id: String,
-        status: String = "",
+        status: String? = nil,
         receivedAt: Date? = nil,
         durationMs: Int? = nil,
         latestTranscriptionStatus: String? = nil
@@ -47,7 +49,7 @@ public struct OperatorWorkListItem: Sendable, Equatable, Decodable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? container.decode(String.self, forKey: .id)) ?? ""
-        status = (try? container.decode(String.self, forKey: .status)) ?? ""
+        status = try? container.decodeIfPresent(String.self, forKey: .status)
         durationMs = try? container.decodeIfPresent(Int.self, forKey: .durationMs)
         latestTranscriptionStatus = try? container.decodeIfPresent(
             String.self, forKey: .latestTranscriptionStatus

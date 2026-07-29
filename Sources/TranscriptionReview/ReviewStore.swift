@@ -102,7 +102,7 @@ public final class ReviewStore {
     /// Reviewable messages with no transcription row at all — the primary
     /// enrichment queue now that the Operator no longer solicits transcription.
     /// Messages whose newest row is pending or failed belong to
-    /// `alreadyTranscribed`, because re-running those is a human decision.
+    /// `withTranscriptionHistory`, because re-running those is a human decision.
     public var awaitingTranscription: [Message] {
         messages.filter(\.needsTranscription)
     }
@@ -111,7 +111,7 @@ public final class ReviewStore {
     /// still running, or failed — offered separately so an operator can
     /// deliberately re-run the AI over them. Decided (approved/rejected)
     /// messages are out of scope.
-    public var alreadyTranscribed: [Message] {
+    public var withTranscriptionHistory: [Message] {
         messages.filter { $0.isReviewable && $0.latestTranscription != nil }
     }
 

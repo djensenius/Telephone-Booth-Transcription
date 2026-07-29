@@ -140,7 +140,7 @@ struct ReviewTranscriptionQueueTests {
         await store.refresh()
 
         #expect(store.awaitingTranscription.map(\.id) == ["untranscribed"])
-        #expect(store.alreadyTranscribed.map(\.id) == ["silent", "spoken"])
+        #expect(store.withTranscriptionHistory.map(\.id) == ["silent", "spoken"])
     }
 
     @Test("a silent recording is distinguishable from an untranscribed one")
@@ -214,7 +214,7 @@ struct ReviewTranscriptionQueueTests {
         store.transcriptionRerunner = rerunner
         await store.refresh()
 
-        let target = try! #require(store.alreadyTranscribed.first { $0.id == "spoken" })
+        let target = try! #require(store.withTranscriptionHistory.first { $0.id == "spoken" })
         await store.requestTranscription(target)
 
         #expect(rerunner.requested == ["spoken"])
@@ -258,7 +258,7 @@ struct ReviewTranscriptionQueueTests {
         await store.refresh()
 
         #expect(store.messages.count == 2)
-        #expect(store.alreadyTranscribed.map(\.id) == ["spoken"])
+        #expect(store.withTranscriptionHistory.map(\.id) == ["spoken"])
         #expect(store.awaitingTranscription.isEmpty)
     }
 
@@ -273,7 +273,7 @@ struct ReviewTranscriptionQueueTests {
         // The newest row failed, but transcription history exists: re-running is
         // a human decision, and an older transcript may be masked.
         #expect(store.awaitingTranscription.isEmpty)
-        #expect(store.alreadyTranscribed.map(\.id) == ["spoken"])
+        #expect(store.withTranscriptionHistory.map(\.id) == ["spoken"])
     }
 
     @Test("a queued transcription that never lands expires so it can be retried")

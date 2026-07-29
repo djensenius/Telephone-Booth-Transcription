@@ -136,7 +136,7 @@ the newest succeeded row wins downstream.
 
 The **Review** tab separates reviewable messages with no transcription at all
 ("Needs transcription") from ones that already have transcription history
-("Transcribed"), and shows distinct "Silent", "Transcribing…", and
+("Transcription history"), and shows distinct "Silent", "Transcribing…", and
 "Transcription failed" states. Messages whose newest transcription is pending or failed stay in the
 second bucket: the review payload only carries the newest row, so an older
 successful transcript could otherwise be masked, and re-running from Review is a

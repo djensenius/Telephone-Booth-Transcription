@@ -120,10 +120,10 @@ struct ReviewView: View {
                 )
 
                 bucket(
-                    title: "Transcribed",
+                    title: "Transcription history",
                     systemImage: "arrow.clockwise.circle",
-                    messages: store.alreadyTranscribed,
-                    emptyText: "Nothing has been transcribed yet.",
+                    messages: store.withTranscriptionHistory,
+                    emptyText: "No message has been transcribed yet.",
                     kind: .retranscription
                 )
             }
@@ -232,7 +232,8 @@ private struct ReviewRow: View {
             case .transcription:
                 return "Reviewable messages the AI hasn’t transcribed yet."
             case .retranscription:
-                return "Already transcribed. Re-running keeps the old transcript; the newest one wins."
+                return "Transcribed, in progress, or failed. Re-running keeps the old transcript; "
+                    + "the newest one wins."
             case .translation, .moderation:
                 return nil
             }
