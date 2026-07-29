@@ -244,6 +244,11 @@ public final class ReviewStore {
                 clearQueuedTranscription(id)
                 continue
             }
+            // Best effort: the review payload carries only the newest row and no
+            // per-request identifier, so a different succeeded transcript that
+            // postdates the request is taken as this request's result. In the
+            // worst case the button re-enables a little early — the marker is a
+            // UI affordance, and a second deliberate re-run is always allowed.
             if let latest = message.latestTranscription,
                latest.status == .succeeded,
                latest.id != state.baseline,
