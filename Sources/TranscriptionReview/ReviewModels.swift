@@ -258,9 +258,20 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
         }
     }
 
-    /// True when the Operator holds a succeeded transcription for this message.
+    /// True when the newest transcription row succeeded. The review payload
+    /// only carries the newest row, so a re-run that is still pending (or that
+    /// failed) masks an older successful transcript — which is why a message
+    /// with any transcription row stays in the re-run bucket rather than the
+    /// "needs transcription" one.
     public var hasSucceededTranscription: Bool {
         latestTranscription?.status == .succeeded
+    }
+
+    /// True when a transcription row exists but hasn't succeeded: still running
+    /// on some worker, or failed outright.
+    public var transcriptionIsUnfinished: Bool {
+        guard let latest = latestTranscription else { return false }
+        return latest.status != .succeeded
     }
 
     /// True when transcription succeeded but produced no text — a silent
@@ -271,11 +282,14 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
         return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// True when the message is reviewable and no succeeded transcription
-    /// exists yet. Transcription is optional enrichment on the Operator side,
-    /// so these messages are visible to operators but not yet enriched.
+    /// True when the message is reviewable and the Operator holds no
+    /// transcription row at all. Transcription is optional enrichment on the
+    /// Operator side, so these messages are visible to operators but not yet
+    /// enriched. A message whose newest row is pending or failed is deliberately
+    /// excluded: it already has transcription history, and re-running it is a
+    /// human decision rather than something discovery should chase.
     public var needsTranscription: Bool {
-        isReviewable && !hasSucceededTranscription
+        isReviewable && latestTranscription == nil
     }
 }
 

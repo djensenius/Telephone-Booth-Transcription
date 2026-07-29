@@ -25,11 +25,26 @@ struct ReviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task(id: auth.isSignedIn) {
-            store.transcriptionRerunner = host
+            store.transcriptionRerunner = workerTargetsSameOperator ? host : nil
             if auth.isSignedIn {
                 await store.poll()
             }
         }
+    }
+
+    /// The Review client and the worker are configured independently. Bridging
+    /// a re-run across two different Operators would silently transcribe against
+    /// the wrong backend, so the button is only wired up when they agree.
+    private var workerTargetsSameOperator: Bool {
+        guard let workerURL = URL(string: host.config.operatorPolling.baseURL.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )) else { return false }
+        func normalized(_ url: URL) -> String {
+            var text = url.absoluteString.lowercased()
+            while text.hasSuffix("/") { text.removeLast() }
+            return text
+        }
+        return normalized(workerURL) == normalized(OperatorAPIConfig.shared.baseURL)
     }
 
     private var signedOut: some View {
@@ -170,7 +185,9 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
             Label("\(title) (\(messages.count))", systemImage: systemImage)
                 .font(Theme.Fonts.headerLarge())
-                .foregroundStyle(kind.accent)
+                // Header text stays high-contrast; the coloured spine carries
+                // the bucket's accent.
+                .foregroundStyle(Theme.Colors.textPrimary)
 
             if let subtitle = kind.subtitle {
                 Text(subtitle)
@@ -404,13 +421,14 @@ private struct ReviewRow: View {
     private var transcriptionStateText: String {
         if message.transcriptionIsSilent { return "Silent" }
         if message.hasSucceededTranscription { return "Transcribed" }
+        if message.transcriptionIsUnfinished { return "Transcription unfinished" }
         return "No transcription"
     }
 
-    private var transcriptionStateTint: Color {
-        if message.transcriptionIsSilent { return Theme.Colors.info }
-        return message.hasSucceededTranscription ? Theme.Colors.success : Theme.Colors.warning
-    }
+    /// These pills use the primary text colour over a neutral fill rather than a
+    /// low-contrast semantic tint; the bucket a row sits in already carries the
+    /// meaning, so legibility wins here.
+    private var transcriptionStateTint: Color { Theme.Colors.textPrimary }
 
     private var statusTint: Color {
         switch message.status {

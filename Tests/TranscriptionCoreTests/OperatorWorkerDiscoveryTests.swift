@@ -14,6 +14,7 @@ struct OperatorWorkerDiscoveryTests {
         var inputs: [String: OperatorWorkInput] = [:]
         var pushCalls: [PushCall] = []
         var listCalls: [OperatorWorkNeeds] = []
+        var listCursors: [String?] = []
         var listError: (any Error)?
 
         init(pages: [OperatorWorkListPage] = []) {
@@ -23,6 +24,7 @@ struct OperatorWorkerDiscoveryTests {
         func setInput(_ input: OperatorWorkInput, for id: String) { inputs[id] = input }
         func setListError(_ error: any Error) { listError = error }
         func calls() -> [OperatorWorkNeeds] { listCalls }
+        func cursors() -> [String?] { listCursors }
         func pushes() -> [PushCall] { pushCalls }
 
         nonisolated func listWork(
@@ -30,11 +32,12 @@ struct OperatorWorkerDiscoveryTests {
             limit: Int,
             cursor: String?
         ) async throws -> OperatorWorkListPage {
-            try await self.nextPage(needs: needs)
+            try await self.nextPage(needs: needs, cursor: cursor)
         }
 
-        func nextPage(needs: OperatorWorkNeeds) throws -> OperatorWorkListPage {
+        func nextPage(needs: OperatorWorkNeeds, cursor: String?) throws -> OperatorWorkListPage {
             listCalls.append(needs)
+            listCursors.append(cursor)
             if let listError { throw listError }
             guard !pages.isEmpty else { return OperatorWorkListPage(items: []) }
             return pages.removeFirst()
@@ -353,6 +356,9 @@ struct OperatorWorkerDiscoveryTests {
 
         let ids = await dispatcher.recorded().map(\.id).sorted()
         #expect(ids == ["p1", "p2"])
+        // The second request must carry the cursor the first page returned.
+        let cursors = await client.cursors()
+        #expect(cursors.prefix(2).map { $0 ?? "nil" } == ["nil", "c1"])
     }
 }
 

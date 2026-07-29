@@ -99,11 +99,12 @@ public final class ReviewStore {
         messages.filter(\.needsTranscription)
     }
 
-    /// Reviewable messages that already have a transcript, offered separately
-    /// so an operator can deliberately re-run the AI over them. Decided
-    /// (approved/rejected) messages are out of scope.
+    /// Reviewable messages that already have transcription history — succeeded,
+    /// still running, or failed — offered separately so an operator can
+    /// deliberately re-run the AI over them. Decided (approved/rejected)
+    /// messages are out of scope.
     public var alreadyTranscribed: [Message] {
-        messages.filter { $0.isReviewable && $0.hasSucceededTranscription }
+        messages.filter { $0.isReviewable && $0.latestTranscription != nil }
     }
 
     /// Messages whose latest transcription has source text but no translation.

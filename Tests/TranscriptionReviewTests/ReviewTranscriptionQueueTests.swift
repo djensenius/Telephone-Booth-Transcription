@@ -237,6 +237,20 @@ struct ReviewTranscriptionQueueTests {
         #expect(store.awaitingTranscription.isEmpty)
     }
 
+    @Test("a failed transcription row keeps the message in the re-run bucket")
+    @MainActor
+    func unfinishedTranscriptionIsNotTreatedAsMissing() async {
+        let seed = Self.seedWithDecided.replacingOccurrences(of: "\"status\":\"succeeded\"",
+                                                            with: "\"status\":\"failed\"")
+        let store = ReviewStore(client: QueueClient(seed: seed), pollInterval: .seconds(1))
+        await store.refresh()
+
+        // The newest row failed, but transcription history exists: re-running is
+        // a human decision, and an older transcript may be masked.
+        #expect(store.awaitingTranscription.isEmpty)
+        #expect(store.alreadyTranscribed.map(\.id) == ["spoken"])
+    }
+
     @Test("a queued transcription that never lands expires so it can be retried")
     @MainActor
     func queuedTranscriptionExpires() async {

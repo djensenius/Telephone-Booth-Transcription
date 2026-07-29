@@ -123,14 +123,20 @@ the newest succeeded row wins downstream.
 
 ## Re-running transcription from the app
 
-The **Review** tab separates reviewable messages with no succeeded transcription
-("Needs transcription") from ones that already have a transcript
-("Transcribed"), and shows a distinct "Silent" state for a transcription that
-succeeded but returned no speech. Both buckets offer a button that hands the
-message to the local worker; that request bypasses the discovery attempt cap.
+The **Review** tab separates reviewable messages with no transcription at all
+("Needs transcription") from ones that already have transcription history
+("Transcribed"), and shows distinct "Silent" and "Transcription unfinished"
+states. Messages whose newest transcription is pending or failed stay in the
+second bucket: the review payload only carries the newest row, so an older
+successful transcript could otherwise be masked, and re-running is a human
+decision. Both buckets offer a button that hands the message to the local
+worker; that request bypasses the discovery attempt cap.
+
 Review runs on the operator's own OIDC session while the worker uses its
 worker-scoped API token — the app bridges the two locally, so no extra Operator
-permission is needed.
+permission is needed. The bridge is only wired up when the Review base URL and
+the worker's Operator base URL agree; when they don't, the re-run is refused
+with an error rather than transcribing against a different backend.
 
 ## Configuration
 

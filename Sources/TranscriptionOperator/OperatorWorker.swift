@@ -231,6 +231,7 @@ public actor OperatorWorker {
         var cursor: String?
         var enqueued = 0
         var pages = 0
+        var atCapacity = false
         repeat {
             if stopRequested || Task.isCancelled { return }
             do {
@@ -240,7 +241,12 @@ public actor OperatorWorker {
                     cursor: cursor
                 )
                 for item in page.items where !item.hasSucceededTranscription {
-                    guard queuedDiscoveryCount < maxQueuedDiscoveryJobs else { return }
+                    // At capacity the pass stops early but still reports success:
+                    // discovery is working, the queue is simply full.
+                    guard queuedDiscoveryCount < maxQueuedDiscoveryJobs else {
+                        atCapacity = true
+                        break
+                    }
                     guard discoveryAttempts[item.id, default: 0] < maxDiscoveryAttempts else { continue }
                     if enqueue(.init(messageID: item.id, kind: .transcription,
                                      force: false, source: .discovery)) {
@@ -248,7 +254,7 @@ public actor OperatorWorker {
                         enqueued += 1
                     }
                 }
-                cursor = page.nextCursor
+                cursor = atCapacity ? nil : page.nextCursor
                 pages += 1
             } catch {
                 recordDiscoveryError(code: errorCode(for: error))
@@ -386,10 +392,11 @@ public actor OperatorWorker {
         // when the socket really is connected, and never reset its backoff.
         status.phase = socketConnected ? .subscribed : .connecting
         if kind == .transcription {
-            // The Operator will stop listing this message; drop the counter so
-            // it doesn't accumulate for the worker's whole lifetime, which also
-            // restores a full attempt budget if the message ever comes back.
-            discoveryAttempts.removeValue(forKey: jobID)
+            // Exhaust the discovery budget for this message: a succeeded push
+            // means discovery has done its job, so if the Operator keeps listing
+            // it (a stale item, say) the worker must not transcribe it again and
+            // again. A deliberate human re-run bypasses this by being forced.
+            discoveryAttempts[jobID] = maxDiscoveryAttempts
         }
         emitStatus()
     }
