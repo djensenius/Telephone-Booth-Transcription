@@ -366,26 +366,50 @@ struct OperatorWorkerDiscoveryTests {
         #expect(ids.filter { $0 == "q6" }.count == 1)
     }
 
-    @Test func anEnvelopeArrivingWhileTheSameJobRunsIsReplayedOnce() async throws {
+    @Test func aTranslationEnvelopeArrivingMidJobIsReplayedOnce() async throws {
+        let client = DiscoveryClient()
+        await client.setInput(audioInput(id: "r1", transcriptionID: "t1"), for: "r1")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setResult(
+            .translation(translatedText: "hello", sourceLanguage: "fr", targetLanguage: "en", model: nil)
+        )
+        await dispatcher.setDelay(nanos: 200_000_000)
+        let channel = SilentChannel()
+        await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.translation]))
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel,
+                                kinds: [.translation])
+
+        await worker.start()
+        // A second envelope lands while the first translation is still running;
+        // the running job already fetched the older input, so it must re-run.
+        try await Task.sleep(nanoseconds: 80_000_000)
+        await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.translation]))
+        try await Task.sleep(nanoseconds: 500_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        #expect(jobs.filter { $0.kind == .translation }.count == 2)
+    }
+
+    @Test func aTranscriptionEnvelopeArrivingMidJobIsNotReplayed() async throws {
         let client = DiscoveryClient(pages: [
-            OperatorWorkListPage(items: [OperatorWorkListItem(id: "r1", status: "pending")])
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "r2", status: "pending")])
         ])
-        await client.setInput(audioInput(id: "r1"), for: "r1")
+        await client.setInput(audioInput(id: "r2"), for: "r2")
         let dispatcher = RecordingDispatcher()
         await dispatcher.setDelay(nanos: 200_000_000)
         let channel = SilentChannel()
         let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
 
         await worker.start()
-        // Land the envelope while discovery's job for the same key is in flight.
         try await Task.sleep(nanoseconds: 80_000_000)
-        await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.transcription]))
+        await channel.yield(OperatorWorkEnvelope(messageId: "r2", needs: [.transcription]))
         try await Task.sleep(nanoseconds: 500_000_000)
         await worker.stop()
 
         let ids = await dispatcher.recorded().map(\.id)
-        // Exactly one follow-up run: the in-flight job used the older input.
-        #expect(ids.filter { $0 == "r1" }.count == 2)
+        // Replaying transcription would post a second transcript row.
+        #expect(ids.filter { $0 == "r2" }.count == 1)
     }
 
     @Test func discoveryFollowsPaginationCursors() async throws {

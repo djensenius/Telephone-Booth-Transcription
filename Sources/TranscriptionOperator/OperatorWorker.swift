@@ -350,9 +350,12 @@ public actor OperatorWorker {
         guard job.force || enabledKinds.contains(job.kind) else { return false }
         guard !job.messageID.isEmpty else { return false }
         if runningKey == job.key {
-            // The running job already fetched its input, so newer reactive work
-            // for the same key needs one follow-up run rather than being lost.
-            guard job.source == .envelope else { return false }
+            // The running job already fetched its input, so a newer envelope for
+            // the same key needs one follow-up run rather than being lost. This
+            // never applies to transcription: replaying it would post a second
+            // transcript row, and a human re-run is rejected while one is in
+            // flight, as `requestTranscription` documents.
+            guard job.source == .envelope, !job.force, job.kind != .transcription else { return false }
             deferredJobs[job.key] = job
             return true
         }
