@@ -149,7 +149,8 @@ public final class ReviewStore {
             queuedTranscriptionState[message.id] = .init(baseline: baseline, queuedAt: now())
         } else {
             actionError = "Couldn’t start transcription: the worker isn’t running, "
-                + "or this message is already queued."
+                + "this message is already queued, or the worker points at a "
+                + "different Operator than the one being reviewed."
         }
     }
 

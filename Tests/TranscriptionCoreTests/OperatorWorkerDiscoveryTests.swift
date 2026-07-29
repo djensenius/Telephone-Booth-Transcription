@@ -15,6 +15,10 @@ struct OperatorWorkerDiscoveryTests {
         var pushCalls: [PushCall] = []
         var listCalls: [OperatorWorkNeeds] = []
         var listCursors: [String?] = []
+        var fetchAttempts: [String: Int] = [:]
+        /// When set, every pass lists this page again — the Operator has not
+        /// stopped advertising the message.
+        var repeatingPage: OperatorWorkListPage?
         var listError: (any Error)?
 
         init(pages: [OperatorWorkListPage] = []) {
@@ -25,6 +29,8 @@ struct OperatorWorkerDiscoveryTests {
         func setListError(_ error: any Error) { listError = error }
         func calls() -> [OperatorWorkNeeds] { listCalls }
         func cursors() -> [String?] { listCursors }
+        func attempts(for id: String) -> Int { fetchAttempts[id] ?? 0 }
+        func setRepeatingPage(_ page: OperatorWorkListPage) { repeatingPage = page }
         func pushes() -> [PushCall] { pushCalls }
 
         nonisolated func listWork(
@@ -39,7 +45,7 @@ struct OperatorWorkerDiscoveryTests {
             listCalls.append(needs)
             listCursors.append(cursor)
             if let listError { throw listError }
-            guard !pages.isEmpty else { return OperatorWorkListPage(items: []) }
+            guard !pages.isEmpty else { return repeatingPage ?? OperatorWorkListPage(items: []) }
             return pages.removeFirst()
         }
 
@@ -48,6 +54,7 @@ struct OperatorWorkerDiscoveryTests {
         }
 
         func scriptedInput(messageID: String) throws -> OperatorWorkInput {
+            fetchAttempts[messageID, default: 0] += 1
             guard let input = inputs[messageID] else {
                 throw OperatorClientError.malformedResponse("missing scripted input")
             }
@@ -135,7 +142,8 @@ struct OperatorWorkerDiscoveryTests {
         client: any OperatorClient,
         dispatcher: any OperatorJobDispatcher,
         channel: any OperatorWorkChannel,
-        kinds: Set<OperatorJob.Kind> = Set(OperatorJob.Kind.allCases)
+        kinds: Set<OperatorJob.Kind> = Set(OperatorJob.Kind.allCases),
+        clock: (@Sendable () -> Date)? = nil
     ) -> OperatorWorker {
         OperatorWorker(
             client: client,
@@ -143,8 +151,50 @@ struct OperatorWorkerDiscoveryTests {
             workChannel: channel,
             reconnectBaseSeconds: 1,
             enabledKinds: kinds,
-            logger: Logger(label: "test")
+            logger: Logger(label: "test"),
+            clock: clock ?? { Date() }
         )
+    }
+
+    /// A clock a test can move forward without waiting.
+    final class TestClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = Date(timeIntervalSince1970: 1_800_000_000)
+
+        var now: Date {
+            lock.lock(); defer { lock.unlock() }
+            return value
+        }
+
+        func advance(by seconds: TimeInterval) {
+            lock.lock(); defer { lock.unlock() }
+            value = value.addingTimeInterval(seconds)
+        }
+    }
+
+    @Test func aRepeatedlyFailingMessageIsCappedThenRetriedAfterTheCooldown() async throws {
+        let clock = TestClock()
+        let client = DiscoveryClient()
+        // The message is listed on every pass but its input always fails, so the
+        // job never succeeds and the attempt cap is what stops the hot loop.
+        await client.setRepeatingPage(
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "f1", status: "pending")])
+        )
+        let dispatcher = RecordingDispatcher()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: SilentChannel(),
+                                clock: { clock.now })
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 4_500_000_000)
+        let capped = await client.attempts(for: "f1")
+        #expect(capped == 3)
+
+        clock.advance(by: 1801)
+        try await Task.sleep(nanoseconds: 2_500_000_000)
+        let afterCooldown = await client.attempts(for: "f1")
+        await worker.stop()
+
+        #expect(afterCooldown > capped)
     }
 
     @Test func discoveryTranscribesWithoutAnyWorkEnvelope() async throws {
