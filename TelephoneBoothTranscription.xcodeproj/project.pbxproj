@@ -16,6 +16,7 @@
 		08CA1E77EDF26FC8C55066A2 /* RequestLogWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */; };
 		08D5F938836703B80CFEC574 /* OperatorWorkChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5138EE1FCD69164094528260 /* OperatorWorkChannel.swift */; };
 		09343E4CB5BDDF4096ED7121 /* OperatorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E090AC8162782215C378960 /* OperatorClient.swift */; };
+		0A46E9C4E518C812039FE968 /* OnDeviceCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5384BDB3914ED69E698D1F8B /* OnDeviceCapability.swift */; };
 		0B4A5403DD2B783A8EA9B5E0 /* ProxyTranslationBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE1EBCFCE9F040A147E5F25 /* ProxyTranslationBackend.swift */; };
 		0B83447E0285DEEC57CDD5E2 /* SettingsTranslationSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 719FE37893AA09432ABDCA75 /* SettingsTranslationSection.swift */; };
 		0E8C6E249E9E8FE917F9CCF7 /* OpenAIUpstream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */; };
@@ -36,7 +37,6 @@
 		19E3CC713FF4F4265D86D09F /* SpeechAnalyzerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5564EBF98D92DAF2FCC4ED /* SpeechAnalyzerBackend.swift */; };
 		1A734503E367FF981E3D93CE /* TextTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B41180B457AF420AC1D90 /* TextTranslator.swift */; };
 		1BABC67B3D4E4A407A5DFA91 /* TranscriptionOnDevice_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		1E8246D1407AA28930A66E8A /* OnDeviceReviewPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA043CD75422A6F9219D506 /* OnDeviceReviewPipeline.swift */; };
 		20064C1E3EE6440E2B9C4B7A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE434919A1E3F53ECD075137 /* AppDelegate.swift */; };
 		20B13A0E53299A203F188D96 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
 		21D8A4FA65D155C447F61E48 /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B30D8CA32732CB5E386C044 /* DemoData.swift */; };
@@ -52,6 +52,7 @@
 		27F7970B479A80ED1FAE7F25 /* ModelsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */; };
 		2A34B713734C702F740CD7DD /* OperatorWorkInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C396E133C82E0416105D98 /* OperatorWorkInput.swift */; };
 		2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */; };
+		2CD2C63A73C13D31ADB5803E /* OnDeviceReviewPipelineFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E017510E161DACF28EFD9B /* OnDeviceReviewPipelineFactory.swift */; };
 		2E086F863ADB73FEBBF0CD05 /* ConcurrencyLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7B13BDB74E630900391892 /* ConcurrencyLimitMiddleware.swift */; };
 		2FA20701E10F9B2746B90D37 /* TranscriptionShared_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; };
 		302DDDBA20573513575140E2 /* TranscriptionOperator.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */; };
@@ -113,6 +114,7 @@
 		691222315974E097FCE36D91 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 4B95E851355068797D44848C /* Logging */; };
 		69881C5CCA191DCD73AF5F06 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0F4DB9F011E7A015E5C998 /* Crypto */; };
 		6ABC46592F1FE93AA1E16A77 /* OperatorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E090AC8162782215C378960 /* OperatorClient.swift */; };
+		6B0148B629864225DAFC5B35 /* OnDeviceCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5384BDB3914ED69E698D1F8B /* OnDeviceCapability.swift */; };
 		6B43B83A769E1F9FB5D9D0AD /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8544DD720CB364126F1627E3 /* AuthMiddleware.swift */; };
 		6BEA199F2C8331FEA00EF401 /* OperatorReviewClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EACA09D600D816D4B2D9E7E /* OperatorReviewClient.swift */; };
 		6C6D3F8176960A05A3D08CBF /* AppAuthConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45B48E2C59EDD65E83A554A /* AppAuthConfig.swift */; };
@@ -141,8 +143,9 @@
 		8506831E906C17E974C99EAC /* TranscriptionOnDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 224C8B3DA1B3BA56A24F6BF4 /* TranscriptionOnDevice.framework */; };
 		85F3F7B54A31CBD489629207 /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
 		87ED0AAB436FA65E0EB28DBE /* TextTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B41180B457AF420AC1D90 /* TextTranslator.swift */; };
-		886138C586F6EE5D284EE919 /* OnDeviceReviewPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA043CD75422A6F9219D506 /* OnDeviceReviewPipeline.swift */; };
+		886603049189B9D48A6D4C66 /* OnDeviceReviewPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863B30F7F944E77EE3DC9AFA /* OnDeviceReviewPipeline.swift */; };
 		887F942B2E527AFF09549D5A /* APIKeyStoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020BB961F3116444D91D359 /* APIKeyStoring.swift */; };
+		8BE1F1C8E0712E09A7DF9AA4 /* OnDeviceReviewPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863B30F7F944E77EE3DC9AFA /* OnDeviceReviewPipeline.swift */; };
 		8D8B82EB7F2819DBAC3E8925 /* AppAuthConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45B48E2C59EDD65E83A554A /* AppAuthConfig.swift */; };
 		8F08CA576D22093951CCC926 /* URLSessionAudioFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5BFA964FF23EBA1D51532A /* URLSessionAudioFetcher.swift */; };
 		975206D65F856CC158043254 /* InMemoryTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257A70DE620185F5F1F02E10 /* InMemoryTokenStore.swift */; };
@@ -201,6 +204,7 @@
 		D119ACD21C7002310187B760 /* TranscriptionOnDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 224C8B3DA1B3BA56A24F6BF4 /* TranscriptionOnDevice.framework */; };
 		D29298DFC248B89B2CCEB3F1 /* TranscriptionAuth.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 22E8B53426FAADF7DD38F063 /* TranscriptionAuth.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D5875C5E1ECED2585256863F /* ServerHostIOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1C47F8E83198D2AA4F9CD2 /* ServerHostIOS.swift */; };
+		D6043B587692A0136BC773A7 /* OnDeviceReviewPipelineFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E017510E161DACF28EFD9B /* OnDeviceReviewPipelineFactory.swift */; };
 		D78C01B08606B7EE7F876298 /* PowerAssertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */; };
 		D8228D718C3C4781EAEDAC0E /* AuthAnchorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 410F993584E3E22BA61858EF /* AuthAnchorProvider.swift */; };
 		D8ADE10179CF2D22990FB543 /* TranscriptionOperator_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -466,12 +470,12 @@
 		4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHost.swift; sourceTree = "<group>"; };
 		5115419BB0495CF787561459 /* RequestLogMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogMiddleware.swift; sourceTree = "<group>"; };
 		5138EE1FCD69164094528260 /* OperatorWorkChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorWorkChannel.swift; sourceTree = "<group>"; };
+		5384BDB3914ED69E698D1F8B /* OnDeviceCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceCapability.swift; sourceTree = "<group>"; };
 		53EF607E80299C4B7F64F0DA /* HealthRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRoute.swift; sourceTree = "<group>"; };
 		5FBD9C3B24E131B13A2C0ECF /* InMemoryRequestLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryRequestLogStore.swift; sourceTree = "<group>"; };
 		618D1645A6A0F17CDC44261B /* TranscriptionAuth_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionAuth_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		68082F358D45AFF71A5EEE3E /* ConfigPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigPersistence.swift; sourceTree = "<group>"; };
 		6B07206E4A2FEF078EBF9972 /* OnDeviceTranscriptionAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceTranscriptionAdapter.swift; sourceTree = "<group>"; };
-		6EA043CD75422A6F9219D506 /* OnDeviceReviewPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceReviewPipeline.swift; sourceTree = "<group>"; };
 		6F093D733703A349373FC072 /* RequestsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsRoute.swift; sourceTree = "<group>"; };
 		6FD96F7AFC4FC2A09E16DE8D /* InProcessOperatorJobDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InProcessOperatorJobDispatcher.swift; sourceTree = "<group>"; };
 		719FE37893AA09432ABDCA75 /* SettingsTranslationSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTranslationSection.swift; sourceTree = "<group>"; };
@@ -479,6 +483,7 @@
 		7C37C2AA7DC647536998F32C /* TranscriptionOperator.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOperator.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		80D9491D090F8DAD238E6D88 /* TranscriptionOperator_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOperator_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8544DD720CB364126F1627E3 /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
+		863B30F7F944E77EE3DC9AFA /* OnDeviceReviewPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceReviewPipeline.swift; sourceTree = "<group>"; };
 		87D229D9FFFD1DC06A5D418C /* OperatorPollingConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorPollingConfig.swift; sourceTree = "<group>"; };
 		8986C8DF2BB2972833D94E10 /* TextTranslationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextTranslationRoute.swift; sourceTree = "<group>"; };
 		9B30D8CA32732CB5E386C044 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoData.swift; sourceTree = "<group>"; };
@@ -488,6 +493,7 @@
 		A2EE79E65DCF74F5B2C9C768 /* OnDeviceTranslationBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceTranslationBackend.swift; sourceTree = "<group>"; };
 		A39A1B6453748F75B9755D69 /* LoopbackOperatorJobDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackOperatorJobDispatcher.swift; sourceTree = "<group>"; };
 		A3F76661166EFF4D6AB7E1F9 /* SettingsOperatorWorkerSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsOperatorWorkerSection.swift; sourceTree = "<group>"; };
+		A4E017510E161DACF28EFD9B /* OnDeviceReviewPipelineFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceReviewPipelineFactory.swift; sourceTree = "<group>"; };
 		AB4C0DDED2DF5DECCDEADC40 /* ReviewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewModels.swift; sourceTree = "<group>"; };
 		ADE1EBCFCE9F040A147E5F25 /* ProxyTranslationBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyTranslationBackend.swift; sourceTree = "<group>"; };
 		AECF96A7E89218F19631C6F8 /* FoundationModelsAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsAvailability.swift; sourceTree = "<group>"; };
@@ -749,6 +755,7 @@
 				CBF08B317D469DB861A6E53D /* AudioFetching.swift */,
 				6FD96F7AFC4FC2A09E16DE8D /* InProcessOperatorJobDispatcher.swift */,
 				A39A1B6453748F75B9755D69 /* LoopbackOperatorJobDispatcher.swift */,
+				863B30F7F944E77EE3DC9AFA /* OnDeviceReviewPipeline.swift */,
 				4E090AC8162782215C378960 /* OperatorClient.swift */,
 				5138EE1FCD69164094528260 /* OperatorWorkChannel.swift */,
 				28446A26FC108E18F7EF1E1F /* OperatorWorker.swift */,
@@ -781,7 +788,7 @@
 				F460213684A90E631B1439C7 /* AuthBearerAdapter.swift */,
 				68082F358D45AFF71A5EEE3E /* ConfigPersistence.swift */,
 				9B30D8CA32732CB5E386C044 /* DemoData.swift */,
-				6EA043CD75422A6F9219D506 /* OnDeviceReviewPipeline.swift */,
+				A4E017510E161DACF28EFD9B /* OnDeviceReviewPipelineFactory.swift */,
 				012C1F09475EAD0DCB5163B8 /* PowerAssertion.swift */,
 				4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */,
 				DB1C47F8E83198D2AA4F9CD2 /* ServerHostIOS.swift */,
@@ -826,6 +833,7 @@
 				11708B304E4FD14247DAD283 /* FoundationModelsModerationService.swift */,
 				B4C6176C4691215B5B064F56 /* FoundationModelsTranslationService.swift */,
 				A0BF53E0C7DF581ED69E923D /* NativeSpeechTranscriber.swift */,
+				5384BDB3914ED69E698D1F8B /* OnDeviceCapability.swift */,
 				40931948716064CFDD8523A3 /* OnDeviceClassificationLogic.swift */,
 				15DB7EB72AE7F096B10F8DF9 /* SpeechAnalyzerTranscriber.swift */,
 			);
@@ -1271,6 +1279,7 @@
 				CC60AB4908AB881AFBCCD32B /* AudioFetching.swift in Sources */,
 				A5E30849CC9E035589C27BB6 /* InProcessOperatorJobDispatcher.swift in Sources */,
 				583679E15DEFC96E37FC96A5 /* LoopbackOperatorJobDispatcher.swift in Sources */,
+				886603049189B9D48A6D4C66 /* OnDeviceReviewPipeline.swift in Sources */,
 				09343E4CB5BDDF4096ED7121 /* OperatorClient.swift in Sources */,
 				985F7F0655D1D0D3326AE6C5 /* OperatorWorkChannel.swift in Sources */,
 				16F7E2CE3C88A4AEBABCE143 /* OperatorWorker.swift in Sources */,
@@ -1289,7 +1298,7 @@
 				8320D3382663056EA6C9608F /* ConfigPersistence.swift in Sources */,
 				149AFBDD658C73C15EC9EBB0 /* ContentView.swift in Sources */,
 				73AA031DBAB53BD18822BCCA /* DemoData.swift in Sources */,
-				1E8246D1407AA28930A66E8A /* OnDeviceReviewPipeline.swift in Sources */,
+				D6043B587692A0136BC773A7 /* OnDeviceReviewPipelineFactory.swift in Sources */,
 				D78C01B08606B7EE7F876298 /* PowerAssertion.swift in Sources */,
 				6357B6309965DA6B893697EF /* RequestLogView.swift in Sources */,
 				4E1D1D7912260AF6B146C987 /* ReviewView.swift in Sources */,
@@ -1324,6 +1333,7 @@
 				C7602771D6DDD46AD8D5421B /* FoundationModelsModerationService.swift in Sources */,
 				99344387EBDA48C1A9E7B49F /* FoundationModelsTranslationService.swift in Sources */,
 				666B9582C81A38D69358F48B /* NativeSpeechTranscriber.swift in Sources */,
+				0A46E9C4E518C812039FE968 /* OnDeviceCapability.swift in Sources */,
 				AA164D22AF05FEE82AA24309 /* OnDeviceClassificationLogic.swift in Sources */,
 				5EA18240304D0C67604B6EDE /* SpeechAnalyzerTranscriber.swift in Sources */,
 			);
@@ -1351,6 +1361,7 @@
 				5DFC29EC812E6604795855EC /* FoundationModelsModerationService.swift in Sources */,
 				F3729C2320FA3D85C522BFE7 /* FoundationModelsTranslationService.swift in Sources */,
 				E1F5B672DA29C6D62B3DE5A2 /* NativeSpeechTranscriber.swift in Sources */,
+				6B0148B629864225DAFC5B35 /* OnDeviceCapability.swift in Sources */,
 				B1D5B6750BF0C682FDFDDAC2 /* OnDeviceClassificationLogic.swift in Sources */,
 				EA0BDE1B247498B5DE21FE6F /* SpeechAnalyzerTranscriber.swift in Sources */,
 			);
@@ -1408,7 +1419,7 @@
 				F4A184B6CBEDC726C5C10B74 /* ConfigPersistence.swift in Sources */,
 				9CBE58E58CE7518C2A5290D8 /* ContentView.swift in Sources */,
 				21D8A4FA65D155C447F61E48 /* DemoData.swift in Sources */,
-				886138C586F6EE5D284EE919 /* OnDeviceReviewPipeline.swift in Sources */,
+				2CD2C63A73C13D31ADB5803E /* OnDeviceReviewPipelineFactory.swift in Sources */,
 				A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */,
 				E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */,
 				35E453BE4BF7A56D39711D34 /* ReviewView.swift in Sources */,
@@ -1430,6 +1441,7 @@
 				08A006550C5F07827E49EFDB /* AudioFetching.swift in Sources */,
 				641C36C8DB527D0A2A6EBD83 /* InProcessOperatorJobDispatcher.swift in Sources */,
 				60B1584F9B69B993D3A447B2 /* LoopbackOperatorJobDispatcher.swift in Sources */,
+				8BE1F1C8E0712E09A7DF9AA4 /* OnDeviceReviewPipeline.swift in Sources */,
 				6ABC46592F1FE93AA1E16A77 /* OperatorClient.swift in Sources */,
 				08D5F938836703B80CFEC574 /* OperatorWorkChannel.swift in Sources */,
 				E279675682B848360E87CE32 /* OperatorWorker.swift in Sources */,

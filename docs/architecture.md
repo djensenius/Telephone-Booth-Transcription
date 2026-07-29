@@ -168,7 +168,8 @@ log, and no `ConfigPersistence` (that file is `#if os(macOS)` in its entirety).
 compiles.
 
 Instead, the iOS review UI runs the same pipeline **in-process**.
-`OnDeviceReviewPipeline` (in `TranscriptionApp`) wraps
+`OnDeviceReviewPipeline` (in `TranscriptionOperator`, alongside the dispatcher
+it drives, so its state machine is unit-testable without an app host) wraps
 `InProcessOperatorJobDispatcher` — the identical type the macOS push worker
 uses — with:
 
@@ -197,10 +198,15 @@ The consequences are worth stating plainly:
   button, and its output _pre-fills_ the translation draft. It never submits.
   The human stays in the loop, which also means a bad on-device transcript is a
   correctable draft rather than a published result.
-- **Graceful absence.** `makeAppleIntelligence` returns `nil` when the engines
-  are unavailable (older device, simulator, Apple Intelligence disabled), and
-  the UI hides the affordance entirely rather than offering a button that
-  always fails.
+- **Graceful absence.** `makeAppleIntelligence` (the Apple Intelligence wiring,
+  which stays in `TranscriptionApp`) returns `nil` when the engines are
+  unavailable, and the UI hides the affordance entirely rather than offering a
+  button that always fails. It consults `OnDeviceCapability`, which probes
+  `SpeechTranscriber.isAvailable` and `SystemLanguageModel.availability` — an
+  OS-version check alone is not enough, since a device can run iOS 26 and still
+  be ineligible, have Apple Intelligence turned off, or not have finished
+  downloading the model. The engines re-check at use time as well, because
+  availability can change after the probe.
 
 #### Transcripts are read-only on iOS
 

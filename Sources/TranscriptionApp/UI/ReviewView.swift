@@ -1,5 +1,6 @@
 import SwiftUI
 import TranscriptionAuth
+import TranscriptionOperator
 import TranscriptionReview
 
 /// The review queue: the operator's primary surface. Surfaces messages whose

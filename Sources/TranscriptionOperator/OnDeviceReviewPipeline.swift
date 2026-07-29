@@ -1,9 +1,6 @@
 import Foundation
 import Logging
 import Observation
-import TranscriptionOnDevice
-import TranscriptionOperator
-import TranscriptionReview
 import TranscriptionShared
 
 /// Runs the whole review pipeline locally with Apple Intelligence: fetch the
@@ -22,6 +19,32 @@ import TranscriptionShared
 @MainActor
 @Observable
 public final class OnDeviceReviewPipeline {
+    /// The subset of a review message this pipeline needs. Kept separate from
+    /// the operator's `Message` model so the orchestration stays independent of
+    /// the review client (and testable without it).
+    public struct Input: Sendable, Equatable {
+        public var id: String
+        public var audioURL: URL
+        public var audioSHA256: String
+        public var audioDurationMs: Int?
+        /// BCP-47 hint for the transcriber, when the operator already knows it.
+        public var language: String?
+
+        public init(
+            id: String,
+            audioURL: URL,
+            audioSHA256: String,
+            audioDurationMs: Int? = nil,
+            language: String? = nil
+        ) {
+            self.id = id
+            self.audioURL = audioURL
+            self.audioSHA256 = audioSHA256
+            self.audioDurationMs = audioDurationMs
+            self.language = language
+        }
+    }
+
     public struct Output: Sendable, Equatable {
         /// Transcript produced locally from the audio.
         public var transcript: String
@@ -31,6 +54,18 @@ public final class OnDeviceReviewPipeline {
         /// Local moderation verdict, when moderation ran.
         public var recommendation: String?
         public var flagged: Bool?
+
+        public init(
+            transcript: String,
+            translation: String? = nil,
+            recommendation: String? = nil,
+            flagged: Bool? = nil
+        ) {
+            self.transcript = transcript
+            self.translation = translation
+            self.recommendation = recommendation
+            self.flagged = flagged
+        }
     }
 
     public enum Stage: Sendable, Equatable {
@@ -60,53 +95,6 @@ public final class OnDeviceReviewPipeline {
         self.logger = logger
     }
 
-    /// Builds a pipeline backed by Apple Intelligence, or returns `nil` when
-    /// this OS/device can't run the on-device engines — callers hide the entry
-    /// point entirely rather than offering a button that always fails.
-    public static func makeAppleIntelligence(
-        locale: Locale = .current
-    ) -> OnDeviceReviewPipeline? {
-        guard let transcriber = Self.makeTranscriber(locale: locale),
-              let translator = Self.makeTranslator(),
-              let moderator = Self.makeModerator() else {
-            return nil
-        }
-        let dispatcher = InProcessOperatorJobDispatcher(
-            transcriber: transcriber,
-            translator: translator,
-            moderator: moderator,
-            audioFetcher: URLSessionAudioFetcher()
-        )
-        return OnDeviceReviewPipeline(dispatcher: dispatcher)
-    }
-
-    private static func makeTranscriber(locale: Locale) -> (any AudioTranscriber)? {
-        #if canImport(Speech)
-        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
-            return SpeechAnalyzerTranscriber(locale: locale)
-        }
-        #endif
-        return nil
-    }
-
-    private static func makeTranslator() -> (any TextTranslationService)? {
-        #if canImport(FoundationModels)
-        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
-            return FoundationModelsTranslationService()
-        }
-        #endif
-        return nil
-    }
-
-    private static func makeModerator() -> (any TextModerationService)? {
-        #if canImport(FoundationModels)
-        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
-            return FoundationModelsModerationService()
-        }
-        #endif
-        return nil
-    }
-
     // MARK: - Running
 
     public func stage(for messageID: String) -> Stage {
@@ -120,8 +108,31 @@ public final class OnDeviceReviewPipeline {
         }
     }
 
-    /// Clears any surfaced result/error for a message.
+    /// Bumped whenever a message's run is superseded — by `reset`, or by a new
+    /// run starting. A run captures the value at entry and abandons its results
+    /// if it no longer matches, so a task still in flight when the row was reset
+    /// can't repopulate the operator's draft with a stale transcript. Swift
+    /// concurrency gives us no way to cancel the caller's task from here, and
+    /// `isRunning` goes false on reset, so without this a second run could start
+    /// and race the first.
+    @ObservationIgnored
+    private var generations: [String: Int] = [:]
+
+    /// Starts a new generation for `messageID` and returns it.
+    private func beginGeneration(_ messageID: String) -> Int {
+        let next = (generations[messageID] ?? 0) + 1
+        generations[messageID] = next
+        return next
+    }
+
+    private func isCurrent(_ messageID: String, _ generation: Int) -> Bool {
+        generations[messageID] == generation
+    }
+
+    /// Clears any surfaced result/error for a message, and supersedes any run
+    /// still in flight for it.
     public func reset(_ messageID: String) {
+        _ = beginGeneration(messageID)
         stages[messageID] = nil
         outputs[messageID] = nil
     }
@@ -135,8 +146,9 @@ public final class OnDeviceReviewPipeline {
     /// one that does is worker-token gated — so there is deliberately no submit
     /// path here yet. See the `transcriptionSubmissionUnsupported` note below.
     @discardableResult
-    public func transcribeOnly(for message: Message) async -> String? {
+    public func transcribeOnly(for message: Input) async -> String? {
         guard !isRunning(message.id) else { return nil }
+        let generation = beginGeneration(message.id)
         outputs[message.id] = nil
         stages[message.id] = .fetchingAndTranscribing
 
@@ -144,9 +156,11 @@ public final class OnDeviceReviewPipeline {
         do {
             transcript = try await transcribe(message)
         } catch {
+            guard isCurrent(message.id, generation) else { return nil }
             fail(message.id, error, verb: "transcribe that audio")
             return nil
         }
+        guard isCurrent(message.id, generation) else { return nil }
 
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -163,8 +177,9 @@ public final class OnDeviceReviewPipeline {
     /// result. Returns the English translation so the caller can pre-fill the
     /// operator's draft, or `nil` if any stage failed.
     @discardableResult
-    public func run(for message: Message) async -> String? {
+    public func run(for message: Input) async -> String? {
         guard !isRunning(message.id) else { return nil }
+        let generation = beginGeneration(message.id)
         outputs[message.id] = nil
         stages[message.id] = .fetchingAndTranscribing
 
@@ -172,9 +187,11 @@ public final class OnDeviceReviewPipeline {
         do {
             transcript = try await transcribe(message)
         } catch {
+            guard isCurrent(message.id, generation) else { return nil }
             fail(message.id, error, verb: "transcribe that audio")
             return nil
         }
+        guard isCurrent(message.id, generation) else { return nil }
 
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -187,9 +204,11 @@ public final class OnDeviceReviewPipeline {
         do {
             translation = try await translate(trimmed)
         } catch {
+            guard isCurrent(message.id, generation) else { return nil }
             fail(message.id, error, verb: "translate that transcript")
             return nil
         }
+        guard isCurrent(message.id, generation) else { return nil }
 
         // Moderation is advisory, so a failure here must not discard the
         // translation the operator is waiting on.
@@ -200,6 +219,7 @@ public final class OnDeviceReviewPipeline {
             recommendation = verdict.recommendation
             flagged = verdict.flagged
         }
+        guard isCurrent(message.id, generation) else { return nil }
 
         outputs[message.id] = Output(
             transcript: trimmed,
@@ -213,16 +233,16 @@ public final class OnDeviceReviewPipeline {
 
     // MARK: - Stages
 
-    private func transcribe(_ message: Message) async throws -> String {
+    private func transcribe(_ message: Input) async throws -> String {
         let job = OperatorJob(
             id: message.id,
             leaseToken: "",
             kind: .transcription,
             payload: .transcription(.init(
-                audioURL: message.audio.url.absoluteString,
-                sha256: message.audio.sha256,
-                durationMs: message.audio.durationMs,
-                language: message.latestTranscription?.language
+                audioURL: message.audioURL.absoluteString,
+                sha256: message.audioSHA256,
+                durationMs: message.audioDurationMs,
+                language: message.language
             ))
         )
         guard case .transcription(let text, _, _) = try await dispatcher.execute(job: job) else {
