@@ -143,7 +143,15 @@ struct URLSessionAudioFetcherTests {
     /// Exercises `buffered`'s chunk boundary: a payload spanning several 64 KB
     /// chunks plus a partial trailing chunk must reassemble byte-for-byte.
     @Test func reassemblesMultiChunkPayload() async throws {
-        let payload = Data((0..<(64 * 1024 * 2 + 517)).map { UInt8($0 % 251) })
+        // Written out in steps: as a single expression the type checker times
+        // out on some toolchains.
+        let count: Int = 64 * 1024 * 2 + 517
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(count)
+        for index in 0..<count {
+            bytes.append(UInt8(index % 251))
+        }
+        let payload = Data(bytes)
         StubAudioURLProtocol.install(.init(body: payload))
 
         let staged: Data = try await makeFetcher().withFetchedAudioFile(
