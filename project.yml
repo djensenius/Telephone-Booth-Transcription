@@ -470,6 +470,10 @@ targets:
       - target: TranscriptionOperator_iOS
       - target: TranscriptionAuth_iOS
       - target: TranscriptionReview_iOS
+      # Linked directly because the on-device pipeline's `logger:` default
+      # arguments are inlined into this target's call sites.
+      - package: swift-log
+        product: Logging
     info:
       path: Resources/TranscriptionAppiOS-Info.plist
       properties:

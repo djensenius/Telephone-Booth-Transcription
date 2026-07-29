@@ -66,6 +66,7 @@
 		387CC848C7563C2A1A733A5B /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
 		397F4078EFDF7865D64740B9 /* InMemoryAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCE47768E454F783DFC1675 /* InMemoryAPIKeyStore.swift */; };
 		3AFE2794D4B08B5F3EEDFD45 /* URLSessionAudioFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5BFA964FF23EBA1D51532A /* URLSessionAudioFetcher.swift */; };
+		3B24BAB6ABC38A504387EDD5 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 3803380DBA71D54DEC3E94D6 /* Logging */; };
 		3C1976FE50354C07131A74A1 /* ModerationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CFDA457CE8E99DAD236637 /* ModerationClassifier.swift */; };
 		3C9BBBA01B621ACE8C4D4F75 /* TranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */; };
 		3CAA088588C74F197B6B9EBC /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA45BAF272E6BBDEC576B2E6 /* StatusView.swift */; };
@@ -634,6 +635,7 @@
 				F35B22E377EAF6AB9CBD385C /* TranscriptionOperator_iOS.framework in Frameworks */,
 				63C61343B0C1EF0F54D2FE8C /* TranscriptionAuth_iOS.framework in Frameworks */,
 				49ED5FAF400A59841DDA2FAE /* TranscriptionReview_iOS.framework in Frameworks */,
+				3B24BAB6ABC38A504387EDD5 /* Logging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1155,6 +1157,7 @@
 			);
 			name = TranscriptionAppiOS;
 			packageProductDependencies = (
+				3803380DBA71D54DEC3E94D6 /* Logging */,
 			);
 			productName = TranscriptionAppiOS;
 			productReference = 3B677675667170EBC8F37CD4 /* Transcriber.app */;
@@ -2713,6 +2716,11 @@
 			productName = GRDB;
 		};
 		36072863AF57A19E367E9CC4 /* Logging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
+			productName = Logging;
+		};
+		3803380DBA71D54DEC3E94D6 /* Logging */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9792781761DBD88AE9D72598 /* XCRemoteSwiftPackageReference "swift-log" */;
 			productName = Logging;
