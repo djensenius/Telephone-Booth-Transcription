@@ -218,5 +218,7 @@ while socket work succeeds.
 ## Concurrency
 
 The worker handles one need at a time, whether it arrived over the WebSocket or
-from the discovery pass. If higher throughput is needed, add more worker devices
-pointing at the same Operator.
+from the discovery pass. Throughput can't be raised by adding worker devices:
+the listing endpoint doesn't lease work, so a second Mac polling the same
+Operator would transcribe every message a second time. Run one worker per
+Operator until the Operator can hand out claims.

@@ -83,10 +83,13 @@ public actor OperatorWorker {
     private var queuedKeys: Set<String> = []
     private var runningKey: String?
     private var discoveryFailures = 0
+    /// Continuation cursor carried across passes that stopped early.
+    private var discoveryCursor: String?
     /// Reconnect backoff counts socket failures only. Job outcomes must not
     /// shorten or lengthen the next reconnect delay.
     private var socketFailures = 0
     private var socketConnected = false
+    private var lastSocketErrorCode: String?
     /// How many times the discovery pass has enqueued each message, and when it
     /// last did. Caps repeated attempts so a message the Operator keeps listing
     /// (because a push failed, say) can't spin in a hot loop, while a cooldown
@@ -238,7 +241,10 @@ public actor OperatorWorker {
     }
 
     private func runDiscoveryPass() async {
-        var cursor: String?
+        // Passes resume from where the previous one stopped, so a long backlog
+        // is covered over successive intervals instead of rescanning page one
+        // forever. The cursor resets once the listing is exhausted.
+        var cursor = discoveryCursor
         var enqueued = 0
         var pages = 0
         var atCapacity = false
@@ -265,14 +271,16 @@ public actor OperatorWorker {
                         enqueued += 1
                     }
                 }
-                cursor = atCapacity ? nil : page.nextCursor
+                cursor = page.nextCursor
                 pages += 1
+                if atCapacity { break }
             } catch {
                 recordDiscoveryError(code: errorCode(for: error))
                 return
             }
         } while cursor != nil && pages < discoveryMaxPages
 
+        discoveryCursor = cursor
         discoveryFailures = 0
         status.lastDiscoveryErrorCode = nil
         status.lastDiscoveryAt = clock()
@@ -416,6 +424,7 @@ public actor OperatorWorker {
     private func recordConnectionHealthy() {
         socketConnected = true
         socketFailures = 0
+        lastSocketErrorCode = nil
         status.consecutiveFailures = 0
         status.lastErrorCode = nil
         status.phase = .subscribed
@@ -425,7 +434,9 @@ public actor OperatorWorker {
     private func recordSuccess(jobID: String, kind: OperatorJob.Kind) {
         status.consecutiveFailures = 0
         status.lastSuccessAt = clock()
-        status.lastErrorCode = nil
+        // A finished job clears job errors only: an ongoing socket outage must
+        // stay visible in the status while the socket keeps retrying.
+        status.lastErrorCode = socketConnected ? nil : lastSocketErrorCode
         status.lastJobID = jobID
         status.lastJobKind = kind
         // A finished job says nothing about the socket: only report `subscribed`
@@ -445,6 +456,7 @@ public actor OperatorWorker {
         if socket {
             socketConnected = false
             socketFailures += 1
+            lastSocketErrorCode = code
         }
         status.consecutiveFailures += 1
         status.lastErrorAt = clock()
