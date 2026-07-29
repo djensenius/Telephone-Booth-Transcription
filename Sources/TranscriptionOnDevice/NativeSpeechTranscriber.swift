@@ -53,9 +53,22 @@ public struct NativeSpeechTranscriber: AudioTranscriber {
 
         let request = SFSpeechURLRecognitionRequest(url: audioFileURL)
         request.shouldReportPartialResults = false
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
+        // Fail closed. `SFSpeechRecognizer` silently falls back to Apple's
+        // servers when on-device recognition isn't supported for the locale or
+        // device, which would send the audio off-machine — unacceptable for a
+        // backend that reports `isOnDevice == true` and drives the "no request
+        // leaves this machine" indicator. Refuse instead, so the operator can
+        // pick Speech Analyzer or a locale with on-device assets.
+        guard recognizer.supportsOnDeviceRecognition else {
+            throw OnDeviceServiceError.unavailable(
+                """
+                on-device speech recognition is unavailable for \
+                \(effectiveLocale.identifier); refusing to fall back to \
+                Apple's servers
+                """
+            )
         }
+        request.requiresOnDeviceRecognition = true
 
         return try await recognizeWithTimeout(recognizer: recognizer, request: request)
     }

@@ -18,6 +18,12 @@ import TranscriptionShared
 ///
 /// The response shape is identical to the proxy backend's (`{"text": …}`), so
 /// OpenAI-compatible clients can't tell the difference.
+///
+/// An optional `language` form field (BCP-47) names the *source* language of
+/// the audio. Without it the transcriber falls back to its configured locale,
+/// which decodes non-English audio as English and produces a nonsense
+/// "translation"; the locale picker isn't even shown when transcription is
+/// proxied, so the default can't be corrected in the UI.
 public struct OnDeviceTranslationBackend: TranslationBackendImpl {
     public let transcriber: any AudioTranscriber
     public let translator: any TextTranslationService
@@ -34,13 +40,19 @@ public struct OnDeviceTranslationBackend: TranslationBackendImpl {
     }
 
     public func handle(body: ByteBuffer, contentType: String) async throws -> Response {
+        let sourceLanguage = MultipartFilePart.extractTextValue(
+            named: "language",
+            from: body,
+            contentType: contentType
+        )
+
         let transcript: String
         do {
             transcript = try await OnDeviceAudioFile.withTemporaryFile(
                 body: body,
                 contentType: contentType
             ) { url in
-                try await transcriber.transcribe(audioFileURL: url, language: nil)
+                try await transcriber.transcribe(audioFileURL: url, language: sourceLanguage)
             }
         } catch let error as OnDeviceServiceError {
             throw error.asTranslationBackendError
@@ -52,7 +64,7 @@ public struct OnDeviceTranslationBackend: TranslationBackendImpl {
         }
 
         do {
-            let result = try await translator.translate(trimmed, sourceLanguage: nil)
+            let result = try await translator.translate(trimmed, sourceLanguage: sourceLanguage)
             return Self.textResponse(result.translatedText)
         } catch let error as OnDeviceServiceError {
             throw error.asTranslationBackendError

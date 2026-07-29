@@ -116,12 +116,21 @@ The multipart fields mirror OpenAI's `/v1/audio/translations`:
 | `prompt` | no | Optional prompt to bias the decoder. Ignored by the on-device backend. |
 | `temperature` | no | 0..1. Ignored by the on-device backend. |
 | `response_format` | no | `json` (default), `text`, `srt`, `vtt`, `verbose_json`. The on-device backend always returns `json`. |
+| `language` | no | BCP-47 hint naming the **source** language of the audio, e.g. `fr`. On-device only; the proxy backend forwards it and Whisper ignores it. |
 
 For the proxy backend, response body and status code are passed through from
 the upstream unchanged (minus hop-by-hop headers). The on-device backend
 returns the same `{"text": "…"}` shape, so OpenAI-compatible clients can't tell
-the two apart. `language` is **not** accepted — translation always targets
-English by design.
+the two apart.
+
+`language` never selects the _target_ language — translation always targets
+English by design. It names the language of the _incoming audio_. Supplying it
+matters for the on-device backend: unlike Whisper, Apple's Speech engine does
+not detect the spoken language, so without a hint it decodes using the
+configured transcription locale (`en-US` by default). French audio would then
+be transcribed as if it were English and "translated" from that garbage. The
+locale picker in Settings is hidden when transcription is proxied, so on that
+combination `language` is the only way to get this right.
 
 ## `POST /v1/translations`
 

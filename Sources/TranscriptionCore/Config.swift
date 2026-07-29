@@ -287,6 +287,11 @@ public enum TranscriptionBackend: Sendable, Equatable {
     /// Widely supported (50+ locales, no separate asset download) but less
     /// accurate than the macOS 26 `SpeechAnalyzer`. Requires
     /// `NSSpeechRecognitionUsageDescription` and user approval at first use.
+    ///
+    /// Fails closed: `SFSpeechRecognizer` would otherwise silently use Apple's
+    /// servers for locales/devices without on-device support, so the
+    /// transcriber refuses rather than letting audio leave the machine. That's
+    /// what keeps `isOnDevice` below honest.
     case nativeMacOS
     /// Use macOS 26's `SpeechAnalyzer` + `SpeechTranscriber` (the same engine
     /// behind Apple Intelligence transcription in Notes/Voice Memos). Higher

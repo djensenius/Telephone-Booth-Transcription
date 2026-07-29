@@ -14,9 +14,11 @@ struct OnDeviceTranslationBackendTests {
 
     // MARK: - Doubles
 
-    private struct StubTranscriber: AudioTranscriber {
+    private final class StubTranscriber: AudioTranscriber, @unchecked Sendable {
         let text: String
         let error: OnDeviceServiceError?
+        /// Language hint the backend passed through, for assertions.
+        private(set) var receivedLanguage: String?
 
         init(text: String = "", error: OnDeviceServiceError? = nil) {
             self.text = text
@@ -24,19 +26,22 @@ struct OnDeviceTranslationBackendTests {
         }
 
         func transcribe(audioFileURL: URL, language: String?) async throws -> String {
+            receivedLanguage = language
             if let error { throw error }
             return text
         }
     }
 
-    private struct StubTranslator: TextTranslationService {
+    private final class StubTranslator: TextTranslationService, @unchecked Sendable {
         let error: OnDeviceServiceError?
+        private(set) var receivedSourceLanguage: String?
 
         init(error: OnDeviceServiceError? = nil) {
             self.error = error
         }
 
         func translate(_ input: String, sourceLanguage: String?) async throws -> TranslationResult {
+            receivedSourceLanguage = sourceLanguage
             if let error { throw error }
             return TranslationResult(
                 translatedText: "EN(\(input))",
@@ -48,8 +53,19 @@ struct OnDeviceTranslationBackendTests {
 
     // MARK: - Helpers
 
-    private func makeMultipartBody(boundary: String, fileBytes: [UInt8]) -> ByteBuffer {
+    private func makeMultipartBody(
+        boundary: String,
+        fileBytes: [UInt8],
+        language: String? = nil
+    ) -> ByteBuffer {
         var bytes: [UInt8] = []
+        if let language {
+            bytes.append(contentsOf: "--\(boundary)\r\n".utf8)
+            bytes.append(contentsOf: "Content-Disposition: form-data; name=\"language\"".utf8)
+            bytes.append(contentsOf: [0x0D, 0x0A, 0x0D, 0x0A])
+            bytes.append(contentsOf: language.utf8)
+            bytes.append(contentsOf: [0x0D, 0x0A])
+        }
         bytes.append(contentsOf: "--\(boundary)\r\n".utf8)
         bytes.append(contentsOf: "Content-Disposition: form-data; name=\"file\"; filename=\"a.wav\"\r\nContent-Type: audio/wav".utf8)
         bytes.append(contentsOf: [0x0D, 0x0A, 0x0D, 0x0A])
@@ -155,6 +171,54 @@ struct OnDeviceTranslationBackendTests {
         // Intelligence being off is a 503 the caller can retry, not a 403.
         #expect(OnDeviceServiceError.unavailable("x").asTranslationBackendError.isUnavailable)
         #expect(OnDeviceServiceError.unauthorized("x").asTranslationBackendError.isUnauthorized)
+    }
+
+    // MARK: - Source language
+
+    @Test func passesTheLanguageFormFieldToBothStages() async throws {
+        let boundary = "BNDRY-LANG"
+        let transcriber = StubTranscriber(text: "bonjour")
+        let translator = StubTranslator()
+        let backend = OnDeviceTranslationBackend(transcriber: transcriber, translator: translator)
+
+        _ = try await backend.handle(
+            body: makeMultipartBody(boundary: boundary, fileBytes: [0x01, 0x02], language: "fr"),
+            contentType: contentType(boundary)
+        )
+
+        // Without this the transcriber decodes non-English audio with its
+        // default locale, and "translation" becomes garbage.
+        #expect(transcriber.receivedLanguage == "fr")
+        #expect(translator.receivedSourceLanguage == "fr")
+    }
+
+    @Test func omittedLanguageStaysNil() async throws {
+        let boundary = "BNDRY-NOLANG"
+        let transcriber = StubTranscriber(text: "hello")
+        let translator = StubTranslator()
+        let backend = OnDeviceTranslationBackend(transcriber: transcriber, translator: translator)
+
+        _ = try await backend.handle(
+            body: makeMultipartBody(boundary: boundary, fileBytes: [0x01]),
+            contentType: contentType(boundary)
+        )
+
+        #expect(transcriber.receivedLanguage == nil)
+        #expect(translator.receivedSourceLanguage == nil)
+    }
+
+    @Test func blankLanguageIsTreatedAsAbsent() async throws {
+        let boundary = "BNDRY-BLANK"
+        let transcriber = StubTranscriber(text: "hello")
+        let translator = StubTranslator()
+        let backend = OnDeviceTranslationBackend(transcriber: transcriber, translator: translator)
+
+        _ = try await backend.handle(
+            body: makeMultipartBody(boundary: boundary, fileBytes: [0x01], language: "   "),
+            contentType: contentType(boundary)
+        )
+
+        #expect(transcriber.receivedLanguage == nil)
     }
 
     // MARK: - All-local config

@@ -36,6 +36,29 @@ struct MultipartFilePart {
     /// Returns nil if the body isn't multipart, the boundary can't be parsed,
     /// or no part with `name="file"` is present.
     static func extractFile(from buffer: ByteBuffer, contentType: String) -> MultipartFilePart? {
+        extractPart(named: "file", from: buffer, contentType: contentType)
+    }
+
+    /// Reads a short text part (e.g. `language`) as a trimmed UTF-8 string.
+    /// Returns nil when the part is absent or empty.
+    static func extractTextValue(
+        named name: String,
+        from buffer: ByteBuffer,
+        contentType: String
+    ) -> String? {
+        guard let part = extractPart(named: name, from: buffer, contentType: contentType),
+              let data = part.data.getData(at: part.data.readerIndex, length: part.data.readableBytes),
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Shared parser backing `extractFile` and `extractTextValue`.
+    static func extractPart(
+        named name: String,
+        from buffer: ByteBuffer,
+        contentType: String
+    ) -> MultipartFilePart? {
         guard let boundary = MultipartHelpers.parseBoundary(from: contentType),
               !boundary.isEmpty else { return nil }
 
@@ -90,7 +113,7 @@ struct MultipartFilePart {
             // Parse headers (they're always ASCII/UTF-8).
             let headersSlice = view[contentStart..<headersEnd]
             guard let headers = String(bytes: headersSlice, encoding: .utf8) else { continue }
-            guard Self.hasExactNameParameter(headers, name: "file") else { continue }
+            guard Self.hasExactNameParameter(headers, name: name) else { continue }
 
             let filename = Self.matchHeader(headers, key: "filename")
             let mimeType = Self.matchHeader(headers, key: "Content-Type", isCT: true)
