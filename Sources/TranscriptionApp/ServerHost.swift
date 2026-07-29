@@ -402,8 +402,27 @@ final class ServerHost: ObservableObject {
 /// deliberate re-run of one that already has a transcript.
 extension ServerHost: TranscriptionRerunRequesting {
     func requestTranscription(messageID: String) async -> Bool {
-        guard let worker = operatorWorker else { return false }
+        guard let worker = operatorWorker, workerTargetsReviewedOperator else { return false }
         return await worker.requestTranscription(messageID: messageID)
+    }
+
+    /// Review and the worker are configured independently, so a re-run must be
+    /// refused unless both target the same Operator — otherwise the app would
+    /// transcribe against a different backend than the one being reviewed.
+    private var workerTargetsReviewedOperator: Bool {
+        let raw = config.operatorPolling.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let workerURL = URL(string: raw) else { return false }
+        // Scheme and host are case-insensitive; the path is not, so a tenant
+        // prefix like `/TenantA` must not match `/tenanta`.
+        func normalized(_ url: URL) -> String {
+            var path = url.path
+            while path.hasSuffix("/") { path.removeLast() }
+            let scheme = (url.scheme ?? "").lowercased()
+            let host = (url.host ?? "").lowercased()
+            let port = url.port.map { ":\($0)" } ?? ""
+            return "\(scheme)://\(host)\(port)\(path)"
+        }
+        return normalized(workerURL) == normalized(OperatorAPIConfig.shared.baseURL)
     }
 }
 

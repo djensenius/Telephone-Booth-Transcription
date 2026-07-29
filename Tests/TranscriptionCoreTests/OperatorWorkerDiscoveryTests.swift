@@ -340,6 +340,32 @@ struct OperatorWorkerDiscoveryTests {
         #expect(translationIndex < backlog.count)
     }
 
+    @Test func anEnvelopePromotesAJobDiscoveryAlreadyQueued() async throws {
+        var backlog: [OperatorWorkListItem] = []
+        for index in 0..<8 {
+            backlog.append(OperatorWorkListItem(id: "q\(index)", status: "pending"))
+        }
+        let client = DiscoveryClient(pages: [OperatorWorkListPage(items: backlog)])
+        for item in backlog { await client.setInput(audioInput(id: item.id), for: item.id) }
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setDelay(nanos: 40_000_000)
+        let channel = SilentChannel()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        await channel.yield(OperatorWorkEnvelope(messageId: "q6", needs: [.transcription]))
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let ids = await dispatcher.recorded().map(\.id)
+        let index = try #require(ids.firstIndex(of: "q6"))
+        // The envelope must promote the already-queued discovery job instead of
+        // being dropped by de-duplication and left at the back of the queue.
+        #expect(index < 6)
+        #expect(ids.filter { $0 == "q6" }.count == 1)
+    }
+
     @Test func discoveryFollowsPaginationCursors() async throws {
         let client = DiscoveryClient(pages: [
             OperatorWorkListPage(items: [OperatorWorkListItem(id: "p1", status: "pending")], nextCursor: "c1"),

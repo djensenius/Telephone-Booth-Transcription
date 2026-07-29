@@ -116,7 +116,9 @@ the newest succeeded row wins downstream.
 - Items already reporting `latestTranscriptionStatus: "succeeded"` are skipped.
 - A message is enqueued by discovery at most 3 times per worker session, so a
   message the Operator keeps listing can't spin in a hot loop. A successful
-  transcription resets that counter.
+  transcription exhausts that budget outright, so a stale listing can never
+  cause the same message to be transcribed over and over. A deliberate re-run
+  from the app is forced and ignores the cap.
 - At most 25 discovered jobs wait in the queue at once, so a large backlog
   can't crowd out translation and moderation.
 - Runs only when the transcription realm is enabled.

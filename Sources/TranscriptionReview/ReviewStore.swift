@@ -93,8 +93,10 @@ public final class ReviewStore {
         self.now = now
     }
 
-    /// Reviewable messages with no succeeded transcription — the primary
+    /// Reviewable messages with no transcription row at all — the primary
     /// enrichment queue now that the Operator no longer solicits transcription.
+    /// Messages whose newest row is pending or failed belong to
+    /// `alreadyTranscribed`, because re-running those is a human decision.
     public var awaitingTranscription: [Message] {
         messages.filter(\.needsTranscription)
     }

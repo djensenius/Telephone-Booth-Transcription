@@ -290,15 +290,33 @@ public actor OperatorWorker {
         guard !stopRequested, !Task.isCancelled else { return false }
         guard job.force || enabledKinds.contains(job.kind) else { return false }
         guard !job.messageID.isEmpty else { return false }
-        guard !queuedKeys.contains(job.key), runningKey != job.key else { return false }
+        guard runningKey != job.key else { return false }
+        if queuedKeys.contains(job.key) {
+            // Already queued. If this is an envelope for work discovery queued
+            // first, promote it rather than dropping it: someone is waiting.
+            if job.source == .envelope,
+               let existing = jobQueue.firstIndex(where: { $0.key == job.key && $0.source == .discovery }) {
+                var promoted = jobQueue.remove(at: existing)
+                promoted.source = .envelope
+                promoted.force = promoted.force || job.force
+                insert(promoted)
+                return true
+            }
+            return false
+        }
         queuedKeys.insert(job.key)
+        insert(job)
+        startDrainIfNeeded()
+        return true
+    }
+
+    /// Envelope work goes ahead of any discovered work already waiting.
+    private func insert(_ job: QueuedJob) {
         if job.source == .envelope, let first = jobQueue.firstIndex(where: { $0.source == .discovery }) {
             jobQueue.insert(job, at: first)
         } else {
             jobQueue.append(job)
         }
-        startDrainIfNeeded()
-        return true
     }
 
     private var queuedDiscoveryCount: Int {

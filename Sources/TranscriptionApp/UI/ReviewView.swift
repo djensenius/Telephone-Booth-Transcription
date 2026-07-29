@@ -25,26 +25,11 @@ struct ReviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task(id: auth.isSignedIn) {
-            store.transcriptionRerunner = workerTargetsSameOperator ? host : nil
+            store.transcriptionRerunner = host
             if auth.isSignedIn {
                 await store.poll()
             }
         }
-    }
-
-    /// The Review client and the worker are configured independently. Bridging
-    /// a re-run across two different Operators would silently transcribe against
-    /// the wrong backend, so the button is only wired up when they agree.
-    private var workerTargetsSameOperator: Bool {
-        guard let workerURL = URL(string: host.config.operatorPolling.baseURL.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )) else { return false }
-        func normalized(_ url: URL) -> String {
-            var text = url.absoluteString.lowercased()
-            while text.hasSuffix("/") { text.removeLast() }
-            return text
-        }
-        return normalized(workerURL) == normalized(OperatorAPIConfig.shared.baseURL)
     }
 
     private var signedOut: some View {
