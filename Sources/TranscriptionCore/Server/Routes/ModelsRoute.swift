@@ -25,9 +25,12 @@ public struct ModelsRoute<Context: RequestContext>: Sendable {
     public let translationUpstream: UpstreamConfig?
     public let moderationUpstream: UpstreamConfig?
     public let includeNativeMacOS: Bool
-    /// True when any text realm (moderation / text translation / audio
-    /// translation) is served by Apple's Foundation Models.
-    public let includeFoundationModels: Bool
+    /// Realms served by Apple's Foundation Models, e.g. `["translation",
+    /// "moderation"]`. One synthetic entry is emitted per realm so `owned_by`
+    /// keeps meaning what it does for proxied models — collapsing them into a
+    /// single entry would advertise a translation model when only moderation is
+    /// on-device.
+    public let foundationModelsRealms: [String]
 
     public init(
         upstream: OpenAIUpstream,
@@ -35,14 +38,14 @@ public struct ModelsRoute<Context: RequestContext>: Sendable {
         translationUpstream: UpstreamConfig?,
         moderationUpstream: UpstreamConfig?,
         includeNativeMacOS: Bool,
-        includeFoundationModels: Bool = false
+        foundationModelsRealms: [String] = []
     ) {
         self.upstream = upstream
         self.transcriptionUpstream = transcriptionUpstream
         self.translationUpstream = translationUpstream
         self.moderationUpstream = moderationUpstream
         self.includeNativeMacOS = includeNativeMacOS
-        self.includeFoundationModels = includeFoundationModels
+        self.foundationModelsRealms = foundationModelsRealms
     }
 
     public func handle(_ request: Request, context: Context) async throws -> Response {
@@ -50,11 +53,11 @@ public struct ModelsRoute<Context: RequestContext>: Sendable {
         async let translation:   [[String: Any]] = fetchModels(from: translationUpstream, owner: "translation")
         async let moderation:    [[String: Any]] = fetchModels(from: moderationUpstream, owner: "moderation")
         var combined = await transcription + (await translation) + (await moderation)
-        if includeFoundationModels {
+        for realm in foundationModelsRealms.reversed() {
             combined.insert([
                 "id": "apple-foundation-models",
                 "object": "model",
-                "owned_by": "translation",
+                "owned_by": realm,
                 "created": 0
             ], at: 0)
         }

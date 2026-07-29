@@ -69,13 +69,19 @@ public struct OnDeviceTranslationBackend: TranslationBackendImpl {
 
 extension OnDeviceServiceError {
     /// Maps the transport-agnostic on-device error onto the translation route's
-    /// error type, mirroring `asTranscriptionBackendError`.
+    /// error type.
+    ///
+    /// `.unavailable` maps to its own case rather than to `.unauthorized`: "this
+    /// device can't run the engine" is a capability problem, not an
+    /// authorization one, and the route renders it as the documented
+    /// `503 on_device_unavailable` that the text-translation and moderation
+    /// routes already return.
     var asTranslationBackendError: TranslationBackendError {
         switch self {
         case .badRequest(let message): return .badRequest(message)
         case .unauthorized(let message): return .unauthorized(message)
         case .timeout(let message): return .timeout(message)
-        case .unavailable(let message): return .unauthorized(message)
+        case .unavailable(let message): return .unavailable(message)
         }
     }
 }

@@ -151,9 +151,9 @@ struct OnDeviceTranslationBackendTests {
     @Test func errorMappingPreservesSemantics() {
         #expect(OnDeviceServiceError.badRequest("x").asTranslationBackendError.isBadRequest)
         #expect(OnDeviceServiceError.timeout("x").asTranslationBackendError.isTimeout)
-        // `.unavailable` maps to `.unauthorized` (HTTP 403), matching the
-        // transcription route's behavior.
-        #expect(OnDeviceServiceError.unavailable("x").asTranslationBackendError.isUnauthorized)
+        // `.unavailable` stays distinct from `.unauthorized`: Apple
+        // Intelligence being off is a 503 the caller can retry, not a 403.
+        #expect(OnDeviceServiceError.unavailable("x").asTranslationBackendError.isUnavailable)
         #expect(OnDeviceServiceError.unauthorized("x").asTranslationBackendError.isUnauthorized)
     }
 
@@ -212,6 +212,7 @@ private extension TranslationBackendError {
     var isBadRequest: Bool { if case .badRequest = self { return true }; return false }
     var isUnauthorized: Bool { if case .unauthorized = self { return true }; return false }
     var isTimeout: Bool { if case .timeout = self { return true }; return false }
+    var isUnavailable: Bool { if case .unavailable = self { return true }; return false }
 }
 
 /// Drains a `ResponseBody` into memory so tests can assert on the JSON payload.

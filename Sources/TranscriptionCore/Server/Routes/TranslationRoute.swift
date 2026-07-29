@@ -45,6 +45,9 @@ public struct TranslationRoute<Context: RequestContext>: Sendable {
             return Self.errorResponse(status: .forbidden, code: "permission_denied", message: message)
         } catch let TranslationBackendError.timeout(message) {
             return Self.errorResponse(status: .gatewayTimeout, code: "timeout", message: message)
+        } catch let TranslationBackendError.unavailable(message) {
+            return Self.errorResponse(status: .serviceUnavailable, code: "on_device_unavailable",
+                                      message: message)
         } catch let TranslationBackendError.upstream(status, body) {
             return Self.passthroughError(status: status, body: body)
         } catch {
@@ -78,6 +81,10 @@ public enum TranslationBackendError: Error, Sendable {
     case badRequest(String)
     case unauthorized(String)
     case timeout(String)
+    /// The selected on-device engine can't run on this device. Rendered as
+    /// `503 on_device_unavailable`, matching the text-translation and
+    /// moderation routes.
+    case unavailable(String)
     case upstream(status: Int, body: ByteBuffer)
 }
 
