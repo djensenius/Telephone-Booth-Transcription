@@ -162,7 +162,11 @@ struct ReviewTranscriptionQueueTests {
     @MainActor
     func requestTranscriptionQueuesAndClears() async {
         let client = QueueClient(seed: Self.seed)
-        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        // The seeded transcript is dated 2026-01-02, so the store's clock sits
+        // just before it: a transcript that predates the request must not be
+        // mistaken for its result.
+        let requestedAt = Date(timeIntervalSince1970: 1_767_000_000)
+        let store = ReviewStore(client: client, pollInterval: .seconds(1), now: { requestedAt })
         let rerunner = StubRerunner()
         store.transcriptionRerunner = rerunner
         await store.refresh()
@@ -179,6 +183,27 @@ struct ReviewTranscriptionQueueTests {
         await store.refresh()
         #expect(store.isTranscriptionQueued("untranscribed") == false)
         #expect(store.awaitingTranscription.isEmpty)
+    }
+
+    @Test("a transcript that predates the request doesn't clear the queued state")
+    @MainActor
+    func staleTranscriptDoesNotClearTheQueuedState() async {
+        let client = QueueClient(seed: Self.seed)
+        // The clock sits after the seeded transcript, so the transcript that
+        // appears next is older than the request and can't be its result.
+        let requestedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = ReviewStore(client: client, pollInterval: .seconds(1), now: { requestedAt })
+        let rerunner = StubRerunner()
+        store.transcriptionRerunner = rerunner
+        await store.refresh()
+
+        let target = try! #require(store.awaitingTranscription.first)
+        await store.requestTranscription(target)
+        #expect(store.isTranscriptionQueued("untranscribed"))
+
+        client.seed = Self.seedAfterTranscription
+        await store.refresh()
+        #expect(store.isTranscriptionQueued("untranscribed"))
     }
 
     @Test("a re-run of an already-transcribed message is accepted")

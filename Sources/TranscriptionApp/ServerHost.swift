@@ -86,6 +86,9 @@ final class ServerHost: ObservableObject {
     /// depends on) the HTTP server because the worker dispatches via
     /// loopback.
     private var operatorWorker: OperatorWorker?
+    /// Operator base URL the running worker was built with. Compared against the
+    /// Review client's before a manual re-run is allowed.
+    private var operatorWorkerBaseURL: String?
 
     /// Observer for OIDC auth-state changes; retained so account changes also
     /// reconcile background Operator-related work.
@@ -386,10 +389,12 @@ final class ServerHost: ObservableObject {
             }
         )
         self.operatorWorker = worker
+        self.operatorWorkerBaseURL = cfg.baseURL
         await worker.start()
     }
 
     private func stopOperatorWorker() async {
+        operatorWorkerBaseURL = nil
         guard let worker = operatorWorker else { return }
         operatorWorker = nil
         await worker.stop()
@@ -410,8 +415,12 @@ extension ServerHost: TranscriptionRerunRequesting {
     /// refused unless both target the same Operator — otherwise the app would
     /// transcribe against a different backend than the one being reviewed.
     private var workerTargetsReviewedOperator: Bool {
-        let raw = config.operatorPolling.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let workerURL = URL(string: raw) else { return false }
+        // Compare the URL the *running* worker captured, not the latest edited
+        // configuration: reconciliation is asynchronous, so an edit that hasn't
+        // restarted the worker yet must not authorize a re-run against the new
+        // Operator.
+        guard let raw = operatorWorkerBaseURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let workerURL = URL(string: raw) else { return false }
         // Scheme and host are case-insensitive; the path is not, so a tenant
         // prefix like `/TenantA` must not match `/tenanta`.
         func normalized(_ url: URL) -> String {

@@ -143,13 +143,16 @@ public final class ReviewStore {
         pendingActions.insert(message.id)
         actionError = nil
         defer { pendingActions.remove(message.id) }
+        // Both the baseline and the queue time are read before awaiting the
+        // worker: a poll landing mid-request must not become this request's
+        // baseline (which would hold the marker until it times out), and the
+        // reconciler compares transcript timestamps so such a poll can't clear
+        // the marker early either.
+        let baseline = message.latestTranscription?.id
+        let queuedAt = now()
         if await rerunner.requestTranscription(messageID: message.id) {
-            // Read the baseline after the await: a poll may have replaced this
-            // row while the request was suspended, and treating that newer
-            // transcript as this request's result would clear the marker early.
-            let baseline = messages.first { $0.id == message.id }?.latestTranscription?.id
             queuedTranscriptions.insert(message.id)
-            queuedTranscriptionState[message.id] = .init(baseline: baseline, queuedAt: now())
+            queuedTranscriptionState[message.id] = .init(baseline: baseline, queuedAt: queuedAt)
         } else {
             actionError = "Couldn’t start transcription: the worker isn’t running, "
                 + "this message is already queued, or the worker points at a "
@@ -237,7 +240,8 @@ public final class ReviewStore {
             }
             if let latest = message.latestTranscription,
                latest.status == .succeeded,
-               latest.id != state.baseline {
+               latest.id != state.baseline,
+               latest.createdAt >= state.queuedAt {
                 clearQueuedTranscription(id)
             }
         }
