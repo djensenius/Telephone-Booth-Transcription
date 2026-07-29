@@ -22,8 +22,9 @@ manual "Re-run transcription" button emits one — they're simply no longer
 required.
 
 Both sources feed a single queue that de-duplicates by `(message, kind)` and
-runs one job at a time, so an envelope and a discovery hit for the same message
-run exactly once.
+runs one job at a time. Envelope-driven work jumps ahead of discovered work, so
+a translation or moderation request never waits behind a transcription backlog.
+An envelope and a discovery hit for the same message run exactly once.
 
 ## Operator wire format
 
@@ -116,6 +117,8 @@ the newest succeeded row wins downstream.
 - A message is enqueued by discovery at most 3 times per worker session, so a
   message the Operator keeps listing can't spin in a hot loop. A successful
   transcription resets that counter.
+- At most 25 discovered jobs wait in the queue at once, so a large backlog
+  can't crowd out translation and moderation.
 - Runs only when the transcription realm is enabled.
 
 ## Re-running transcription from the app
@@ -193,7 +196,9 @@ The Settings UI surfaces a live status row driven by the worker actor:
 A `Last error` field shows the sanitized error code when present, and a
 `Last discovery` field shows when the discovery pass last succeeded and how many
 messages it queued — so "subscribed but discovering nothing" is
-distinguishable from "not polling at all".
+distinguishable from "not polling at all". Discovery failures report separately
+under `Discovery error`, so an endpoint that keeps 404ing stays visible even
+while socket work succeeds.
 
 ## Concurrency
 

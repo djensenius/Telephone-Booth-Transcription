@@ -101,16 +101,20 @@ struct OperatorWorkerDiscoveryTests {
     actor RecordingDispatcher: OperatorJobDispatcher {
         var jobs: [OperatorJob] = []
         var result: OperatorJobResult = .transcription(text: "bonjour", language: "fr", model: nil)
+        /// Lets a test hold a job in flight long enough to observe queue order.
+        var delayNanos: UInt64 = 0
 
         func setResult(_ value: OperatorJobResult) { result = value }
+        func setDelay(nanos: UInt64) { delayNanos = nanos }
         func recorded() -> [OperatorJob] { jobs }
 
         nonisolated func execute(job: OperatorJob) async throws -> OperatorJobResult {
             await self.run(job: job)
         }
 
-        func run(job: OperatorJob) -> OperatorJobResult {
+        func run(job: OperatorJob) async -> OperatorJobResult {
             jobs.append(job)
+            if delayNanos > 0 { try? await Task.sleep(nanoseconds: delayNanos) }
             return result
         }
     }
@@ -297,9 +301,40 @@ struct OperatorWorkerDiscoveryTests {
         let status = await worker.currentStatus()
         await worker.stop()
 
-        #expect(status.lastErrorCode == "operator_http_404")
+        #expect(status.lastDiscoveryErrorCode == "operator_http_404")
+        // Discovery health is tracked on its own fields so unrelated socket or
+        // job success can't clear it.
+        #expect(status.lastErrorCode == nil)
         #expect(status.consecutiveFailures == 0)
         #expect(status.lastDiscoveryAt == nil)
+    }
+
+    @Test func envelopeWorkIsNotStarvedByADiscoveryBacklog() async throws {
+        var backlog: [OperatorWorkListItem] = []
+        for index in 0..<10 {
+            backlog.append(OperatorWorkListItem(id: "b\(index)", status: "pending"))
+        }
+        let client = DiscoveryClient(pages: [OperatorWorkListPage(items: backlog)])
+        for item in backlog { await client.setInput(audioInput(id: item.id), for: item.id) }
+        await client.setInput(audioInput(id: "urgent", transcriptionID: "t-urgent"), for: "urgent")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setDelay(nanos: 40_000_000)
+        let channel = SilentChannel()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        // Let discovery queue the whole backlog and start the first job, then
+        // deliver a translation envelope behind it.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        await channel.yield(OperatorWorkEnvelope(messageId: "urgent", needs: [.translation]))
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await worker.stop()
+
+        let jobs = await dispatcher.recorded()
+        let translationIndex = try #require(jobs.firstIndex { $0.kind == .translation })
+        // The envelope must jump the queued discovery backlog rather than wait
+        // behind all ten transcriptions.
+        #expect(translationIndex < backlog.count)
     }
 
     @Test func discoveryFollowsPaginationCursors() async throws {

@@ -36,6 +36,10 @@ public actor OperatorWorker {
         public var lastDiscoveryAt: Date?
         /// How many messages that listing enqueued for transcription.
         public var lastDiscoveredCount: Int?
+        /// Discovery health is tracked separately from socket/job health so an
+        /// unrelated success can't hide a listing endpoint that keeps failing.
+        public var lastDiscoveryErrorCode: String?
+        public var lastDiscoveryErrorAt: Date?
 
         public init() {}
     }
@@ -43,9 +47,17 @@ public actor OperatorWorker {
     /// One queued unit of work. `force` marks a deliberate human re-run, which
     /// bypasses the per-kind enable filter.
     private struct QueuedJob: Sendable, Equatable {
+        /// Where the job came from. Envelope-driven work is latency-sensitive
+        /// (an operator is waiting on it) and jumps ahead of discovered work.
+        enum Source: Sendable, Equatable {
+            case envelope
+            case discovery
+        }
+
         var messageID: String
         var kind: OperatorJob.Kind
         var force: Bool
+        var source: Source = .envelope
 
         var key: String { "\(kind.rawValue):\(messageID)" }
     }
@@ -71,6 +83,10 @@ public actor OperatorWorker {
     private var queuedKeys: Set<String> = []
     private var runningKey: String?
     private var discoveryFailures = 0
+    /// Reconnect backoff counts socket failures only. Job outcomes must not
+    /// shorten or lengthen the next reconnect delay.
+    private var socketFailures = 0
+    private var socketConnected = false
     /// How many times the discovery pass has enqueued each message this
     /// session. Caps repeated attempts so a message the Operator keeps listing
     /// (because a push failed, say) can't spin in a hot loop.
@@ -82,6 +98,9 @@ public actor OperatorWorker {
     private let discoveryPageLimit = 50
     private let discoveryMaxPages = 10
     private let maxDiscoveryAttempts = 3
+    /// Upper bound on discovered jobs waiting in the queue, so a large backlog
+    /// can't crowd out envelope-driven translation and moderation.
+    private let maxQueuedDiscoveryJobs = 25
 
     public init(
         client: any OperatorClient,
@@ -123,6 +142,7 @@ public actor OperatorWorker {
     /// Signals the loops to stop and awaits teardown. Idempotent.
     public func stop() async {
         stopRequested = true
+        socketConnected = false
         let runningTask = task
         let discovery = discoveryTask
         let drain = drainTask
@@ -174,10 +194,12 @@ public actor OperatorWorker {
                     if !confirmedHealthy, connectedSeconds >= minimumHealthyConnectionSeconds {
                         recordConnectionHealthy()
                     }
-                    recordError(code: "operator_ws_disconnected", message: "websocket disconnected")
+                    recordError(code: "operator_ws_disconnected",
+                                message: "websocket disconnected", socket: true)
                 }
             } catch {
-                recordError(code: errorCode(for: error), message: "connect failed: \(type(of: error))")
+                recordError(code: errorCode(for: error),
+                            message: "connect failed: \(type(of: error))", socket: true)
             }
             if !stopRequested && !Task.isCancelled {
                 await sleepBackoff()
@@ -218,8 +240,10 @@ public actor OperatorWorker {
                     cursor: cursor
                 )
                 for item in page.items where !item.hasSucceededTranscription {
+                    guard queuedDiscoveryCount < maxQueuedDiscoveryJobs else { return }
                     guard discoveryAttempts[item.id, default: 0] < maxDiscoveryAttempts else { continue }
-                    if enqueue(.init(messageID: item.id, kind: .transcription, force: false)) {
+                    if enqueue(.init(messageID: item.id, kind: .transcription,
+                                     force: false, source: .discovery)) {
                         discoveryAttempts[item.id, default: 0] += 1
                         enqueued += 1
                     }
@@ -233,6 +257,7 @@ public actor OperatorWorker {
         } while cursor != nil && pages < discoveryMaxPages
 
         discoveryFailures = 0
+        status.lastDiscoveryErrorCode = nil
         status.lastDiscoveryAt = clock()
         status.lastDiscoveredCount = enqueued
         emitStatus()
@@ -261,9 +286,17 @@ public actor OperatorWorker {
         guard !job.messageID.isEmpty else { return false }
         guard !queuedKeys.contains(job.key), runningKey != job.key else { return false }
         queuedKeys.insert(job.key)
-        jobQueue.append(job)
+        if job.source == .envelope, let first = jobQueue.firstIndex(where: { $0.source == .discovery }) {
+            jobQueue.insert(job, at: first)
+        } else {
+            jobQueue.append(job)
+        }
         startDrainIfNeeded()
         return true
+    }
+
+    private var queuedDiscoveryCount: Int {
+        jobQueue.reduce(0) { $0 + ($1.source == .discovery ? 1 : 0) }
     }
 
     private func startDrainIfNeeded() {
@@ -316,7 +349,7 @@ public actor OperatorWorker {
     }
 
     private func sleepBackoff() async {
-        let exp = min(5, status.consecutiveFailures)
+        let exp = min(5, socketFailures)
         let seconds = min(30, max(reconnectBaseSeconds, Int(pow(2.0, Double(exp)))))
         try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
     }
@@ -329,11 +362,14 @@ public actor OperatorWorker {
     }
 
     private func recordSubscribed() {
+        socketConnected = true
         status.phase = .subscribed
         emitStatus()
     }
 
     private func recordConnectionHealthy() {
+        socketConnected = true
+        socketFailures = 0
         status.consecutiveFailures = 0
         status.lastErrorCode = nil
         status.phase = .subscribed
@@ -346,7 +382,9 @@ public actor OperatorWorker {
         status.lastErrorCode = nil
         status.lastJobID = jobID
         status.lastJobKind = kind
-        status.phase = .subscribed
+        // A finished job says nothing about the socket: only report `subscribed`
+        // when the socket really is connected, and never reset its backoff.
+        status.phase = socketConnected ? .subscribed : .connecting
         if kind == .transcription {
             // The Operator will stop listing this message; drop the counter so
             // it doesn't accumulate for the worker's whole lifetime, which also
@@ -356,7 +394,11 @@ public actor OperatorWorker {
         emitStatus()
     }
 
-    private func recordError(code: String, message: String) {
+    private func recordError(code: String, message: String, socket: Bool = false) {
+        if socket {
+            socketConnected = false
+            socketFailures += 1
+        }
         status.consecutiveFailures += 1
         status.lastErrorAt = clock()
         status.lastErrorCode = code
@@ -369,8 +411,8 @@ public actor OperatorWorker {
     /// the WebSocket reconnect backoff or the phase the socket loop publishes.
     private func recordDiscoveryError(code: String) {
         discoveryFailures += 1
-        status.lastErrorAt = clock()
-        status.lastErrorCode = code
+        status.lastDiscoveryErrorAt = clock()
+        status.lastDiscoveryErrorCode = code
         logger.warning("operator discovery error code=\(code)")
         emitStatus()
     }

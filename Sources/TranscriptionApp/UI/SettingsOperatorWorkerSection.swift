@@ -75,6 +75,15 @@ extension SettingsView {
                         + " · \(status.lastDiscoveredCount ?? 0) queued"
                 )
             }
+            if let code = status.lastDiscoveryErrorCode {
+                LabeledContent(
+                    "Discovery error",
+                    value: status.lastDiscoveryErrorAt.map {
+                        "\(code) · \($0.formatted(date: .omitted, time: .standard))"
+                    } ?? code
+                )
+                .foregroundStyle(Theme.Colors.error)
+            }
         } else {
             LabeledContent("Worker status", value: "stopped")
                 .foregroundStyle(Theme.Colors.textSecondary)
