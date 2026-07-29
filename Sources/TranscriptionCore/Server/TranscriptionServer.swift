@@ -3,10 +3,8 @@ import Foundation
 import Hummingbird
 import Logging
 import NIOCore
-import TranscriptionShared
-#if canImport(FoundationModels)
 import TranscriptionOnDevice
-#endif
+import TranscriptionShared
 
 /// Composes the entire HTTP surface — router + middlewares + routes — into a
 /// `Hummingbird.Application` ready to run.
@@ -120,10 +118,10 @@ public struct TranscriptionServer: Sendable {
             backend: backendImpl,
             maxRequestBytes: config.maxRequestBytes
         )
-        let translationBackend = ProxyTranslationBackend(
+        let translationBackend = Self.makeTranslationBackend(
+            config: config,
             upstream: upstream,
-            upstreamConfig: config.translationUpstream,
-            defaultModel: config.defaultTranslationModel
+            logger: logger
         )
         let translation = TranslationRoute<BasicRequestContext>(
             backend: translationBackend,
@@ -148,14 +146,18 @@ public struct TranscriptionServer: Sendable {
         let models = ModelsRoute<BasicRequestContext>(
             upstream: upstream,
             transcriptionUpstream: config.transcriptionUpstream,
-            translationUpstream: config.translationUpstream,
-            moderationUpstream: config.moderationUpstream,
-            includeNativeMacOS: {
-                switch config.transcriptionBackend {
-                case .nativeMacOS, .appleSpeechAnalyzer: return true
-                case .proxy: return false
-                }
-            }()
+            // A realm served on-device has no upstream to enumerate; passing
+            // nil keeps `/v1/models` from making a network call in all-local
+            // mode.
+            translationUpstream: (config.textTranslationBackend == .proxy
+                                  || config.audioTranslationBackend == .proxy)
+                ? config.translationUpstream : nil,
+            moderationUpstream: config.moderationBackend == .proxy
+                ? config.moderationUpstream : nil,
+            includeNativeMacOS: config.transcriptionBackend.isOnDevice,
+            includeFoundationModels: config.moderationBackend == .onDevice
+                || config.textTranslationBackend == .onDevice
+                || config.audioTranslationBackend == .onDevice
         )
         let health = HealthRoute<BasicRequestContext>()
 
@@ -192,5 +194,63 @@ public struct TranscriptionServer: Sendable {
         }
         #endif
         return nil
+    }
+
+    /// Builds the on-device transcriber matching `backend`. Returns `nil` when
+    /// the Speech framework is unavailable on this platform.
+    ///
+    /// A `.proxy` transcription backend maps to the `SpeechAnalyzer` engine
+    /// rather than `nil`, so all-local audio translation still works for users
+    /// who deliberately keep `/v1/audio/transcriptions` pointed at Whisper.
+    static func makeOnDeviceTranscriber(
+        backend: TranscriptionBackend,
+        locale: Locale,
+        logger: Logger
+    ) -> (any AudioTranscriber)? {
+        #if canImport(Speech)
+        if case .nativeMacOS = backend {
+            return NativeSpeechTranscriber(locale: locale, logger: logger)
+        }
+        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
+            return SpeechAnalyzerTranscriber(locale: locale, logger: logger)
+        }
+        return NativeSpeechTranscriber(locale: locale, logger: logger)
+        #else
+        return nil
+        #endif
+    }
+
+    /// Chooses the `POST /v1/audio/translations` backend.
+    ///
+    /// `.onDevice` composes the Speech engine with Foundation Models so no
+    /// audio or text leaves the machine. If either half is unavailable on this
+    /// OS the composition can't be built, so we fall back to the proxy rather
+    /// than silently failing every request — the Settings UI warns about this.
+    static func makeTranslationBackend(
+        config: ServerConfig,
+        upstream: OpenAIUpstream,
+        logger: Logger
+    ) -> any TranslationBackendImpl {
+        let proxy = ProxyTranslationBackend(
+            upstream: upstream,
+            upstreamConfig: config.translationUpstream,
+            defaultModel: config.defaultTranslationModel
+        )
+        guard config.audioTranslationBackend == .onDevice else { return proxy }
+        guard let transcriber = makeOnDeviceTranscriber(
+            backend: config.transcriptionBackend,
+            locale: Locale(identifier: config.nativeTranscriptionLocale),
+            logger: logger
+        ), let translator = makeOnDeviceTranslator(logger: logger) else {
+            logger.warning(
+                "on-device audio translation requested but unavailable on this OS; using proxy"
+            )
+            return proxy
+        }
+        return OnDeviceTranslationBackend(
+            transcriber: transcriber,
+            translator: translator,
+            logger: logger
+        )
     }
 }

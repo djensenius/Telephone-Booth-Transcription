@@ -51,9 +51,41 @@ struct SettingsView: View {
         return .defaultTranscription
     }
 
+    /// One-click switch to fully-local operation, plus a live indicator of
+    /// whether any route can still reach the network.
+    @ViewBuilder
+    private var allLocalSection: some View {
+        Section("Privacy mode") {
+            if host.config.isFullyLocal {
+                Label("All local — transcription, translation, and moderation "
+                      + "run on this Mac with Apple Intelligence. No request "
+                      + "leaves the machine.",
+                      systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+            } else {
+                Label("Some routes proxy to a network upstream.",
+                      systemImage: "network")
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .font(.caption)
+                Button("Switch everything to on-device") {
+                    host.config = host.config.withAllLocalBackends()
+                }
+                Text("Sets transcription to the macOS 26 Speech Analyzer and "
+                     + "moderation, text translation, and audio translation to "
+                     + "Apple Intelligence. Upstream URLs are kept so you can "
+                     + "switch back. Requires Apple Intelligence to be enabled "
+                     + "in System Settings.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+        }
+    }
+
     var body: some View {
         Form {
             AccountSettingsSection()
+            allLocalSection
             Section("Server") {
                 TextField("Bind host", text: Binding(
                     get: { host.config.bindHost },
@@ -191,6 +223,28 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.inline)
 
+                Picker("Audio backend (/v1/audio/translations)", selection: Binding(
+                    get: { host.config.audioTranslationBackend },
+                    set: { host.config.audioTranslationBackend = $0 }
+                )) {
+                    Text("On-device (transcribe, then translate the text)")
+                        .tag(TextServiceBackend.onDevice)
+                    Text("Proxy (Whisper-compatible upstream)").tag(TextServiceBackend.proxy)
+                }
+                .pickerStyle(.inline)
+
+                if host.config.audioTranslationBackend == .onDevice {
+                    Text("""
+                         Apple ships no direct speech→English model, so audio \
+                         translation runs in two on-device steps: the Speech \
+                         engine transcribes the audio, then Apple Intelligence \
+                         translates that text. Slower than a single Whisper \
+                         call, but no audio or text leaves this Mac.
+                         """)
+                        .font(.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+
                 if host.config.textTranslationBackend == .onDevice {
                     Text("""
                          Text→English (`/v1/translations`) runs on-device with \
@@ -200,15 +254,15 @@ struct SettingsView: View {
                          """)
                         .font(.caption)
                         .foregroundStyle(Theme.Colors.textSecondary)
+                }
 
-                    // Audio→English translation has no on-device engine, so the
-                    // upstream is still required even when text translation runs
-                    // locally. Tuck it away so the common on-device case stays tidy.
-                    DisclosureGroup("Audio→English upstream") {
+                if host.config.textTranslationBackend == .proxy
+                    || host.config.audioTranslationBackend == .proxy {
+                    translationUpstreamFields
+                } else {
+                    DisclosureGroup("Translation upstream (unused in on-device mode)") {
                         translationUpstreamFields
                     }
-                } else {
-                    translationUpstreamFields
                 }
             }
 

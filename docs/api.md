@@ -93,25 +93,35 @@ Response body and status code are passed through from the upstream unchanged
 ## `POST /v1/audio/translations`
 
 OpenAI-compatible multipart upload that translates non-English audio into
-English text. Always proxied to the configured **translation** upstream (the
-macOS Speech framework does not natively translate). The translation upstream
-is configured independently from the transcription upstream in Settings so a
-deployment may, for example, run faster-whisper-server `:8000` for
-transcription and a larger Whisper model on a different host for translation.
+English text. The backend is selectable in Settings:
+
+- **Proxy** (default on macOS) — forwards the multipart body verbatim to the
+  configured **translation** upstream. The translation upstream is configured
+  independently from the transcription upstream, so a deployment may run
+  faster-whisper-server `:8000` for transcription and a larger Whisper model on
+  a different host for translation.
+- **On-device** — Apple ships no direct speech→English model, so this runs two
+  on-device steps: the Speech engine (`SpeechAnalyzer`, or the legacy
+  `SFSpeechRecognizer` if that's the selected transcription backend)
+  transcribes the audio, then Foundation Models translates the resulting
+  _text_. No audio or text leaves the machine. Slower than a single Whisper
+  call.
 
 The multipart fields mirror OpenAI's `/v1/audio/translations`:
 
 | Field | Required | Notes |
 | --- | --- | --- |
 | `file` | yes | Audio in any format the upstream Whisper model accepts. |
-| `model` | yes / injected | If omitted and a default translation model is set in Settings, it is injected before forwarding. |
-| `prompt` | no | Optional prompt to bias the decoder. |
-| `temperature` | no | 0..1 |
-| `response_format` | no | `json` (default), `text`, `srt`, `vtt`, `verbose_json` |
+| `model` | yes / injected | If omitted and a default translation model is set in Settings, it is injected before forwarding. Ignored by the on-device backend. |
+| `prompt` | no | Optional prompt to bias the decoder. Ignored by the on-device backend. |
+| `temperature` | no | 0..1. Ignored by the on-device backend. |
+| `response_format` | no | `json` (default), `text`, `srt`, `vtt`, `verbose_json`. The on-device backend always returns `json`. |
 
-Response body and status code are passed through from the upstream unchanged
-(minus hop-by-hop headers). `language` is **not** accepted — translation
-always targets English by design.
+For the proxy backend, response body and status code are passed through from
+the upstream unchanged (minus hop-by-hop headers). The on-device backend
+returns the same `{"text": "…"}` shape, so OpenAI-compatible clients can't tell
+the two apart. `language` is **not** accepted — translation always targets
+English by design.
 
 ## `POST /v1/translations`
 
@@ -154,8 +164,26 @@ of the translation upstream. The response `model` is `apple-foundation-models`
 and no data leaves the device. If on-device translation is selected but Apple
 Intelligence is unavailable (e.g. older OS, simulator, unsupported hardware),
 the endpoint returns `503 on_device_unavailable` — it never silently falls back
-to the proxy upstream. `/v1/audio/translations` is **proxy-only** and is not
-served on-device in this release.
+to the proxy upstream. `/v1/audio/translations` has its own independent
+backend setting; see that section above.
+
+## All-local mode
+
+Every route can run entirely on this machine. _Settings → Privacy mode →
+**Switch everything to on-device**_ sets, in one step:
+
+| Endpoint | On-device engine |
+| --- | --- |
+| `POST /v1/audio/transcriptions` | `SpeechAnalyzer` (Apple Intelligence) |
+| `POST /v1/audio/translations` | `SpeechAnalyzer` → Foundation Models |
+| `POST /v1/translations` | Foundation Models |
+| `POST /v1/moderations` | Foundation Models |
+
+Upstream URLs are preserved so switching back to proxy mode doesn't lose the
+configuration. In this mode no request reaches the network, and `GET
+/v1/models` returns only the on-device model ids. Requires Apple Intelligence
+to be enabled and macOS 26 or newer; otherwise the on-device routes return
+`503 on_device_unavailable`.
 
 ## `POST /v1/moderations`
 

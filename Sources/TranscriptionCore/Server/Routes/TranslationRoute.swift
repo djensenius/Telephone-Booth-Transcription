@@ -81,10 +81,11 @@ public enum TranslationBackendError: Error, Sendable {
     case upstream(status: Int, body: ByteBuffer)
 }
 
-/// Abstract handler for audio→English translation. The only concrete
-/// implementation today is `ProxyTranslationBackend`; native macOS engines
-/// don't translate, so picking a native transcription backend leaves the
-/// translation realm proxy-only.
+/// Abstract handler for audio→English translation. Concrete implementations:
+///
+/// - `ProxyTranslationBackend` — forwards to an OpenAI-compatible upstream.
+/// - `OnDeviceTranslationBackend` — transcribes on-device, then translates the
+///   resulting text with Apple's Foundation Models.
 public protocol TranslationBackendImpl: Sendable {
     func handle(body: ByteBuffer, contentType: String) async throws -> Response
 }
