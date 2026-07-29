@@ -109,11 +109,15 @@ public final class HTTPOperatorClient: OperatorClient {
     public func pushResult(messageID: String, transcriptionId: String?, result: OperatorJobResult) async throws {
         switch result {
         case .transcription(let text, let language, let model):
-            let body: [String: Any] = [
+            var body: [String: Any] = [
                 "text": text,
                 "language": language ?? NSNull(),
                 "model": model ?? NSNull()
             ]
+            // Only sent when the Operator pre-created a pending row for this job.
+            if let transcriptionId, !transcriptionId.isEmpty {
+                body["transcriptionId"] = transcriptionId
+            }
             try await postJSON(path: "/v1/worker/messages/\(escape(messageID))/transcription", body: body)
         case .translation(let translatedText, let sourceLanguage, let targetLanguage, let model):
             guard let transcriptionId, !transcriptionId.isEmpty else {

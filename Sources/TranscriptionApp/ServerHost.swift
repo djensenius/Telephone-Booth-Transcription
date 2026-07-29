@@ -89,6 +89,7 @@ final class ServerHost: ObservableObject {
     /// Operator base URL the running worker was built with. Compared against the
     /// Review client's before a manual re-run is allowed.
     private var operatorWorkerBaseURL: String?
+    private var reconcileTask: Task<Void, Never>?
 
     /// Observer for OIDC auth-state changes; retained so account changes also
     /// reconcile background Operator-related work.
@@ -336,8 +337,22 @@ final class ServerHost: ObservableObject {
     // Starts, stops, or restarts the Operator push worker based on the
     // current configuration, token presence, and server state. Idempotent
     // — safe to call from `didSet` observers and lifecycle transitions.
-    // swiftlint:disable:next function_body_length
+    //
+    // Reconciliations are serialized: each one chains onto the previous, so
+    // overlapping calls can never leave two workers running (and polling the
+    // same Operator) at once.
     func reconcileOperatorWorker() async {
+        let previous = reconcileTask
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            await self?.performOperatorWorkerReconcile()
+        }
+        reconcileTask = task
+        await task.value
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func performOperatorWorkerReconcile() async {
         guard case .running(let host, let port) = state else {
             await stopOperatorWorker()
             return
