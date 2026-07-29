@@ -22,8 +22,9 @@ manual "Re-run transcription" button emits one — they're simply no longer
 required.
 
 Both sources feed a single queue that de-duplicates by `(message, kind)` and
-runs one job at a time. Envelope-driven work jumps ahead of discovered work, so
-a translation or moderation request never waits behind a transcription backlog.
+runs one job at a time. Envelope-driven work jumps ahead of discovered work — at
+most three times in a row, so a discovery backlog still drains — which keeps a
+translation or moderation request from waiting behind a transcription backlog.
 An envelope and a discovery hit for the same message run exactly once. A
 translation or moderation envelope that lands while that same job is running
 schedules one follow-up run, because the running job already fetched the older

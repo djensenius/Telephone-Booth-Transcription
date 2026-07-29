@@ -482,9 +482,12 @@ public actor OperatorWorker {
         if let status = existing.status?.lowercased(), !status.isEmpty {
             return status == "pending" ? existing.id : nil
         }
-        // No status reported: an empty row can only be one awaiting a result,
-        // since a succeeded silent row is filtered out of discovery and a
-        // re-run is already excluded above.
+        // No status reported: an empty row is treated as one awaiting a result.
+        // It could also be a succeeded silent row that the Operator UI asked to
+        // re-run, in which case that row is rewritten instead of a new one being
+        // added. That's the deliberate trade: losing a history entry is far
+        // cheaper than posting a transcript an Operator with a pending row would
+        // accept and discard.
         return existing.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? existing.id : nil
     }
 
