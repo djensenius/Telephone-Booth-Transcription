@@ -87,10 +87,16 @@ public actor OperatorWorker {
     /// shorten or lengthen the next reconnect delay.
     private var socketFailures = 0
     private var socketConnected = false
-    /// How many times the discovery pass has enqueued each message this
-    /// session. Caps repeated attempts so a message the Operator keeps listing
-    /// (because a push failed, say) can't spin in a hot loop.
-    private var discoveryAttempts: [String: Int] = [:]
+    /// How many times the discovery pass has enqueued each message, and when it
+    /// last did. Caps repeated attempts so a message the Operator keeps listing
+    /// (because a push failed, say) can't spin in a hot loop, while a cooldown
+    /// keeps a transient upstream outage from stranding a message for the rest
+    /// of the session.
+    private var discoveryAttempts: [String: (count: Int, lastAttempt: Date)] = [:]
+    /// Messages this worker has already transcribed successfully. Discovery
+    /// never re-runs these: a stale listing must not produce transcript after
+    /// transcript. A deliberate human re-run is forced and ignores this.
+    private var discoveryCompleted: Set<String> = []
     private var stopRequested = false
 
     /// Page size for the discovery listing, and how many pages one pass will
@@ -98,6 +104,10 @@ public actor OperatorWorker {
     private let discoveryPageLimit = 50
     private let discoveryMaxPages = 10
     private let maxDiscoveryAttempts = 3
+    /// How long an exhausted attempt budget stays exhausted. Long enough that a
+    /// genuinely broken message doesn't loop, short enough that a transient
+    /// upstream outage self-heals without restarting the app.
+    private let discoveryRetryCooldown: TimeInterval = 1800
     /// Upper bound on discovered jobs waiting in the queue, so a large backlog
     /// can't crowd out envelope-driven translation and moderation.
     private let maxQueuedDiscoveryJobs = 25
@@ -247,10 +257,11 @@ public actor OperatorWorker {
                         atCapacity = true
                         break
                     }
-                    guard discoveryAttempts[item.id, default: 0] < maxDiscoveryAttempts else { continue }
+                    guard mayDiscover(item.id) else { continue }
                     if enqueue(.init(messageID: item.id, kind: .transcription,
                                      force: false, source: .discovery)) {
-                        discoveryAttempts[item.id, default: 0] += 1
+                        let previous = discoveryAttempts[item.id]?.count ?? 0
+                        discoveryAttempts[item.id] = (previous + 1, clock())
                         enqueued += 1
                     }
                 }
@@ -267,6 +278,17 @@ public actor OperatorWorker {
         status.lastDiscoveryAt = clock()
         status.lastDiscoveredCount = enqueued
         emitStatus()
+    }
+
+    /// Whether discovery may enqueue this message again: never once it has been
+    /// transcribed, and only after a cooldown once its attempt budget is spent.
+    private func mayDiscover(_ messageID: String) -> Bool {
+        guard !discoveryCompleted.contains(messageID) else { return false }
+        guard let attempt = discoveryAttempts[messageID] else { return true }
+        guard attempt.count >= maxDiscoveryAttempts else { return true }
+        guard clock().timeIntervalSince(attempt.lastAttempt) >= discoveryRetryCooldown else { return false }
+        discoveryAttempts.removeValue(forKey: messageID)
+        return true
     }
 
     private func sleepDiscoveryInterval() async {
@@ -410,11 +432,11 @@ public actor OperatorWorker {
         // when the socket really is connected, and never reset its backoff.
         status.phase = socketConnected ? .subscribed : .connecting
         if kind == .transcription {
-            // Exhaust the discovery budget for this message: a succeeded push
-            // means discovery has done its job, so if the Operator keeps listing
-            // it (a stale item, say) the worker must not transcribe it again and
-            // again. A deliberate human re-run bypasses this by being forced.
-            discoveryAttempts[jobID] = maxDiscoveryAttempts
+            // Discovery has done its job for this message: if the Operator keeps
+            // listing it (a stale item, say) the worker must not transcribe it
+            // again and again. A human re-run bypasses this by being forced.
+            discoveryCompleted.insert(jobID)
+            discoveryAttempts.removeValue(forKey: jobID)
         }
         emitStatus()
     }

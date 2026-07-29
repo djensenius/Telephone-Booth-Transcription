@@ -419,7 +419,9 @@ extension ServerHost: TranscriptionRerunRequesting {
             while path.hasSuffix("/") { path.removeLast() }
             let scheme = (url.scheme ?? "").lowercased()
             let host = (url.host ?? "").lowercased()
-            let port = url.port.map { ":\($0)" } ?? ""
+            let defaultPort = scheme == "https" ? 443 : (scheme == "http" ? 80 : nil)
+            let explicitPort = url.port.flatMap { $0 == defaultPort ? nil : $0 }
+            let port = explicitPort.map { ":\($0)" } ?? ""
             return "\(scheme)://\(host)\(port)\(path)"
         }
         return normalized(workerURL) == normalized(OperatorAPIConfig.shared.baseURL)

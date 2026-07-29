@@ -116,12 +116,17 @@ the newest succeeded row wins downstream.
 - Items already reporting `latestTranscriptionStatus: "succeeded"` are skipped.
 - A message is enqueued by discovery at most 3 times per worker session, so a
   message the Operator keeps listing can't spin in a hot loop. A successful
-  transcription exhausts that budget outright, so a stale listing can never
-  cause the same message to be transcribed over and over. A deliberate re-run
-  from the app is forced and ignores the cap.
+  transcription retires the message from discovery for the rest of the session,
+  so a stale listing can never cause it to be transcribed over and over. An
+  exhausted budget is retried after a 30-minute cooldown, so a transient
+  upstream outage doesn't strand a message. A deliberate re-run from the app is
+  forced and ignores both rules.
 - At most 25 discovered jobs wait in the queue at once, so a large backlog
   can't crowd out translation and moderation.
 - Runs only when the transcription realm is enabled.
+- The listing endpoint doesn't lease or claim items, and de-duplication is
+  per-worker, so run **one** worker per Operator: two Macs polling the same
+  Operator would each transcribe every listed message.
 
 ## Re-running transcription from the app
 
@@ -130,9 +135,11 @@ The **Review** tab separates reviewable messages with no transcription at all
 ("Transcribed"), and shows distinct "Silent" and "Transcription unfinished"
 states. Messages whose newest transcription is pending or failed stay in the
 second bucket: the review payload only carries the newest row, so an older
-successful transcript could otherwise be masked, and re-running is a human
-decision. Both buckets offer a button that hands the message to the local
-worker; that request bypasses the discovery attempt cap.
+successful transcript could otherwise be masked, and re-running from Review is a
+human decision. This is Review bucketing only — the worker's discovery pass has
+its own rules and may still retry a message whose newest row failed. Both
+buckets offer a button that hands the message to the local worker; that request
+bypasses the discovery attempt cap.
 
 Review runs on the operator's own OIDC session while the worker uses its
 worker-scoped API token — the app bridges the two locally, so no extra Operator

@@ -286,8 +286,10 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
     /// transcription row at all. Transcription is optional enrichment on the
     /// Operator side, so these messages are visible to operators but not yet
     /// enriched. A message whose newest row is pending or failed is deliberately
-    /// excluded: it already has transcription history, and re-running it is a
-    /// human decision rather than something discovery should chase.
+    /// excluded from this bucket — it already has transcription history, which
+    /// the newest row can mask — and is offered for a manual re-run instead.
+    /// This describes Review bucketing only; the worker's discovery pass has its
+    /// own rules and may still retry such a message.
     public var needsTranscription: Bool {
         isReviewable && latestTranscription == nil
     }
