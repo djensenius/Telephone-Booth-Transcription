@@ -59,6 +59,12 @@ public final class ReviewStore {
     @ObservationIgnored
     private var queuedTranscriptionState: [String: QueuedTranscription] = [:]
 
+    /// `createdAt` comes from the Operator and `queuedAt` from this Mac, so the
+    /// comparison between them tolerates a couple of minutes of clock skew. It
+    /// only needs to be coarse enough to reject a transcript that predates the
+    /// request by a poll interval or two.
+    private static let clockSkewAllowance: TimeInterval = 120
+
     private struct QueuedTranscription {
         var baseline: String?
         var queuedAt: Date
@@ -241,7 +247,7 @@ public final class ReviewStore {
             if let latest = message.latestTranscription,
                latest.status == .succeeded,
                latest.id != state.baseline,
-               latest.createdAt >= state.queuedAt {
+               latest.createdAt >= state.queuedAt.addingTimeInterval(-Self.clockSkewAllowance) {
                 clearQueuedTranscription(id)
             }
         }
