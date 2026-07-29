@@ -366,6 +366,28 @@ struct OperatorWorkerDiscoveryTests {
         #expect(ids.filter { $0 == "q6" }.count == 1)
     }
 
+    @Test func anEnvelopeArrivingWhileTheSameJobRunsIsReplayedOnce() async throws {
+        let client = DiscoveryClient(pages: [
+            OperatorWorkListPage(items: [OperatorWorkListItem(id: "r1", status: "pending")])
+        ])
+        await client.setInput(audioInput(id: "r1"), for: "r1")
+        let dispatcher = RecordingDispatcher()
+        await dispatcher.setDelay(nanos: 200_000_000)
+        let channel = SilentChannel()
+        let worker = makeWorker(client: client, dispatcher: dispatcher, channel: channel)
+
+        await worker.start()
+        // Land the envelope while discovery's job for the same key is in flight.
+        try await Task.sleep(nanoseconds: 80_000_000)
+        await channel.yield(OperatorWorkEnvelope(messageId: "r1", needs: [.transcription]))
+        try await Task.sleep(nanoseconds: 500_000_000)
+        await worker.stop()
+
+        let ids = await dispatcher.recorded().map(\.id)
+        // Exactly one follow-up run: the in-flight job used the older input.
+        #expect(ids.filter { $0 == "r1" }.count == 2)
+    }
+
     @Test func discoveryFollowsPaginationCursors() async throws {
         let client = DiscoveryClient(pages: [
             OperatorWorkListPage(items: [OperatorWorkListItem(id: "p1", status: "pending")], nextCursor: "c1"),

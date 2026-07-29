@@ -82,6 +82,9 @@ public actor OperatorWorker {
     private var jobQueue: [QueuedJob] = []
     private var queuedKeys: Set<String> = []
     private var runningKey: String?
+    /// Reactive work that arrived for the job currently in flight, replayed once
+    /// that job finishes.
+    private var deferredJobs: [String: QueuedJob] = [:]
     private var discoveryFailures = 0
     /// Continuation cursor carried across passes that stopped early.
     private var discoveryCursor: String?
@@ -100,6 +103,9 @@ public actor OperatorWorker {
     /// never re-runs these: a stale listing must not produce transcript after
     /// transcript. A deliberate human re-run is forced and ignores this.
     private var discoveryCompleted: Set<String> = []
+    /// Insertion order for `discoveryCompleted`, so the oldest entries can be
+    /// evicted once the cache is full.
+    private var discoveryCompletedOrder: [String] = []
     private var stopRequested = false
 
     /// Page size for the discovery listing, and how many pages one pass will
@@ -111,6 +117,9 @@ public actor OperatorWorker {
     /// genuinely broken message doesn't loop, short enough that a transient
     /// upstream outage self-heals without restarting the app.
     private let discoveryRetryCooldown: TimeInterval = 1800
+    /// Upper bound on the remembered-message caches, so a long-running worker's
+    /// memory doesn't grow with historical traffic.
+    private let maxRememberedMessages = 500
     /// Upper bound on discovered jobs waiting in the queue, so a large backlog
     /// can't crowd out envelope-driven translation and moderation.
     private let maxQueuedDiscoveryJobs = 25
@@ -164,6 +173,7 @@ public actor OperatorWorker {
         drainTask = nil
         jobQueue.removeAll()
         queuedKeys.removeAll()
+        deferredJobs.removeAll()
         await workChannel.disconnect()
         discovery?.cancel()
         drain?.cancel()
@@ -248,8 +258,10 @@ public actor OperatorWorker {
         var enqueued = 0
         var pages = 0
         var atCapacity = false
+        pruneDiscoveryAttempts()
         repeat {
             if stopRequested || Task.isCancelled { return }
+            let requestCursor = cursor
             do {
                 let page = try await client.listWork(
                     needs: .transcription,
@@ -271,7 +283,9 @@ public actor OperatorWorker {
                         enqueued += 1
                     }
                 }
-                cursor = page.nextCursor
+                // Stopping mid-page must not skip the remainder of that page:
+                // the next pass re-requests it with the same cursor.
+                cursor = atCapacity ? requestCursor : page.nextCursor
                 pages += 1
                 if atCapacity { break }
             } catch {
@@ -286,6 +300,21 @@ public actor OperatorWorker {
         status.lastDiscoveryAt = clock()
         status.lastDiscoveredCount = enqueued
         emitStatus()
+    }
+
+    private func rememberCompleted(_ messageID: String) {
+        guard discoveryCompleted.insert(messageID).inserted else { return }
+        discoveryCompletedOrder.append(messageID)
+        while discoveryCompletedOrder.count > maxRememberedMessages {
+            discoveryCompleted.remove(discoveryCompletedOrder.removeFirst())
+        }
+    }
+
+    /// Drops attempt records the cooldown has already expired, so messages that
+    /// left the listing don't linger in memory.
+    private func pruneDiscoveryAttempts() {
+        let cutoff = clock().addingTimeInterval(-discoveryRetryCooldown)
+        discoveryAttempts = discoveryAttempts.filter { $0.value.lastAttempt > cutoff }
     }
 
     /// Whether discovery may enqueue this message again: never once it has been
@@ -320,7 +349,13 @@ public actor OperatorWorker {
         guard !stopRequested, !Task.isCancelled else { return false }
         guard job.force || enabledKinds.contains(job.kind) else { return false }
         guard !job.messageID.isEmpty else { return false }
-        guard runningKey != job.key else { return false }
+        if runningKey == job.key {
+            // The running job already fetched its input, so newer reactive work
+            // for the same key needs one follow-up run rather than being lost.
+            guard job.source == .envelope else { return false }
+            deferredJobs[job.key] = job
+            return true
+        }
         if queuedKeys.contains(job.key) {
             // Already queued. If this is an envelope for work discovery queued
             // first, promote it rather than dropping it: someone is waiting.
@@ -364,6 +399,9 @@ public actor OperatorWorker {
         while !stopRequested && !Task.isCancelled, let job = dequeue() {
             await runNeed(job.kind, messageID: job.messageID)
             runningKey = nil
+            if let deferred = deferredJobs.removeValue(forKey: job.key) {
+                enqueue(deferred)
+            }
         }
         runningKey = nil
         drainTask = nil
@@ -446,7 +484,7 @@ public actor OperatorWorker {
             // Discovery has done its job for this message: if the Operator keeps
             // listing it (a stale item, say) the worker must not transcribe it
             // again and again. A human re-run bypasses this by being forced.
-            discoveryCompleted.insert(jobID)
+            rememberCompleted(jobID)
             discoveryAttempts.removeValue(forKey: jobID)
         }
         emitStatus()
