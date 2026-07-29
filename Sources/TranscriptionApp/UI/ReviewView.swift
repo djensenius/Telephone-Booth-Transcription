@@ -45,15 +45,21 @@ struct ReviewView: View {
 
     /// Re-probes Apple Intelligence when the queue appears, so enabling it (or
     /// finishing a model download) while the app is running surfaces the
-    /// affordance without a relaunch. Only ever upgrades: an existing pipeline
-    /// is replaced solely when the probe gains a capability, so an in-flight
-    /// run is never discarded.
+    /// affordance without a relaunch.
+    ///
+    /// Only ever upgrades, and never while work is outstanding: swapping the
+    /// pipeline would strand a running task's result on the discarded instance,
+    /// where nothing observes it. The next appearance picks the upgrade up.
     private func refreshOnDeviceCapability() {
-        guard onDevice == nil || onDevice?.supportsTranslation == false else { return }
-        guard let refreshed = OnDeviceReviewPipeline.makeAppleIntelligence() else { return }
-        if onDevice == nil || refreshed.supportsTranslation {
-            onDevice = refreshed
+        guard let existing = onDevice else {
+            onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
+            return
         }
+        guard existing.supportsTranslation == false else { return }
+        guard visibleMessageIDs.allSatisfy({ !existing.isRunning($0) }) else { return }
+        guard let refreshed = OnDeviceReviewPipeline.makeAppleIntelligence(),
+              refreshed.supportsTranslation else { return }
+        onDevice = refreshed
     }
 
     private var signedOut: some View {

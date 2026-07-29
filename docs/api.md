@@ -189,8 +189,11 @@ Every route can run entirely on this machine. _Settings → Privacy mode →
 | `POST /v1/moderations` | Foundation Models |
 
 Upstream URLs are preserved so switching back to proxy mode doesn't lose the
-configuration. In this mode no request reaches the network, and `GET
-/v1/models` returns only the on-device model ids. Requires Apple Intelligence
+configuration. In this mode no audio or text is sent to a configured upstream,
+and `GET /v1/models` returns only the on-device model ids. Note this is not the
+same as "no network activity": `SpeechAnalyzer` may still fetch per-locale
+model assets from Apple the first time a locale is used. Message content is
+never part of that. Requires Apple Intelligence
 to be enabled and macOS 26 or newer; otherwise the on-device routes return
 `503 on_device_unavailable`.
 

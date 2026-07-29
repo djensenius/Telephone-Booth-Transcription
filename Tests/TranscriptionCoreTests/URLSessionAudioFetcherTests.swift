@@ -140,7 +140,33 @@ struct URLSessionAudioFetcherTests {
         #expect(!FileManager.default.fileExists(atPath: stagedPath!.path))
     }
 
-    /// Exercises `buffered`'s chunk boundary: a payload spanning several 64 KB
+    /// `buffered` must pull, not push: a consumer that stops early has to leave
+    /// the rest of the source unread. An `AsyncThrowingStream` would have
+    /// drained the whole body into an unbounded buffer regardless, letting a
+    /// download run far past `maxBytes` before staging noticed.
+    @Test func chunkingIsBackpressuredNotBuffered() async throws {
+        let source = CountingByteSequence(count: 1_000_000)
+        var iterator = ChunkedBytes(source: source, chunkSize: 1_024).makeAsyncIterator()
+
+        let first = try await iterator.next()
+        #expect(first?.readableBytes == 1_024)
+
+        // Only the bytes needed for that one chunk may have been consumed.
+        #expect(source.counter.value == 1_024)
+    }
+
+    @Test func chunkingEmitsAPartialFinalChunk() async throws {
+        var iterator = ChunkedBytes(
+            source: CountingByteSequence(count: 1_500),
+            chunkSize: 1_024
+        ).makeAsyncIterator()
+
+        #expect(try await iterator.next()?.readableBytes == 1_024)
+        #expect(try await iterator.next()?.readableBytes == 476)
+        #expect(try await iterator.next() == nil)
+    }
+
+    /// Exercises the chunk boundary: a payload spanning several 64 KB
     /// chunks plus a partial trailing chunk must reassemble byte-for-byte.
     @Test func reassemblesMultiChunkPayload() async throws {
         // Written out in steps: as a single expression the type checker times
@@ -238,5 +264,36 @@ struct URLSessionAudioFetcherTests {
         ) { _ in 0 }
 
         #expect(StubAudioURLProtocol.lastAuthorization() == nil)
+    }
+}
+
+/// A byte source that records how many bytes the consumer actually pulled.
+struct CountingByteSequence: AsyncSequence, Sendable {
+    typealias Element = UInt8
+
+    let count: Int
+    let counter = Counter()
+
+    /// Lock-free is fine here: the chunker pulls serially.
+    final class Counter: @unchecked Sendable {
+        private(set) var value = 0
+        func increment() { value += 1 }
+    }
+
+    struct AsyncIterator: AsyncIteratorProtocol {
+        let total: Int
+        let counter: Counter
+        var index = 0
+
+        mutating func next() async throws -> UInt8? {
+            guard index < total else { return nil }
+            index += 1
+            counter.increment()
+            return UInt8(index % 251)
+        }
+    }
+
+    func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(total: count, counter: counter)
     }
 }

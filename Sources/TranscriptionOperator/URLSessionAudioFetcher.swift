@@ -116,31 +116,52 @@ public final class URLSessionAudioFetcher: AudioFetching {
     /// Regroups `URLSession`'s byte-at-a-time sequence into `ByteBuffer` chunks
     /// so it can feed `AudioFileStaging.stage`. Chunking keeps the per-element
     /// overhead of the async sequence from dominating large downloads.
+    ///
+    /// Deliberately a pull-based sequence rather than an `AsyncThrowingStream`:
+    /// that type buffers `.unbounded` by default and its bounded policies drop
+    /// elements, which would silently corrupt the audio. Without backpressure a
+    /// fast connection can race ahead of the consumer's disk writes, so a
+    /// response with a missing or understated `Content-Length` could balloon in
+    /// memory and download far past `maxBytes` before `stage` notices the cap.
+    /// Here nothing is read until the consumer asks for the next chunk.
     static func buffered(
         _ bytes: URLSession.AsyncBytes,
         chunkSize: Int = 64 * 1024
-    ) -> AsyncThrowingStream<ByteBuffer, any Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                var scratch = [UInt8]()
-                scratch.reserveCapacity(chunkSize)
-                do {
-                    for try await byte in bytes {
-                        scratch.append(byte)
-                        if scratch.count >= chunkSize {
-                            continuation.yield(ByteBuffer(bytes: scratch))
-                            scratch.removeAll(keepingCapacity: true)
-                        }
-                    }
-                    if !scratch.isEmpty {
-                        continuation.yield(ByteBuffer(bytes: scratch))
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
+    ) -> ChunkedBytes<URLSession.AsyncBytes> {
+        ChunkedBytes(source: bytes, chunkSize: chunkSize)
+    }
+}
+
+/// Groups a byte sequence into `ByteBuffer` chunks, pulling from the source
+/// only as the consumer requests. See `URLSessionAudioFetcher.buffered`.
+public struct ChunkedBytes<Source: AsyncSequence & Sendable>: AsyncSequence, Sendable
+where Source.Element == UInt8 {
+    public typealias Element = ByteBuffer
+
+    let source: Source
+    let chunkSize: Int
+
+    public init(source: Source, chunkSize: Int) {
+        self.source = source
+        self.chunkSize = chunkSize
+    }
+
+    public struct AsyncIterator: AsyncIteratorProtocol {
+        var inner: Source.AsyncIterator
+        let chunkSize: Int
+
+        public mutating func next() async throws -> ByteBuffer? {
+            var scratch = [UInt8]()
+            scratch.reserveCapacity(chunkSize)
+            while scratch.count < chunkSize {
+                guard let byte = try await inner.next() else { break }
+                scratch.append(byte)
             }
-            continuation.onTermination = { _ in task.cancel() }
+            return scratch.isEmpty ? nil : ByteBuffer(bytes: scratch)
         }
+    }
+
+    public func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(inner: source.makeAsyncIterator(), chunkSize: chunkSize)
     }
 }
