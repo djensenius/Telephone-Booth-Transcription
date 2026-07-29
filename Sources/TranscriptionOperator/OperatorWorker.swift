@@ -82,6 +82,9 @@ public actor OperatorWorker {
     private var jobQueue: [QueuedJob] = []
     private var queuedKeys: Set<String> = []
     private var runningKey: String?
+    /// True while a job is executing. The socket loop must not overwrite the
+    /// `running` phase with its own connect/subscribe transitions.
+    private var jobInFlight = false
     /// Reactive work that arrived for the job currently in flight, replayed once
     /// that job finishes.
     private var deferredJobs: [String: QueuedJob] = [:]
@@ -118,8 +121,11 @@ public actor OperatorWorker {
     /// upstream outage self-heals without restarting the app.
     private let discoveryRetryCooldown: TimeInterval = 1800
     /// Upper bound on the remembered-message caches, so a long-running worker's
-    /// memory doesn't grow with historical traffic.
-    private let maxRememberedMessages = 500
+    /// memory doesn't grow with historical traffic. Sized so that eviction only
+    /// happens after thousands of successes: an evicted ID is only reachable
+    /// again if the Operator is still listing that message as untranscribed,
+    /// which costs at most one extra transcript row.
+    private let maxRememberedMessages = 5000
     /// Upper bound on discovered jobs waiting in the queue, so a large backlog
     /// can't crowd out envelope-driven translation and moderation.
     private let maxQueuedDiscoveryJobs = 25
@@ -419,6 +425,8 @@ public actor OperatorWorker {
     }
 
     private func runNeed(_ need: OperatorJob.Kind, messageID: String) async {
+        jobInFlight = true
+        defer { jobInFlight = false }
         setPhase(.running, jobID: messageID, kind: need)
         do {
             let input = try await client.fetchWorkInput(messageID: messageID)
@@ -450,7 +458,8 @@ public actor OperatorWorker {
     }
 
     private func setPhase(_ phase: Status.Phase, jobID: String? = nil, kind: OperatorJob.Kind? = nil) {
-        status.phase = phase
+        // A job in flight outranks socket transitions in the reported phase.
+        status.phase = (jobInFlight && phase != .running && phase != .stopped) ? .running : phase
         if let jobID { status.lastJobID = jobID }
         if let kind { status.lastJobKind = kind }
         emitStatus()
@@ -458,7 +467,7 @@ public actor OperatorWorker {
 
     private func recordSubscribed() {
         socketConnected = true
-        status.phase = .subscribed
+        if !jobInFlight { status.phase = .subscribed }
         emitStatus()
     }
 
@@ -468,7 +477,7 @@ public actor OperatorWorker {
         lastSocketErrorCode = nil
         status.consecutiveFailures = 0
         status.lastErrorCode = nil
-        status.phase = .subscribed
+        if !jobInFlight { status.phase = .subscribed }
         emitStatus()
     }
 
