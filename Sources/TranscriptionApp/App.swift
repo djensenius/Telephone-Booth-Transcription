@@ -1,4 +1,5 @@
 import SwiftUI
+import TranscriptionAuth
 
 @main
 struct TelephoneBoothTranscriptionApp: App {
@@ -14,6 +15,13 @@ struct TelephoneBoothTranscriptionApp: App {
         WindowGroup("Telephone Booth Transcription") {
             ContentView()
                 .environmentObject(host)
+                .task {
+                    // Silently exchange the stored refresh token for a fresh
+                    // access token. Without this, an expired access token
+                    // leaves the app looking signed out until an API call
+                    // happens to trigger a refresh.
+                    await AuthManager.shared.validateSessionOnLaunch()
+                }
                 #if os(macOS)
                 .frame(minWidth: 860, minHeight: 560)
                 .onAppear { appDelegate.serverHost = host }
@@ -27,6 +35,10 @@ struct TelephoneBoothTranscriptionApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 Task { await host.shutdown() }
+            } else if newPhase == .active {
+                // Retry a session restore that previously failed while the
+                // device was offline.
+                Task { await AuthManager.shared.validateSessionOnLaunch() }
             }
         }
         #endif

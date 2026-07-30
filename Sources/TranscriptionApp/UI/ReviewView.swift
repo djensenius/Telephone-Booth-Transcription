@@ -32,18 +32,26 @@ struct ReviewView: View {
 
     var body: some View {
         Group {
-            if auth.isSignedIn {
+            switch auth.authState {
+            case .signedIn:
                 queue
-            } else {
+            case .unknown:
+                restoringSession
+            case .signedOut:
                 signedOut
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .task(id: auth.isSignedIn) {
+        .task(id: auth.authState) {
             store.transcriptionRerunner = host
-            if auth.isSignedIn {
+            switch auth.authState {
+            case .signedIn:
                 await store.poll()
-            } else {
+            case .unknown:
+                // Still restoring: the session may well come back, so hold on
+                // to local work rather than pruning it.
+                break
+            case .signedOut:
                 // This view outlives the session, so locally generated
                 // transcripts would otherwise survive into the next sign-in.
                 // Pruning everything also supersedes any run still in flight.
@@ -52,6 +60,19 @@ struct ReviewView: View {
         }
         .onAppear { probeGeneration &+= 1 }
         .task(id: probeGeneration) { await refreshOnDeviceCapability() }
+    }
+
+    /// Shown while a stored session is being exchanged for a fresh access
+    /// token. Distinct from `signedOut`: offering a Sign In button here would
+    /// push the operator through a browser flow they don't need.
+    private var restoringSession: some View {
+        VStack(spacing: Theme.Spacing.medium) {
+            ProgressView()
+            Text("Restoring your session…")
+                .font(Theme.Fonts.bodyMedium)
+                .foregroundStyle(Theme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Re-probes Apple Intelligence when the queue appears, so enabling it (or

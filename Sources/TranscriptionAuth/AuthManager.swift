@@ -35,13 +35,28 @@ public extension Notification.Name {
         Notification.Name("org.davidjensenius.TelephoneBoothTranscription.authStateDidChange")
 }
 
+/// Result of a refresh attempt. The distinction matters: only a definitive
+/// rejection may discard the stored refresh token. Treating an offline launch
+/// or a 5xx as a rejection would force the user to sign in again even though
+/// their (typically 30-day) refresh token is still good.
+public enum RefreshOutcome: Sendable {
+    /// A new access token was obtained and persisted.
+    case refreshed
+    /// The provider definitively rejected the refresh token, or none was
+    /// stored. The session has been cleared.
+    case rejected
+    /// The refresh could not be completed (offline, 5xx, keychain write
+    /// failure). Stored tokens are left intact so a later attempt can succeed.
+    case transientFailure
+}
+
 /// Serialises concurrent refresh attempts: at most one in-flight refresh
 /// per process.
 private actor RefreshCoordinator {
     private var isRefreshing = false
-    private var continuations: [CheckedContinuation<Bool, Never>] = []
+    private var continuations: [CheckedContinuation<RefreshOutcome, Never>] = []
 
-    func acquireOrWait() async -> Bool? {
+    func acquireOrWait() async -> RefreshOutcome? {
         if isRefreshing {
             return await withCheckedContinuation { cont in continuations.append(cont) }
         }
@@ -49,11 +64,11 @@ private actor RefreshCoordinator {
         return nil
     }
 
-    func complete(success: Bool) {
+    func complete(_ outcome: RefreshOutcome) {
         let waiters = continuations
         continuations.removeAll()
         isRefreshing = false
-        for waiter in waiters { waiter.resume(returning: success) }
+        for waiter in waiters { waiter.resume(returning: outcome) }
     }
 }
 
@@ -123,9 +138,10 @@ public final class AuthManager {
 
     // MARK: - Session lifecycle
 
-    /// Validates the cached session at app launch. On a definitive 4xx
-    /// refresh rejection the session is cleared; transient/offline failures
-    /// allow the cached token only when it hasn't expired yet.
+    /// Validates the cached session at app launch. A definitive rejection
+    /// clears the session; a transient failure (offline, provider down) leaves
+    /// the refresh token in place and the state `.unknown` so the next API
+    /// call — or the next launch — retries instead of forcing a sign-in.
     public func validateSessionOnLaunch() async {
         guard authState == .unknown else { return }
         guard getKeychainItem(account: "oidc_refresh_token") != nil else {
@@ -134,16 +150,20 @@ public final class AuthManager {
             return
         }
 
-        let refreshed = await refreshTokenIfNeeded()
-        if refreshed {
+        switch await refreshSession() {
+        case .refreshed:
             setAuthState(.signedIn)
             logger.info("validateSession: session restored via refresh")
-        } else if authState == .unknown, getAccessToken() != nil, !isTokenExpired() {
-            setAuthState(.signedIn)
-            logger.info("validateSession: refresh failed but token still valid")
-        } else if authState == .unknown {
-            signOut()
-            logger.warning("validateSession: expired token + refresh failure — signed out")
+        case .rejected:
+            // `refreshSession` already cleared the session.
+            logger.warning("validateSession: refresh token rejected — signed out")
+        case .transientFailure:
+            if getAccessToken() != nil, !isTokenExpired() {
+                setAuthState(.signedIn)
+                logger.info("validateSession: refresh unavailable but token still valid")
+            } else {
+                logger.warning("validateSession: refresh unavailable — will retry, session kept")
+            }
         }
     }
 
@@ -296,31 +316,44 @@ public final class AuthManager {
     }
 
     public func refreshTokenIfNeeded() async -> Bool {
+        await refreshSession() == .refreshed
+    }
+
+    /// Refreshes the access token, reporting *why* a failure happened so
+    /// callers can distinguish "sign in again" from "try again later".
+    @discardableResult
+    public func refreshSession() async -> RefreshOutcome {
         if let coalesced = await refreshCoordinator.acquireOrWait() { return coalesced }
         guard let refreshToken = getKeychainItem(account: "oidc_refresh_token") else {
-            logger.warning("refreshTokenIfNeeded: no refresh token")
-            await refreshCoordinator.complete(success: false)
-            return false
+            logger.warning("refreshSession: no refresh token")
+            // Clear before waking waiters: a coalesced caller resuming with
+            // `.rejected` must not still observe a live-looking session.
+            signOut()
+            await refreshCoordinator.complete(.rejected)
+            return .rejected
         }
         do {
             let tokens = try await refreshAccessToken(refreshToken)
-            let persisted = storeTokens(tokens)
-            if persisted {
-                logger.info("Token refreshed (expiresIn=\(tokens.expiresIn ?? -1))")
-            } else {
+            guard storeTokens(tokens) else {
+                // The provider may have rotated the refresh token, so the
+                // stored copy could now be stale — but discarding it here
+                // would guarantee a re-login, while keeping it only risks one.
                 logger.error("Token refreshed but keychain write failed")
+                await refreshCoordinator.complete(.transientFailure)
+                return .transientFailure
             }
-            await refreshCoordinator.complete(success: persisted)
-            return persisted
+            logger.info("Token refreshed (expiresIn=\(tokens.expiresIn ?? -1))")
+            await refreshCoordinator.complete(.refreshed)
+            return .refreshed
         } catch AuthError.refreshTokenInvalid(let reason) {
             logger.error("Refresh token rejected — signing out: \(reason, privacy: .private)")
-            await refreshCoordinator.complete(success: false)
             signOut()
-            return false
+            await refreshCoordinator.complete(.rejected)
+            return .rejected
         } catch {
             logger.warning("Refresh failed transiently: \(error.localizedDescription, privacy: .private)")
-            await refreshCoordinator.complete(success: false)
-            return false
+            await refreshCoordinator.complete(.transientFailure)
+            return .transientFailure
         }
     }
 
@@ -361,6 +394,38 @@ public final class AuthManager {
         return try JSONDecoder().decode(OIDCTokens.self, from: data)
     }
 
+    /// RFC 6749 §5.2 error codes that prove the refresh token itself is no
+    /// longer usable. Anything else — including a 4xx that merely reflects
+    /// throttling or a misrouted request — leaves the session intact.
+    nonisolated static let fatalTokenErrors: Set<String> = [
+        "invalid_grant", "invalid_client", "unauthorized_client", "invalid_scope"
+    ]
+
+    /// Extracts the `error` field from an RFC 6749 §5.2 error response.
+    nonisolated static func oauthErrorCode(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object["error"] as? String
+    }
+
+    /// Whether a non-200 token-endpoint response means the refresh token is
+    /// dead (and the user must sign in again) rather than merely unavailable.
+    ///
+    /// Only a definitive OAuth rejection may cost the user their session. A
+    /// blanket 4xx rule would discard a perfectly good refresh token on a 429
+    /// from provider throttling, or on a 4xx synthesised by a proxy sitting in
+    /// front of the provider.
+    nonisolated static func refreshFailureIsFatal(status: Int, body: Data) -> Bool {
+        if let code = oauthErrorCode(from: body) {
+            return fatalTokenErrors.contains(code)
+        }
+        // A bare 400/401 from the token endpoint with no parseable OAuth error
+        // body still means the grant was refused. Treating it as transient
+        // would strand the app retrying a dead token forever.
+        return status == 400 || status == 401
+    }
+
     private func refreshAccessToken(_ refreshToken: String) async throws -> OIDCTokens {
         let params: [(String, String)] = [
             ("grant_type", "refresh_token"),
@@ -379,12 +444,14 @@ public final class AuthManager {
         if http.statusCode == 200 {
             return try JSONDecoder().decode(OIDCTokens.self, from: data)
         }
+
         let body = String(data: data, encoding: .utf8) ?? "unknown"
-        if (400...499).contains(http.statusCode) {
+        if Self.refreshFailureIsFatal(status: http.statusCode, body: data) {
             logger.error("Refresh rejected (\(http.statusCode)): \(body, privacy: .private)")
             throw AuthError.refreshTokenInvalid(body)
         }
-        logger.warning("Refresh failed transiently (\(http.statusCode))")
+
+        logger.warning("Refresh failed transiently (\(http.statusCode)): \(body, privacy: .private)")
         throw AuthError.transientRefreshFailure(URLError(.badServerResponse))
     }
 

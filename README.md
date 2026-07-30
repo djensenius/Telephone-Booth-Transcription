@@ -194,7 +194,7 @@ fallback works (and how it differs from OpenAI's first-party moderation model).
 | `Resources/AppIconSource.png` + `Resources/AppIcon.icon` | Source-of-truth app icon art and generated Icon Composer document. |
 | `scripts/make-icon.sh` | Extracts the PNG foreground and renders iOS fallback assets plus the layered Icon Composer icon. |
 | `scripts/build-app.sh` | Builds the native macOS `.app` bundle from the Xcode project. |
-| `docs/` | Architecture notes, API reference, LM Studio setup, moderation design. |
+| `docs/` | Architecture notes, API reference, LM Studio setup, moderation design, [OIDC sign-in setup](./docs/oidc-setup.md). |
 | `.github/workflows/ci.yml` | macOS CI: build, test, `.app` packaging, doc lint. |
 
 ## License
