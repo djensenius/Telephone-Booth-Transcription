@@ -90,6 +90,11 @@ struct ReviewDetailView: View {
             // Keyed to the text as well as the id, because the Operator can
             // finalize a pending transcription in place: same id, entirely
             // different source text.
+            //
+            // Not while this device is writing that text: the write moved the
+            // snapshot itself and owns these drafts until it finishes. The
+            // queue applies the same rule for the rows it can't see.
+            guard !store.isWritingText(for: message.id) else { return }
             drafts.clear(message.id)
         }
         .onChange(of: translationDraft) {
@@ -325,7 +330,10 @@ struct ReviewDetailView: View {
     /// device, as a recommendation about entirely different text.
     private var localVerdictIsSubmittable: Bool {
         guard let moderatedText, let operatorEnglish else { return false }
-        return moderatedText == operatorEnglish
+        // Trim-insensitive: the transport trims, so the Operator's copy of a
+        // draft that had stray whitespace is the trimmed form of it.
+        return moderatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            == operatorEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Retires the local work behind a translation that has just landed on the
@@ -338,7 +346,12 @@ struct ReviewDetailView: View {
     /// promise unkeepable — the operator would have to recompute a verdict they
     /// are already looking at. Anything else the pipeline produced is spent.
     private func retireLocalWork(after submitted: String) {
-        guard moderatedText == submitted, output?.recommendation != nil else {
+        // The transport trims before sending, so the Operator's copy of record
+        // is the trimmed text. Compare — and retain — the same form, or a draft
+        // with stray whitespace would never match what came back.
+        let sent = submitted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard moderatedText?.trimmingCharacters(in: .whitespacesAndNewlines) == sent,
+              output?.recommendation != nil else {
             onDevice?.reset(message.id)
             drafts.clear(message.id)
             return
@@ -347,6 +360,7 @@ struct ReviewDetailView: View {
         // Operator's translation, which is this same text, so the verdict stays
         // matched rather than being dropped as stale.
         translationDraft = ""
+        moderatedText = sent
     }
 
     /// Posts the on-device verdict to the Operator and, on success, clears the

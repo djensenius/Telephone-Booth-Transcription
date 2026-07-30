@@ -197,11 +197,13 @@ struct ReviewView: View {
                 // Operator finalizes a pending row *in place*, so the id can
                 // stay put while the text it stands for changes completely.
                 for (id, snapshot) in new where old[id] != snapshot {
-                    // Skip a message whose own write is still in flight: that
-                    // action moved this snapshot itself and owns the local work
-                    // — it decides what to retire and what has just become
-                    // submittable — so clearing here would race it.
-                    guard !store.isActing(on: id) else { continue }
+                    // Skip a message whose own transcript/translation write is
+                    // still in flight: that write moved this snapshot itself and
+                    // owns the local work — it decides what to retire and what
+                    // has just become submittable — so clearing here would race
+                    // it. Scoped to text writes, so a poll that replaces the
+                    // transcript during a moderation submit still clears.
+                    guard !store.isWritingText(for: id) else { continue }
                     onDevice?.reset(id)
                     // The detail view clears its own drafts on the same signal,
                     // but only for the message it has open.

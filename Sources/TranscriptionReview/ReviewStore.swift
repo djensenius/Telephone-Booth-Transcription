@@ -79,6 +79,9 @@ public final class ReviewStore {
 
     /// IDs of messages with an approve/reject/translation request in flight.
     public private(set) var pendingActions: Set<String> = []
+    /// The subset of `pendingActions` that is writing a message's transcript or
+    /// translation — the writes that move the authoritative text themselves.
+    private var pendingTextWrites: Set<String> = []
     /// Human-readable message for the most recent failed write action, if any.
     public private(set) var actionError: String?
     /// IDs of messages whose transcription has been handed to the local worker
@@ -216,6 +219,20 @@ public final class ReviewStore {
         pendingActions.contains(messageID)
     }
 
+    /// True while this device is writing the transcript or translation of
+    /// `messageID`.
+    ///
+    /// Such a write moves the message's authoritative text itself, and the UI
+    /// keys "drop the local draft, the text changed underneath it" off exactly
+    /// that. The write owns the local work for its duration — it decides what to
+    /// retire and what has just become submittable — so the generic rule has to
+    /// stand aside for it. Deliberately narrower than `isActing`: a moderation
+    /// submit or a decision doesn't move the text, so a poll replacing the
+    /// transcript during one of those must still clear the drafts.
+    public func isWritingText(for messageID: String) -> Bool {
+        pendingTextWrites.contains(messageID)
+    }
+
     /// True when a local transcription run has been queued for this message and
     /// no newer transcript has landed yet.
     public func isTranscriptionQueued(_ messageID: String) -> Bool {
@@ -300,8 +317,12 @@ public final class ReviewStore {
     ) async -> Bool {
         guard !pendingActions.contains(message.id) else { return false }
         pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
         actionError = nil
-        defer { pendingActions.remove(message.id) }
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
         do {
             let updated = try await client.submitTranscription(
                 messageID: message.id,
@@ -343,8 +364,12 @@ public final class ReviewStore {
     ) async -> Bool {
         guard !pendingActions.contains(message.id) else { return false }
         pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
         actionError = nil
-        defer { pendingActions.remove(message.id) }
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
         do {
             let updated = try await client.submitTranslation(
                 messageID: message.id,
