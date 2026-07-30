@@ -273,8 +273,10 @@ struct ReviewModelsTests {
         // Known providers keep their curated spelling.
         #expect(AiProvider(rawValue: "openai").displayName == "OpenAI")
         #expect(AiProvider(rawValue: "mac_app").displayName == "Mac app")
-        // Degenerate input doesn't crash or produce an empty label.
+        // Degenerate input doesn't crash, and never renders as invisible
+        // whitespace: an absent name reads as absent.
         #expect(AiProvider(rawValue: "").displayName == "")
+        #expect(AiProvider(rawValue: "   ").displayName == "")
     }
 
     @Test("the flagged score label only appears when flagged")

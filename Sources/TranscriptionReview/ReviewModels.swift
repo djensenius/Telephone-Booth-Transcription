@@ -95,7 +95,9 @@ public enum AiProvider: Codable, Sendable, Hashable {
         case .unknown(let value):
             let spaced = value.replacingOccurrences(of: "_", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let first = spaced.first else { return value }
+            // A whitespace-only value would otherwise render as an invisible
+            // label; an empty one at least reads as "no engine named".
+            guard let first = spaced.first else { return spaced }
             return first.uppercased() + spaced.dropFirst()
         }
     }
