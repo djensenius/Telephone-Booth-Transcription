@@ -39,7 +39,7 @@ struct ReviewDetailView: View {
     private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
     private var output: OnDeviceReviewPipeline.Output? { onDevice?.outputs[message.id] }
     private var advice: AIRecommendation? {
-        AIRecommendation(message: message, onDeviceOutput: output)
+        AIRecommendation(message: message)
     }
 
     var body: some View {
@@ -90,6 +90,11 @@ struct ReviewDetailView: View {
             // Keyed to the text as well as the id, because the Operator can
             // finalize a pending transcription in place: same id, entirely
             // different source text.
+            //
+            // Not while this device is writing that text: the write moved the
+            // snapshot itself and owns these drafts until it finishes. The
+            // queue applies the same rule for the rows it can't see.
+            guard !store.isWritingText(for: message.id) else { return }
             drafts.clear(message.id)
         }
         .onChange(of: translationDraft) {
@@ -199,42 +204,50 @@ struct ReviewDetailView: View {
                 caption("The Operator has no recommendation for this message. Apple "
                         + "Intelligence can weigh in from here — the text never leaves "
                         + "this device.")
-                HStack {
-                    Button {
-                        Task {
-                            let recommendation = await onDevice.moderateOnly(
-                                text,
-                                transcript: message.latestTranscription?.text ?? text,
-                                language: message.latestTranscription?.language,
-                                for: message.id
-                            )
-                            // The draft is editable while this is suspended, so
-                            // a verdict that arrives against text the operator
-                            // has since changed is already stale. Compared
-                            // against the candidate rather than the draft,
-                            // which is empty in the Decide state this button
-                            // exists for.
-                            if recommendation != nil {
-                                if englishForModeration == text {
-                                    moderatedText = text
-                                } else {
-                                    onDevice.clearModeration(message.id)
+
+                // A verdict computed on this device stays local until submitted:
+                // the pipeline never uploads on its own. Show it with a Submit
+                // action, exactly as a locally produced transcript is shown.
+                if let localAdvice, moderatedText != nil {
+                    localVerdictReview(localAdvice, using: onDevice)
+                } else {
+                    HStack {
+                        Button {
+                            Task {
+                                let recommendation = await onDevice.moderateOnly(
+                                    text,
+                                    transcript: message.latestTranscription?.text ?? text,
+                                    language: message.latestTranscription?.language,
+                                    for: message.id
+                                )
+                                // The draft is editable while this is suspended, so
+                                // a verdict that arrives against text the operator
+                                // has since changed is already stale. Compared
+                                // against the candidate rather than the draft,
+                                // which is empty in the Decide state this button
+                                // exists for.
+                                if recommendation != nil {
+                                    if englishForModeration == text {
+                                        moderatedText = text
+                                    } else {
+                                        onDevice.clearModeration(message.id)
+                                    }
                                 }
                             }
-                        }
-                    } label: {
-                        if running {
-                            HStack(spacing: Theme.Spacing.small) {
-                                ProgressView().controlSize(.small)
-                                Text(stageLabel(onDevice.stage(for: message.id)))
+                        } label: {
+                            if running {
+                                HStack(spacing: Theme.Spacing.small) {
+                                    ProgressView().controlSize(.small)
+                                    Text(stageLabel(onDevice.stage(for: message.id)))
+                                }
+                            } else {
+                                Label("Get a recommendation", systemImage: "apple.intelligence")
                             }
-                        } else {
-                            Label("Get a recommendation", systemImage: "apple.intelligence")
                         }
+                        .buttonStyle(.tbtGlass)
+                        .disabled(busy || isActing)
+                        Spacer()
                     }
-                    .buttonStyle(.tbtGlass)
-                    .disabled(busy || isActing)
-                    Spacer()
                 }
                 if case .failed(let reason) = onDevice.stage(for: message.id), owns(.moderate) {
                     Text(reason)
@@ -246,6 +259,126 @@ struct ReviewDetailView: View {
             .padding(Theme.Spacing.medium)
             .background(Theme.Colors.tertiaryBackground.opacity(0.4),
                         in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        }
+    }
+
+    /// The verdict this device just computed, ready to review and submit. Nil
+    /// until a local moderation run has produced one.
+    private var localAdvice: AIRecommendation? {
+        output.flatMap(AIRecommendation.init(localOutput:))
+    }
+
+    /// Shows the on-device verdict and a deliberate Submit action. On success
+    /// the local verdict is cleared: it is now persisted on the Operator, so
+    /// `message.latestModeration` becomes the source of truth for every device.
+    @ViewBuilder
+    private func localVerdictReview(
+        _ advice: AIRecommendation,
+        using onDevice: OnDeviceReviewPipeline
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            HStack(spacing: Theme.Spacing.small) {
+                Image(systemName: advice.systemImage)
+                    .foregroundStyle(advice.tint)
+                Text(advice.recommendation.displayName)
+                    .font(Theme.Fonts.headerLarge())
+                    .foregroundStyle(advice.tint)
+                if advice.flagged {
+                    StatusPill(text: "Flagged", tint: Theme.Colors.error)
+                }
+                Spacer(minLength: 0)
+                Text(advice.source)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+            caption("""
+                Computed on this device. Submit it to the Operator so every reviewer \
+                sees the same recommendation — nothing is sent until you do.
+                """)
+            if localVerdictIsSubmittable {
+                HStack {
+                    Spacer()
+                    Button {
+                        Task { await submitLocalVerdict(using: onDevice) }
+                    } label: {
+                        actionLabel("Submit recommendation", systemImage: "arrow.up.circle.fill")
+                    }
+                    .buttonStyle(.tbtGlass)
+                    .disabled(onDevice.isRunning(message.id) || isActing)
+                }
+            } else {
+                // The verdict is stored against the Operator's transcription, so
+                // publishing one computed from a draft nobody has submitted would
+                // attach a recommendation to text the Operator doesn't hold.
+                caption("""
+                    This judged a draft the Operator doesn't have yet. Submit the \
+                    translation and the recommendation can go with it.
+                    """)
+            }
+        }
+    }
+
+    /// The English the Operator actually holds for this message — its
+    /// translation of record, or the transcript when nothing is translated yet.
+    private var operatorEnglish: String? {
+        message.translationText ?? message.latestTranscription?.text
+    }
+
+    /// Whether the verdict on screen describes the text the Operator holds. A
+    /// submitted verdict is attached to `latestTranscription`, so a verdict
+    /// computed from an unsubmitted local draft would read, on every other
+    /// device, as a recommendation about entirely different text.
+    private var localVerdictIsSubmittable: Bool {
+        guard let moderatedText, let operatorEnglish else { return false }
+        // Trim-insensitive: the transport trims, so the Operator's copy of a
+        // draft that had stray whitespace is the trimmed form of it.
+        return moderatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            == operatorEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Retires the local work behind a translation that has just landed on the
+    /// Operator.
+    ///
+    /// The verdict is the exception: it was computed for exactly `submitted`,
+    /// which is now the Operator's translation of record, so it has become
+    /// submittable rather than stale. Throwing it away here would make the
+    /// card's "submit the translation and the recommendation can go with it"
+    /// promise unkeepable — the operator would have to recompute a verdict they
+    /// are already looking at. Anything else the pipeline produced is spent.
+    private func retireLocalWork(after submitted: String) {
+        // The transport trims before sending, so the Operator's copy of record
+        // is the trimmed text. Compare — and retain — the same form, or a draft
+        // with stray whitespace would never match what came back.
+        let sent = submitted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard moderatedText?.trimmingCharacters(in: .whitespacesAndNewlines) == sent,
+              output?.recommendation != nil else {
+            onDevice?.reset(message.id)
+            drafts.clear(message.id)
+            moderatedText = nil
+            return
+        }
+        // Only the draft goes. `englishForModeration` then falls through to the
+        // Operator's translation, which is this same text, so the verdict stays
+        // matched rather than being dropped as stale.
+        translationDraft = ""
+        moderatedText = sent
+    }
+
+    /// Posts the on-device verdict to the Operator and, on success, clears the
+    /// local result so it can't be submitted twice.
+    private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
+        guard localVerdictIsSubmittable,
+              let output, let recommendation = output.recommendation else { return }
+        let submitted = await store.submitModeration(
+            message,
+            flagged: output.flagged ?? false,
+            recommendation: recommendation,
+            maxScore: output.maxScore ?? 0,
+            model: output.moderationModel
+        )
+        if submitted {
+            onDevice.clearModeration(message.id)
+            moderatedText = nil
         }
     }
 
@@ -452,17 +585,13 @@ struct ReviewDetailView: View {
                     let text = translationDraft
                     Task {
                         let submitted = await store.submitTranslation(message, text: text)
-                        // Only on success: the message moves to Decide, where
-                        // the local verdict would be the only recommendation on
-                        // screen despite having been computed for the
-                        // pipeline's own translation rather than the text the
-                        // operator submitted. A failure has to keep the draft
-                        // and its output, or a transient error would discard
-                        // the work being retried.
-                        if submitted {
-                            onDevice?.reset(message.id)
-                            drafts.clear(message.id)
-                        }
+                        // Only on success: the message moves to Decide, where a
+                        // local verdict computed for the pipeline's own
+                        // translation rather than the text the operator
+                        // submitted would be the only recommendation on screen.
+                        // A failure has to keep the draft and its output, or a
+                        // transient error would discard the work being retried.
+                        if submitted { retireLocalWork(after: text) }
                     }
                 } label: {
                     actionLabel("Submit translation", systemImage: "arrow.up.circle.fill")
@@ -654,7 +783,12 @@ struct ReviewDetailView: View {
             language: output.language,
             model: output.model
         )
-        if submitted { onDevice.reset(message.id) }
+        if submitted {
+            onDevice.reset(message.id)
+            // The queue's snapshot rule leaves local work alone while this
+            // action is in flight, so clear the drafts here instead.
+            drafts.clear(message.id)
+        }
     }
 
     // MARK: - Building blocks

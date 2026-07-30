@@ -10,9 +10,6 @@ import TranscriptionReview
 /// which is what made the queue unreadable.
 struct ReviewMessageRow: View {
     let message: Message
-    /// The on-device result for this message, when one has been produced. Folds
-    /// Apple Intelligence's opinion into the same badge as the Operator's.
-    let onDeviceOutput: OnDeviceReviewPipeline.Output?
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.medium) {
@@ -71,7 +68,7 @@ struct ReviewMessageRow: View {
     }
 
     private var advice: AIRecommendation? {
-        AIRecommendation(message: message, onDeviceOutput: onDeviceOutput)
+        AIRecommendation(message: message)
     }
 
     /// English first — that's what the operator moderates on. Falls back to the
@@ -114,11 +111,13 @@ struct ReviewMessageRow: View {
 
 // MARK: - AI recommendation
 
-/// The AI's opinion on a message, from whichever engine produced one.
+/// The AI's opinion on a message, as stored on the Operator.
 ///
 /// Issue #79 called out that this was invisible: the Operator's recommendation
-/// was a low-contrast pill among four others, and the on-device verdict was
-/// buried in caption text under the translate button. Both now feed one badge.
+/// was a low-contrast pill among four others. It now drives one prominent
+/// badge. The verdict of record always comes from the Operator; a verdict
+/// computed on this device is shown only as an explicit preview until it is
+/// submitted, so every device shows the same recommendation.
 struct AIRecommendation {
     var recommendation: ModerationRecommendation
     var reason: String?
@@ -126,23 +125,35 @@ struct AIRecommendation {
     var source: String
     var flagged: Bool
 
-    /// Prefers the Operator's verdict — it's the one of record — and falls back
-    /// to a local Apple Intelligence run when the Operator has none.
-    init?(message: Message, onDeviceOutput: OnDeviceReviewPipeline.Output?) {
-        if let moderation = message.latestModeration,
-           let recommendation = moderation.recommendation {
-            self.recommendation = recommendation
-            self.reason = moderation.reasonSummary
-            self.source = "AI"
-            self.flagged = moderation.flagged ?? false
-        } else if let raw = onDeviceOutput?.recommendation {
-            self.recommendation = ModerationRecommendation(rawValue: raw)
-            self.reason = nil
-            self.source = "On device"
-            self.flagged = onDeviceOutput?.flagged ?? false
-        } else {
-            return nil
-        }
+    /// The Operator's verdict is the single source of truth: AI is computed
+    /// locally but its result is stored on the server, and every device reads
+    /// the server's copy so they all agree. A verdict a phone produced on-device
+    /// only becomes visible here once it has been submitted (see
+    /// `ReviewStore.submitModeration`) — until then it shows only as a
+    /// deliberate, unsubmitted preview in the detail view.
+    init?(message: Message) {
+        guard let moderation = message.latestModeration,
+              let recommendation = moderation.recommendation else { return nil }
+        self.recommendation = recommendation
+        self.reason = moderation.reasonSummary
+        self.source = "AI"
+        self.flagged = moderation.flagged ?? false
+    }
+
+    /// Builds the display holder for a verdict computed on this device that has
+    /// not been submitted yet. Kept separate from `init?(message:)` so the local
+    /// preview never masquerades as the Operator's verdict of record.
+    init?(localOutput: OnDeviceReviewPipeline.Output) {
+        guard let raw = localOutput.recommendation else { return nil }
+        // Through the same shaping the submission uses, so the preview reads as
+        // what would actually be stored — a model that says "block" means
+        // reject, not an unrecognized verdict.
+        self.recommendation = ModerationRecommendation(
+            rawValue: OperatorSubmission.recommendation(raw)
+        )
+        self.reason = nil
+        self.source = "On device"
+        self.flagged = localOutput.flagged ?? false
     }
 
     var tint: Color {

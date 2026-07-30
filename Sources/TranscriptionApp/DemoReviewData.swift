@@ -94,6 +94,41 @@ actor DemoOperatorReviewClient: OperatorReviewClient {
         return try decode(Transcription.self, from: transcription)
     }
 
+    func submitModeration(
+        messageID: String,
+        transcriptionId: String?,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        reasonSummary: String?,
+        model: String?
+    ) async throws -> Moderation {
+        guard let index = raw.firstIndex(where: { $0["id"] as? String == messageID }) else {
+            throw OperatorReviewError.api(status: 404, code: "not_found")
+        }
+        let moderation: [String: Any] = [
+            "id": "mod-demo-\(UUID().uuidString.prefix(8))",
+            "messageId": messageID,
+            "transcriptionId": OperatorSubmission.metadata(transcriptionId) ?? NSNull(),
+            "provider": "mac_app",
+            "model": OperatorSubmission.metadata(model) ?? NSNull(),
+            "status": "succeeded",
+            "flagged": flagged,
+            // Shaped exactly as the HTTP client shapes it, so demo mode can't
+            // show a verdict the real Operator would have rewritten.
+            "recommendation": OperatorSubmission.recommendation(recommendation),
+            "maxScore": OperatorSubmission.score(maxScore),
+            "categories": NSNull(),
+            "reasonSummary": OperatorSubmission.metadata(reasonSummary) ?? NSNull(),
+            "latencyMs": NSNull(),
+            "error": NSNull(),
+            "createdAt": OperatorJSON.iso8601String(from: Date()),
+            "completedAt": OperatorJSON.iso8601String(from: Date()),
+        ]
+        raw[index]["latestModeration"] = moderation
+        return try decode(Moderation.self, from: moderation)
+    }
+
     private func decodeList() throws -> MessageList {
         let data = try JSONSerialization.data(withJSONObject: ["items": raw])
         return try OperatorJSON.decoder.decode(MessageList.self, from: data)

@@ -121,6 +121,7 @@
 		68F84D09B19F35052809FDB6 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 99D0B70DA725802797315DFA /* Crypto */; };
 		691222315974E097FCE36D91 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 4B95E851355068797D44848C /* Logging */; };
 		69881C5CCA191DCD73AF5F06 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0F4DB9F011E7A015E5C998 /* Crypto */; };
+		6A81396EBFD557C6626CBB83 /* OperatorSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = E801D4440B41F9D7FD029D95 /* OperatorSubmission.swift */; };
 		6ABC46592F1FE93AA1E16A77 /* OperatorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E090AC8162782215C378960 /* OperatorClient.swift */; };
 		6B0148B629864225DAFC5B35 /* OnDeviceCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5384BDB3914ED69E698D1F8B /* OnDeviceCapability.swift */; };
 		6B43B83A769E1F9FB5D9D0AD /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8544DD720CB364126F1627E3 /* AuthMiddleware.swift */; };
@@ -138,6 +139,7 @@
 		74C98894254C1A92D021D0B7 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = FA43ACD5FDF80989BDB41059 /* Hummingbird */; };
 		7534464C6A3914DF3212878F /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
 		78C6A3CBCF8BC646DA5C95AD /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 738160645144C35DE16BC1C4 /* Logging */; };
+		79204573E7431F5782606291 /* OperatorSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = E801D4440B41F9D7FD029D95 /* OperatorSubmission.swift */; };
 		79623D7F11F0C6C046EF11B0 /* ReviewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C0DDED2DF5DECCDEADC40 /* ReviewModels.swift */; };
 		79830E8A3CC38CE124AD7A7D /* StreamingAudioDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 497997B29861A9425CC7F4F0 /* StreamingAudioDownload.swift */; };
 		7B07E25FA5845D36518A09C5 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 2320F84D08B4C9BB1DE3109D /* Crypto */; };
@@ -541,6 +543,7 @@
 		DE7EC17700DA318A3EA4B2B2 /* ModelsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsRoute.swift; sourceTree = "<group>"; };
 		DEE2ACB1AEBBF2A3B7B763BC /* TranscriptionShared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E193A2B7B90F76E32B325D9D /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		E801D4440B41F9D7FD029D95 /* OperatorSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorSubmission.swift; sourceTree = "<group>"; };
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogWriter.swift; sourceTree = "<group>"; };
 		EFB5FB6C8C9C1315039088DF /* Transcriber.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Transcriber.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -886,6 +889,7 @@
 				DD44A868C8C655C6C21DF876 /* OperatorAPIConfig.swift */,
 				7B7D406082BAA0FB8C87E437 /* OperatorJSON.swift */,
 				2EACA09D600D816D4B2D9E7E /* OperatorReviewClient.swift */,
+				E801D4440B41F9D7FD029D95 /* OperatorSubmission.swift */,
 				AB4C0DDED2DF5DECCDEADC40 /* ReviewModels.swift */,
 				00B13A1252D09210D2ADED00 /* ReviewStore.swift */,
 			);
@@ -1353,6 +1357,7 @@
 				FA84A1AD90948EC9C20B48FA /* OperatorAPIConfig.swift in Sources */,
 				F2B4C8636CA71C1C03F38E98 /* OperatorJSON.swift in Sources */,
 				A85F1601FC2C4CF948821E05 /* OperatorReviewClient.swift in Sources */,
+				6A81396EBFD557C6626CBB83 /* OperatorSubmission.swift in Sources */,
 				155AF724740DFB1C3FD49719 /* ReviewModels.swift in Sources */,
 				59173476D0DE84D8EE76B251 /* ReviewStore.swift in Sources */,
 			);
@@ -1494,6 +1499,7 @@
 				63BFD5C00D9CBDB8CDEE553C /* OperatorAPIConfig.swift in Sources */,
 				272FE3F7E038FD7CE07B86C8 /* OperatorJSON.swift in Sources */,
 				6BEA199F2C8331FEA00EF401 /* OperatorReviewClient.swift in Sources */,
+				79204573E7431F5782606291 /* OperatorSubmission.swift in Sources */,
 				79623D7F11F0C6C046EF11B0 /* ReviewModels.swift in Sources */,
 				CA041768481B1A116E69173D /* ReviewStore.swift in Sources */,
 			);

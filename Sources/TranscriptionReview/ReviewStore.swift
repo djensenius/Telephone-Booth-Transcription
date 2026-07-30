@@ -77,8 +77,13 @@ public final class ReviewStore {
     public private(set) var state: LoadState = .idle
     public private(set) var lastUpdated: Date?
 
-    /// IDs of messages with an approve/reject/translation request in flight.
+    /// IDs of messages with a write in flight — a decision, a transcript, a
+    /// translation, a re-run request, or a moderation verdict. One at a time
+    /// per message, so the UI can disable every action on that row at once.
     public private(set) var pendingActions: Set<String> = []
+    /// The subset of `pendingActions` that is writing a message's transcript or
+    /// translation — the writes that move the authoritative text themselves.
+    private var pendingTextWrites: Set<String> = []
     /// Human-readable message for the most recent failed write action, if any.
     public private(set) var actionError: String?
     /// IDs of messages whose transcription has been handed to the local worker
@@ -216,6 +221,20 @@ public final class ReviewStore {
         pendingActions.contains(messageID)
     }
 
+    /// True while this device is writing the transcript or translation of
+    /// `messageID`.
+    ///
+    /// Such a write moves the message's authoritative text itself, and the UI
+    /// keys "drop the local draft, the text changed underneath it" off exactly
+    /// that. The write owns the local work for its duration — it decides what to
+    /// retire and what has just become submittable — so the generic rule has to
+    /// stand aside for it. Deliberately narrower than `isActing`: a moderation
+    /// submit or a decision doesn't move the text, so a poll replacing the
+    /// transcript during one of those must still clear the drafts.
+    public func isWritingText(for messageID: String) -> Bool {
+        pendingTextWrites.contains(messageID)
+    }
+
     /// True when a local transcription run has been queued for this message and
     /// no newer transcript has landed yet.
     public func isTranscriptionQueued(_ messageID: String) -> Bool {
@@ -300,8 +319,12 @@ public final class ReviewStore {
     ) async -> Bool {
         guard !pendingActions.contains(message.id) else { return false }
         pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
         actionError = nil
-        defer { pendingActions.remove(message.id) }
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
         do {
             let updated = try await client.submitTranscription(
                 messageID: message.id,
@@ -343,8 +366,12 @@ public final class ReviewStore {
     ) async -> Bool {
         guard !pendingActions.contains(message.id) else { return false }
         pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
         actionError = nil
-        defer { pendingActions.remove(message.id) }
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
         do {
             let updated = try await client.submitTranslation(
                 messageID: message.id,
@@ -359,6 +386,72 @@ public final class ReviewStore {
         } catch {
             actionError = Self.describe(error, verb: "submit that translation")
             logger.error("Translation submit failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
+    /// Submits a moderation verdict computed on this device for `message` and
+    /// folds the returned row into `latestModeration`, so the recommendation is
+    /// on screen immediately and — because it is now persisted on the Operator —
+    /// visible to every other operator too.
+    ///
+    /// Returns `true` when the submission succeeded, so the caller can clear the
+    /// local on-device verdict it came from. Note that "succeeded" is not
+    /// "displayed": if the message moved on while the request was in flight —
+    /// a new transcription, or a newer verdict from another operator — the row
+    /// is left with the Operator rather than folded onto text it never judged.
+    /// The caller still clears; the Operator holds the record either way.
+    @discardableResult
+    public func submitModeration(
+        _ message: Message,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double = 0,
+        model: String? = nil
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
+        pendingActions.insert(message.id)
+        actionError = nil
+        defer { pendingActions.remove(message.id) }
+        do {
+            // Tie the verdict to the transcription the *store* currently holds,
+            // not the one the caller captured: a poll may have moved it while
+            // the view sat open, and the guard below would then drop a verdict
+            // that was recorded against the wrong row anyway.
+            let latest = messages.first(where: { $0.id == message.id }) ?? message
+            let updated = try await client.submitModeration(
+                messageID: message.id,
+                transcriptionId: latest.latestTranscription?.id,
+                flagged: flagged,
+                recommendation: recommendation,
+                maxScore: maxScore,
+                reasonSummary: nil,
+                model: model
+            )
+            // Merge into the *current* local message, not the captured one, so a
+            // poll that landed mid-request can't be clobbered with stale fields.
+            let base = messages.first(where: { $0.id == message.id }) ?? message
+            // That same poll can also swap in a *new* transcription. A verdict
+            // recorded against the one it replaced describes text that is no
+            // longer on screen, so leave the polled state alone rather than show
+            // a recommendation beside a transcript it never judged.
+            guard updated.transcriptionId == nil
+                    || updated.transcriptionId == base.latestTranscription?.id else {
+                return true
+            }
+            // Nor should a slow round-trip displace a newer verdict a poll
+            // brought in from another operator while this one was in flight.
+            if let current = base.latestModeration, current.createdAt > updated.createdAt {
+                return true
+            }
+            apply(base.replacingLatestModeration(updated))
+            return true
+        } catch {
+            actionError = Self.describe(error, verb: "submit that recommendation")
+            logger.error("""
+                Moderation submit failed for \(message.id, privacy: .public): \
+                \(String(describing: error), privacy: .public)
+                """)
             return false
         }
     }

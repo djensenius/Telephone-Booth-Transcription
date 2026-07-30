@@ -48,6 +48,20 @@ public protocol OperatorReviewClient: Sendable {
         translatedText: String,
         translatedLanguage: String?
     ) async throws -> Transcription
+    /// Records a moderation verdict computed on this device for `messageID`.
+    /// The Operator finalizes any pending moderation row or appends a new
+    /// succeeded one attributed to the submitting operator, so a verdict a phone
+    /// produced locally becomes the message's verdict of record — visible to
+    /// every other operator rather than stranded in this device's memory.
+    func submitModeration(
+        messageID: String,
+        transcriptionId: String?,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        reasonSummary: String?,
+        model: String?
+    ) async throws -> Moderation
 }
 
 public actor HTTPOperatorReviewClient: OperatorReviewClient {
@@ -116,8 +130,8 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         }
         let body = Body(
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            language: Self.normalized(language),
-            model: Self.normalized(model)
+            language: OperatorSubmission.metadata(language),
+            model: OperatorSubmission.metadata(model)
         )
         return try await post("/v1/messages/\(messageID)/transcription", body: body)
     }
@@ -139,11 +153,32 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         return try await post("/v1/messages/\(messageID)/translation", body: body)
     }
 
-    /// Trims a metadata field and folds an empty result to `nil`, so a blank
-    /// hint is sent as JSON `null` rather than an empty string.
-    private static func normalized(_ value: String?) -> String? {
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (trimmed?.isEmpty == false) ? trimmed : nil
+    public func submitModeration(
+        messageID: String,
+        transcriptionId: String?,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        reasonSummary: String?,
+        model: String?
+    ) async throws -> Moderation {
+        struct Body: Encodable {
+            let transcriptionId: String?
+            let flagged: Bool
+            let recommendation: String
+            let maxScore: Double
+            let reasonSummary: String?
+            let model: String?
+        }
+        let body = Body(
+            transcriptionId: OperatorSubmission.metadata(transcriptionId),
+            flagged: flagged,
+            recommendation: OperatorSubmission.recommendation(recommendation),
+            maxScore: OperatorSubmission.score(maxScore),
+            reasonSummary: OperatorSubmission.metadata(reasonSummary),
+            model: OperatorSubmission.metadata(model)
+        )
+        return try await post("/v1/messages/\(messageID)/moderation", body: body)
     }
 
     // MARK: - Request plumbing
