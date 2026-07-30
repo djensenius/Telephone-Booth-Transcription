@@ -67,6 +67,16 @@ struct OnDeviceReviewPipelineTests {
         }
     }
 
+    /// Records the text the pipeline asks it to classify.
+    final class SpyModerator: TextModerationService, @unchecked Sendable {
+        private(set) var receivedInput: String?
+        func moderate(_ input: String) async throws -> ModerationVerdict {
+            receivedInput = input
+            return ModerationVerdict(flagged: false, recommendation: "approve",
+                                     maxScore: 0.1, model: "apple-foundation-models")
+        }
+    }
+
     /// Records the source-language hint the pipeline forwards.
     final class SpyTranslator: TextTranslationService, @unchecked Sendable {
         private(set) var receivedSourceLanguage: String?
@@ -464,5 +474,49 @@ struct OnDeviceReviewPipelineTests {
         await gate.open()
         _ = await task.value
         #expect(pipeline.isRunning("m1") == false)
+    }
+
+    // MARK: - Moderation input
+
+    /// The operator reviews and decides on the translation, and for a
+    /// non-English message it's the only text the moderator can read.
+    @Test("run moderates the translation, not the source transcript")
+    func runModeratesTheTranslation() async {
+        let moderator = SpyModerator()
+        let pipeline = OnDeviceReviewPipeline(
+            dispatcher: InProcessOperatorJobDispatcher(
+                transcriber: StubTranscriber(text: "bonjour"),
+                translator: StubTranslator(text: "hello"),
+                moderator: moderator,
+                audioFetcher: StubAudioFetcher()
+            ),
+            transcriptionModel: "apple-speech-analyzer"
+        )
+
+        await pipeline.run(for: input())
+
+        #expect(moderator.receivedInput == "hello")
+        #expect(pipeline.outputs["m1"]?.recommendation == "approve")
+    }
+
+    @Test("clearModeration drops the verdict but keeps the generated text")
+    func clearModerationKeepsText() async {
+        let pipeline = makePipeline()
+        await pipeline.run(for: input())
+        #expect(pipeline.outputs["m1"]?.recommendation != nil)
+
+        pipeline.clearModeration("m1")
+
+        #expect(pipeline.outputs["m1"]?.recommendation == nil)
+        #expect(pipeline.outputs["m1"]?.flagged == nil)
+        #expect(pipeline.outputs["m1"]?.transcript == "bonjour")
+        #expect(pipeline.outputs["m1"]?.translation == "hello")
+    }
+
+    @Test("clearModeration is a no-op when there is no output")
+    func clearModerationWithoutOutput() {
+        let pipeline = makePipeline()
+        pipeline.clearModeration("m1")
+        #expect(pipeline.outputs["m1"] == nil)
     }
 }

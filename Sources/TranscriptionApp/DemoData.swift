@@ -18,6 +18,9 @@ enum DemoMode {
         #if DEBUG
         return ProcessInfo.processInfo.arguments.contains("-uiTestDemoMode")
             || ProcessInfo.processInfo.environment["TBT_DEMO_MODE"] == "1"
+            // Xcode previews have no server, no Keychain token and no Operator,
+            // so without this every preview renders the sign-in screen.
+            || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
         #else
         return false
         #endif

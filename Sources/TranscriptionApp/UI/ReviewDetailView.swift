@@ -14,6 +14,9 @@ struct ReviewDetailView: View {
 
     @State private var translationDraft = ""
     @State private var notesDraft = ""
+    /// The text the local verdict on screen was computed from, so an edit that
+    /// makes it stale can be detected.
+    @State private var moderatedText: String?
 
     private var isActing: Bool { store.isActing(on: message.id) }
     private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
@@ -62,11 +65,23 @@ struct ReviewDetailView: View {
                 translationDraft = translation
             }
         }
-        .onChange(of: message.latestTranscription?.id) {
+        .onChange(of: transcriptionSnapshot) {
             // A new transcript replaced the one being translated; drop the draft
             // so it can't be submitted against the wrong source text. The
             // pipeline output is reset by the queue, which sees every row.
+            //
+            // Keyed to the text as well as the id, because the Operator can
+            // finalize a pending transcription in place: same id, entirely
+            // different source text.
             translationDraft = ""
+        }
+        .onChange(of: translationDraft) {
+            // The verdict was computed from the draft as it stood. Editing it
+            // makes that verdict describe text that no longer exists, so drop
+            // it rather than let it sit above the decision buttons.
+            guard let moderatedText, moderatedText != translationDraft else { return }
+            onDevice?.clearModeration(message.id)
+            self.moderatedText = nil
         }
     }
 
@@ -159,12 +174,13 @@ struct ReviewDetailView: View {
                 HStack {
                     Button {
                         Task {
-                            await onDevice.moderateOnly(
+                            let recommendation = await onDevice.moderateOnly(
                                 text,
                                 transcript: message.latestTranscription?.text ?? text,
                                 language: message.latestTranscription?.language,
                                 for: message.id
                             )
+                            if recommendation != nil { moderatedText = text }
                         }
                     } label: {
                         if running {
@@ -209,6 +225,14 @@ struct ReviewDetailView: View {
         guard let candidate,
               !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return candidate
+    }
+
+    /// What the Operator holds for this message, as a value that changes
+    /// whenever the authoritative source text does — including a pending
+    /// transcription finalized in place under the same id.
+    private var transcriptionSnapshot: String? {
+        guard let transcription = message.latestTranscription else { return nil }
+        return transcription.id + "\u{1F}" + (transcription.text ?? "")
     }
 
     // MARK: - Transcript

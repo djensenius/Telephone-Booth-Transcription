@@ -176,6 +176,23 @@ public final class OnDeviceReviewPipeline {
         }
     }
 
+    /// Drops only the local verdict for a message, keeping any transcript or
+    /// translation it was computed alongside.
+    ///
+    /// Asking for a recommendation classifies the operator's current draft, so
+    /// editing that draft afterwards leaves a prominent verdict describing text
+    /// that no longer exists. `reset` is too blunt here — it would also discard
+    /// the generated transcript and translation the draft came from.
+    public func clearModeration(_ messageID: String) {
+        guard let existing = outputs[messageID], existing.recommendation != nil else { return }
+        outputs[messageID] = Output(
+            transcript: existing.transcript,
+            language: existing.language,
+            model: existing.model,
+            translation: existing.translation
+        )
+    }
+
     /// Clears any surfaced result/error for a message, and supersedes any run
     /// still in flight for it.
     public func reset(_ messageID: String) {
@@ -315,10 +332,15 @@ public final class OnDeviceReviewPipeline {
 
         // Moderation is advisory, so a failure here must not discard the
         // translation the operator is waiting on.
+        //
+        // The translation is what gets classified, not the transcript: it's the
+        // text the operator reviews and decides on, and for a non-English
+        // message it's the only one the moderator can read. `moderateOnly`
+        // makes the same choice.
         stages[message.id] = .moderating
         var recommendation: String?
         var flagged: Bool?
-        if let verdict = try? await moderate(trimmed) {
+        if let verdict = try? await moderate(translation) {
             recommendation = verdict.recommendation
             flagged = verdict.flagged
         }
