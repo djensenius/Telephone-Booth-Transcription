@@ -2,7 +2,7 @@ import Crypto
 import Foundation
 import NIOCore
 import Testing
-import TranscriptionOperator
+@testable import TranscriptionOperator
 import TranscriptionShared
 
 /// Stubs the network for `URLSessionAudioFetcher` so the tests exercise the
@@ -15,6 +15,9 @@ final class StubAudioURLProtocol: URLProtocol, @unchecked Sendable {
         /// Set to advertise a Content-Length that differs from `body`, to test
         /// the fail-fast cap independently of the streaming cap.
         var advertisedLength: Int?
+        /// Delivers the body in slices of this size, mimicking the several
+        /// `didReceive data:` callbacks a real transfer produces.
+        var sliceSize: Int?
     }
 
     private static let lock = NSLock()
@@ -58,7 +61,13 @@ final class StubAudioURLProtocol: URLProtocol, @unchecked Sendable {
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if !stub.body.isEmpty {
-            client?.urlProtocol(self, didLoad: stub.body)
+            let slice = stub.sliceSize ?? stub.body.count
+            var offset = 0
+            while offset < stub.body.count {
+                let end = min(offset + slice, stub.body.count)
+                client?.urlProtocol(self, didLoad: stub.body.subdata(in: offset..<end))
+                offset = end
+            }
         }
         client?.urlProtocolDidFinishLoading(self)
     }
@@ -140,32 +149,6 @@ struct URLSessionAudioFetcherTests {
         #expect(!FileManager.default.fileExists(atPath: stagedPath!.path))
     }
 
-    /// `buffered` must pull, not push: a consumer that stops early has to leave
-    /// the rest of the source unread. An `AsyncThrowingStream` would have
-    /// drained the whole body into an unbounded buffer regardless, letting a
-    /// download run far past `maxBytes` before staging noticed.
-    @Test func chunkingIsBackpressuredNotBuffered() async throws {
-        let source = CountingByteSequence(count: 1_000_000)
-        var iterator = ChunkedBytes(source: source, chunkSize: 1_024).makeAsyncIterator()
-
-        let first = try await iterator.next()
-        #expect(first?.readableBytes == 1_024)
-
-        // Only the bytes needed for that one chunk may have been consumed.
-        #expect(source.counter.value == 1_024)
-    }
-
-    @Test func chunkingEmitsAPartialFinalChunk() async throws {
-        var iterator = ChunkedBytes(
-            source: CountingByteSequence(count: 1_500),
-            chunkSize: 1_024
-        ).makeAsyncIterator()
-
-        #expect(try await iterator.next()?.readableBytes == 1_024)
-        #expect(try await iterator.next()?.readableBytes == 476)
-        #expect(try await iterator.next() == nil)
-    }
-
     /// Exercises the chunk boundary: a payload spanning several 64 KB
     /// chunks plus a partial trailing chunk must reassemble byte-for-byte.
     @Test func reassemblesMultiChunkPayload() async throws {
@@ -178,7 +161,7 @@ struct URLSessionAudioFetcherTests {
             bytes.append(UInt8(index % 251))
         }
         let payload = Data(bytes)
-        StubAudioURLProtocol.install(.init(body: payload))
+        StubAudioURLProtocol.install(.init(body: payload, sliceSize: 16 * 1024))
 
         let staged: Data = try await makeFetcher().withFetchedAudioFile(
             url: Self.url,
@@ -267,33 +250,128 @@ struct URLSessionAudioFetcherTests {
     }
 }
 
-/// A byte source that records how many bytes the consumer actually pulled.
-struct CountingByteSequence: AsyncSequence, Sendable {
-    typealias Element = UInt8
-
-    let count: Int
-    let counter = Counter()
-
-    /// Lock-free is fine here: the chunker pulls serially.
-    final class Counter: @unchecked Sendable {
-        private(set) var value = 0
-        func increment() { value += 1 }
+/// Drives `StreamingAudioDownload`'s delegate callbacks directly, which is the
+/// only way to observe chunk delivery and the mid-stream cap without a real
+/// transfer.
+@Suite("StreamingAudioDownload")
+struct StreamingAudioDownloadTests {
+    private func makeTask() -> (URLSession, URLSessionDataTask) {
+        let session = URLSession(configuration: .ephemeral)
+        return (session, session.dataTask(with: URL(string: "https://operator.test/a.flac")!))
     }
 
-    struct AsyncIterator: AsyncIteratorProtocol {
-        let total: Int
-        let counter: Counter
-        var index = 0
+    /// Chunks arrive as the OS delivered them — one awaited `next()` per
+    /// `didReceive data:`, not per byte.
+    @Test func deliversOneChunkPerCallback() async throws {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        download.urlSession(session, dataTask: task, didReceive: Data([1, 2, 3]))
+        download.urlSession(session, dataTask: task, didReceive: Data([4, 5]))
+        download.urlSession(session, task: task, didCompleteWithError: nil)
 
-        mutating func next() async throws -> UInt8? {
-            guard index < total else { return nil }
-            index += 1
-            counter.increment()
-            return UInt8(index % 251)
+        var iterator = download.chunks.makeAsyncIterator()
+        #expect(try await iterator.next()?.readableBytes == 3)
+        #expect(try await iterator.next()?.readableBytes == 2)
+        #expect(try await iterator.next() == nil)
+    }
+
+    /// The cap is enforced as bytes arrive, so a response with a missing or
+    /// understated `Content-Length` can't stream far past it.
+    @Test func failsAsSoonAsTheCapIsPassed() async {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 4)
+        download.urlSession(session, dataTask: task, didReceive: Data(repeating: 0x01, count: 3))
+        download.urlSession(session, dataTask: task, didReceive: Data(repeating: 0x01, count: 3))
+
+        var iterator = download.chunks.makeAsyncIterator()
+        await #expect(throws: AudioFetchError.tooLarge) {
+            // The buffered prefix is discarded, so a partial body can't be
+            // consumed as if it were whole.
+            _ = try await iterator.next()
         }
     }
 
-    func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(total: count, counter: counter)
+    /// A consumer waiting on an empty buffer is handed the next chunk directly.
+    @Test func handsOffToAWaitingConsumer() async throws {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        var iterator = download.chunks.makeAsyncIterator()
+
+        async let first = iterator.next()
+        // Give the consumer a chance to park on the empty buffer.
+        try await Task.sleep(for: .milliseconds(20))
+        download.urlSession(session, dataTask: task, didReceive: Data([7, 7, 7, 7]))
+
+        #expect(try await first?.readableBytes == 4)
+    }
+
+    /// A transport failure surfaces as the content-free fetch error rather than
+    /// ending the sequence as if the body were complete.
+    @Test func transportFailureThrows() async {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        download.urlSession(session, dataTask: task, didReceive: Data([1]))
+        download.urlSession(
+            session, task: task,
+            didCompleteWithError: URLError(.networkConnectionLost)
+        )
+
+        var iterator = download.chunks.makeAsyncIterator()
+        await #expect(throws: AudioFetchError.fetchFailed) {
+            _ = try await iterator.next()
+        }
+    }
+
+    /// An advertised body larger than the cap is refused at the response head,
+    /// so none of it is ever delivered.
+    @Test func refusesAnAdvertisedOversizedBody() async throws {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 4)
+        let response = HTTPURLResponse(
+            url: URL(string: "https://operator.test/a.flac")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Length": "64"]
+        )!
+
+        var disposition: URLSession.ResponseDisposition?
+        download.urlSession(session, dataTask: task, didReceive: response) { disposition = $0 }
+        #expect(disposition == .cancel)
+
+        // The head still reaches the caller, which reports the same failure
+        // staging would.
+        _ = try await download.awaitResponse()
+        var iterator = download.chunks.makeAsyncIterator()
+        await #expect(throws: AudioFetchError.tooLarge) {
+            _ = try await iterator.next()
+        }
+    }
+
+    /// Cancelling the consuming task unparks the wait instead of leaving it
+    /// blocked until the request times out.
+    @Test func cancellingTheConsumerUnparksTheWait() async throws {
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        let waiting = Task {
+            var iterator = download.chunks.makeAsyncIterator()
+            _ = try await iterator.next()
+        }
+        // Give the consumer a chance to park on the empty buffer.
+        try await Task.sleep(for: .milliseconds(20))
+        waiting.cancel()
+
+        await #expect(throws: CancellationError.self) { try await waiting.value }
+    }
+
+    /// `cancel()` is idempotent and safe after the transfer already finished.
+    @Test func cancelIsIdempotent() async throws {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        download.urlSession(session, dataTask: task, didReceive: Data([1, 2]))
+        download.urlSession(session, task: task, didCompleteWithError: nil)
+        download.cancel()
+        download.cancel()
+
+        var iterator = download.chunks.makeAsyncIterator()
+        #expect(try await iterator.next()?.readableBytes == 2)
     }
 }

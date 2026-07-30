@@ -11,6 +11,11 @@ import TranscriptionShared
 /// byte-capping, temp-file staging, and cleanup are all delegated to the shared
 /// `AudioFileStaging`, so behavior matches `HTTPClientAudioFetcher` exactly.
 ///
+/// The body is streamed by `StreamingAudioDownload`, which reads
+/// `URLSession`'s delegate-delivered `Data` chunks rather than
+/// `URLSession.AsyncBytes` — the latter yields one `UInt8` per awaited
+/// `next()`, so a large download costs an async iterator call per byte.
+///
 /// **Privacy:** errors are the same content-free `AudioFetchError` cases used
 /// elsewhere. The URL, bytes, and hash never reach a log line.
 ///
@@ -85,10 +90,15 @@ public final class URLSessionAudioFetcher: AudioFetching {
         var request = URLRequest(url: requestURL)
         request.httpMethod = "GET"
 
-        let bytes: URLSession.AsyncBytes
+        let download = StreamingAudioDownload(maxBytes: maxBytes)
+        download.start(request, on: urlSession)
+        // Cancels a transfer the consumer walked away from (cap exceeded, hash
+        // mismatch, body threw). Cancelling a finished task is a no-op.
+        defer { download.cancel() }
+
         let response: URLResponse
         do {
-            (bytes, response) = try await urlSession.bytes(for: request)
+            response = try await download.awaitResponse()
         } catch {
             logger.debug("audio fetch transport failed: \(type(of: error))")
             throw AudioFetchError.fetchFailed
@@ -99,69 +109,18 @@ public final class URLSessionAudioFetcher: AudioFetching {
         }
 
         // Fail fast on an advertised length over the cap so we don't stream a
-        // huge body just to reject it. `stage` still enforces the real cap.
+        // huge body just to reject it. The download and `stage` still enforce
+        // the real cap.
         if http.expectedContentLength > 0, http.expectedContentLength > Int64(maxBytes) {
             throw AudioFetchError.tooLarge
         }
 
         return try await AudioFileStaging.stage(
-            chunks: Self.buffered(bytes),
+            chunks: download.chunks,
             expectedSHA256: expectedSHA256,
             maxBytes: maxBytes,
             suggestedExtension: suggestedExtension,
             body
         )
-    }
-
-    /// Regroups `URLSession`'s byte-at-a-time sequence into `ByteBuffer` chunks
-    /// so it can feed `AudioFileStaging.stage`. Chunking keeps the per-element
-    /// overhead of the async sequence from dominating large downloads.
-    ///
-    /// Deliberately a pull-based sequence rather than an `AsyncThrowingStream`:
-    /// that type buffers `.unbounded` by default and its bounded policies drop
-    /// elements, which would silently corrupt the audio. Without backpressure a
-    /// fast connection can race ahead of the consumer's disk writes, so a
-    /// response with a missing or understated `Content-Length` could balloon in
-    /// memory and download far past `maxBytes` before `stage` notices the cap.
-    /// Here nothing is read until the consumer asks for the next chunk.
-    static func buffered(
-        _ bytes: URLSession.AsyncBytes,
-        chunkSize: Int = 64 * 1024
-    ) -> ChunkedBytes<URLSession.AsyncBytes> {
-        ChunkedBytes(source: bytes, chunkSize: chunkSize)
-    }
-}
-
-/// Groups a byte sequence into `ByteBuffer` chunks, pulling from the source
-/// only as the consumer requests. See `URLSessionAudioFetcher.buffered`.
-public struct ChunkedBytes<Source: AsyncSequence & Sendable>: AsyncSequence, Sendable
-where Source.Element == UInt8 {
-    public typealias Element = ByteBuffer
-
-    let source: Source
-    let chunkSize: Int
-
-    public init(source: Source, chunkSize: Int) {
-        self.source = source
-        self.chunkSize = chunkSize
-    }
-
-    public struct AsyncIterator: AsyncIteratorProtocol {
-        var inner: Source.AsyncIterator
-        let chunkSize: Int
-
-        public mutating func next() async throws -> ByteBuffer? {
-            var scratch = [UInt8]()
-            scratch.reserveCapacity(chunkSize)
-            while scratch.count < chunkSize {
-                guard let byte = try await inner.next() else { break }
-                scratch.append(byte)
-            }
-            return scratch.isEmpty ? nil : ByteBuffer(bytes: scratch)
-        }
-    }
-
-    public func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(inner: source.makeAsyncIterator(), chunkSize: chunkSize)
     }
 }

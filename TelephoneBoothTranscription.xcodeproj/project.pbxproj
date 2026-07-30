@@ -91,6 +91,7 @@
 		51F3D5DD58C59F180143C74B /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = EB406DC5BCEF365DB8DB68C9 /* Logging */; };
 		542CEEF61D8A60E04CD4A19D /* TranscriptionShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DEE2ACB1AEBBF2A3B7B763BC /* TranscriptionShared.framework */; };
 		555EF6F474CF6859E392B1EC /* TranscriptionCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 01682C9E143027DFBB660EBF /* TranscriptionCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		57CBAF0F82755BBEF55DA94F /* StreamingAudioDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 497997B29861A9425CC7F4F0 /* StreamingAudioDownload.swift */; };
 		583679E15DEFC96E37FC96A5 /* LoopbackOperatorJobDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A39A1B6453748F75B9755D69 /* LoopbackOperatorJobDispatcher.swift */; };
 		59173476D0DE84D8EE76B251 /* ReviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B13A1252D09210D2ADED00 /* ReviewStore.swift */; };
 		592BA7505C78E5B8284102F8 /* RequestsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F093D733703A349373FC072 /* RequestsRoute.swift */; };
@@ -133,6 +134,7 @@
 		7534464C6A3914DF3212878F /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC515CEBB052723FAC579782 /* Config.swift */; };
 		78C6A3CBCF8BC646DA5C95AD /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 738160645144C35DE16BC1C4 /* Logging */; };
 		79623D7F11F0C6C046EF11B0 /* ReviewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C0DDED2DF5DECCDEADC40 /* ReviewModels.swift */; };
+		79830E8A3CC38CE124AD7A7D /* StreamingAudioDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 497997B29861A9425CC7F4F0 /* StreamingAudioDownload.swift */; };
 		7B07E25FA5845D36518A09C5 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 2320F84D08B4C9BB1DE3109D /* Crypto */; };
 		7CA94E87ED8A9DD6E0A7CA72 /* OperatorWorkList.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4DA67BA68DBF584C50BD97 /* OperatorWorkList.swift */; };
 		7D0847EAE814D1C3E9CB7446 /* OIDCTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B8840FA67CD0CB407BBDAAC /* OIDCTokens.swift */; };
@@ -468,6 +470,7 @@
 		40931948716064CFDD8523A3 /* OnDeviceClassificationLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceClassificationLogic.swift; sourceTree = "<group>"; };
 		410F993584E3E22BA61858EF /* AuthAnchorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthAnchorProvider.swift; sourceTree = "<group>"; };
 		4739C61372E6D214327AC357 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		497997B29861A9425CC7F4F0 /* StreamingAudioDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioDownload.swift; sourceTree = "<group>"; };
 		4D8AD907142DF3365E296FF2 /* TranscriptionOnDevice_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TranscriptionOnDevice_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E090AC8162782215C378960 /* OperatorClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorClient.swift; sourceTree = "<group>"; };
 		4F42F1E85A52BDAAEC06BC73 /* ServerHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHost.swift; sourceTree = "<group>"; };
@@ -765,6 +768,7 @@
 				4E090AC8162782215C378960 /* OperatorClient.swift */,
 				5138EE1FCD69164094528260 /* OperatorWorkChannel.swift */,
 				28446A26FC108E18F7EF1E1F /* OperatorWorker.swift */,
+				497997B29861A9425CC7F4F0 /* StreamingAudioDownload.swift */,
 				CF5BFA964FF23EBA1D51532A /* URLSessionAudioFetcher.swift */,
 			);
 			path = TranscriptionOperator;
@@ -1291,6 +1295,7 @@
 				09343E4CB5BDDF4096ED7121 /* OperatorClient.swift in Sources */,
 				985F7F0655D1D0D3326AE6C5 /* OperatorWorkChannel.swift in Sources */,
 				16F7E2CE3C88A4AEBABCE143 /* OperatorWorker.swift in Sources */,
+				79830E8A3CC38CE124AD7A7D /* StreamingAudioDownload.swift in Sources */,
 				3AFE2794D4B08B5F3EEDFD45 /* URLSessionAudioFetcher.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1453,6 +1458,7 @@
 				6ABC46592F1FE93AA1E16A77 /* OperatorClient.swift in Sources */,
 				08D5F938836703B80CFEC574 /* OperatorWorkChannel.swift in Sources */,
 				E279675682B848360E87CE32 /* OperatorWorker.swift in Sources */,
+				57CBAF0F82755BBEF55DA94F /* StreamingAudioDownload.swift in Sources */,
 				8F08CA576D22093951CCC926 /* URLSessionAudioFetcher.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
