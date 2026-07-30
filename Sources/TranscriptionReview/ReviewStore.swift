@@ -375,7 +375,7 @@ public final class ReviewStore {
         _ message: Message,
         flagged: Bool,
         recommendation: String,
-        maxScore: Double?,
+        maxScore: Double = 0,
         model: String? = nil
     ) async -> Bool {
         guard !pendingActions.contains(message.id) else { return false }
@@ -388,7 +388,7 @@ public final class ReviewStore {
                 transcriptionId: message.latestTranscription?.id,
                 flagged: flagged,
                 recommendation: recommendation,
-                maxScore: maxScore ?? 0,
+                maxScore: maxScore,
                 reasonSummary: nil,
                 model: model
             )

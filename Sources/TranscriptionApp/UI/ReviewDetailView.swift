@@ -286,9 +286,10 @@ struct ReviewDetailView: View {
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
-            caption("Computed on this device. Submit it to the Operator so every "
-                    + "reviewer sees the same recommendation — nothing is sent until "
-                    + "you do.")
+            caption("""
+                Computed on this device. Submit it to the Operator so every reviewer \
+                sees the same recommendation — nothing is sent until you do.
+                """)
             HStack {
                 Spacer()
                 Button {
@@ -310,7 +311,7 @@ struct ReviewDetailView: View {
             message,
             flagged: output.flagged ?? false,
             recommendation: recommendation,
-            maxScore: output.maxScore,
+            maxScore: output.maxScore ?? 0,
             model: output.moderationModel
         )
         if submitted {
