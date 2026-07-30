@@ -63,3 +63,52 @@ struct AuthHelpersTests {
         #expect(config.redirectURI == "tbtranscription://oauth/callback")
     }
 }
+
+@Suite("Refresh failure classification")
+struct RefreshFailureClassificationTests {
+    private func body(_ json: String) -> Data { Data(json.utf8) }
+
+    @Test("an OAuth error proving the grant is dead ends the session", arguments: [
+        "invalid_grant", "invalid_client", "unauthorized_client", "invalid_scope"
+    ])
+    func fatalOAuthErrors(code: String) {
+        let payload = body(#"{"error":"\#(code)"}"#)
+        #expect(AuthManager.refreshFailureIsFatal(status: 400, body: payload))
+    }
+
+    @Test("throttling keeps the session even though it is a 4xx")
+    func throttlingIsTransient() {
+        // Authentik/proxies answer 429 while rate limiting; the refresh token
+        // is still perfectly good, so this must not sign the user out.
+        let payload = body(#"{"error":"rate_limited"}"#)
+        #expect(!AuthManager.refreshFailureIsFatal(status: 429, body: payload))
+    }
+
+    @Test("a 4xx from infrastructure rather than the provider is transient", arguments: [
+        408, 429, 403, 404, 502
+    ])
+    func nonOAuthFailuresAreTransient(status: Int) {
+        // A proxy in front of the provider returns HTML, not an OAuth body.
+        let payload = body("<html><body>Gateway error</body></html>")
+        #expect(!AuthManager.refreshFailureIsFatal(status: status, body: payload))
+    }
+
+    @Test("a bare 400/401 with no parseable body still ends the session", arguments: [400, 401])
+    func unparseableRefusalIsFatal(status: Int) {
+        // Otherwise the app would retry a dead token forever.
+        #expect(AuthManager.refreshFailureIsFatal(status: status, body: Data()))
+    }
+
+    @Test("an unrecognised OAuth error code is treated as transient")
+    func unknownOAuthErrorIsTransient() {
+        let payload = body(#"{"error":"temporarily_unavailable"}"#)
+        #expect(!AuthManager.refreshFailureIsFatal(status: 400, body: payload))
+    }
+
+    @Test("the OAuth error code is read out of the response body")
+    func extractsErrorCode() {
+        #expect(AuthManager.oauthErrorCode(from: body(#"{"error":"invalid_grant"}"#)) == "invalid_grant")
+        #expect(AuthManager.oauthErrorCode(from: body("not json")) == nil)
+        #expect(AuthManager.oauthErrorCode(from: body(#"{"detail":"nope"}"#)) == nil)
+    }
+}

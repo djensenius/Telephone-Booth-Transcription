@@ -35,9 +35,12 @@ path of the per-app issuer (`/application/o/authorize/`,
 
 In the Authentik admin interface, open **Applications → Providers →** the
 provider backing `telephone-booth-operator-mobile`, and add
-`tbtranscription://oauth/callback` to **Redirect URIs/Origins**. Authentik 2024.x
-and newer treat each line as a strict/regex match entry, so add it as its own
-line alongside the Operator Mobile entry:
+`tbtranscription://oauth/callback` to **Redirect URIs/Origins**.
+
+Authentik 2024.8.5 and 2024.10.3 (the releases fixing [CVE-2024-52289][cve])
+replaced the single free-text field with a list of entries, each carrying its
+own match mode. On those versions and later, add it as its own line alongside
+the Operator Mobile entry:
 
 ```text
 tboperator://oauth/callback
@@ -45,7 +48,11 @@ tbtranscription://oauth/callback
 ```
 
 Leave the match mode as **Strict** — a regex entry that accidentally matches
-more than intended is an open-redirect risk.
+more than intended is an open-redirect risk, which is precisely what the CVE
+covered. On an earlier 2024.x build there is no match mode to set, and you
+should upgrade: before those releases every entry was treated as a regex.
+
+[cve]: https://docs.goauthentik.io/security/cves/CVE-2024-52289/
 
 ## Troubleshooting
 

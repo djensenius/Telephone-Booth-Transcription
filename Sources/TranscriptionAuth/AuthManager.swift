@@ -326,8 +326,10 @@ public final class AuthManager {
         if let coalesced = await refreshCoordinator.acquireOrWait() { return coalesced }
         guard let refreshToken = getKeychainItem(account: "oidc_refresh_token") else {
             logger.warning("refreshSession: no refresh token")
-            await refreshCoordinator.complete(.rejected)
+            // Clear before waking waiters: a coalesced caller resuming with
+            // `.rejected` must not still observe a live-looking session.
             signOut()
+            await refreshCoordinator.complete(.rejected)
             return .rejected
         }
         do {
@@ -345,8 +347,8 @@ public final class AuthManager {
             return .refreshed
         } catch AuthError.refreshTokenInvalid(let reason) {
             logger.error("Refresh token rejected — signing out: \(reason, privacy: .private)")
-            await refreshCoordinator.complete(.rejected)
             signOut()
+            await refreshCoordinator.complete(.rejected)
             return .rejected
         } catch {
             logger.warning("Refresh failed transiently: \(error.localizedDescription, privacy: .private)")
@@ -392,6 +394,38 @@ public final class AuthManager {
         return try JSONDecoder().decode(OIDCTokens.self, from: data)
     }
 
+    /// RFC 6749 §5.2 error codes that prove the refresh token itself is no
+    /// longer usable. Anything else — including a 4xx that merely reflects
+    /// throttling or a misrouted request — leaves the session intact.
+    nonisolated static let fatalTokenErrors: Set<String> = [
+        "invalid_grant", "invalid_client", "unauthorized_client", "invalid_scope"
+    ]
+
+    /// Extracts the `error` field from an RFC 6749 §5.2 error response.
+    nonisolated static func oauthErrorCode(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object["error"] as? String
+    }
+
+    /// Whether a non-200 token-endpoint response means the refresh token is
+    /// dead (and the user must sign in again) rather than merely unavailable.
+    ///
+    /// Only a definitive OAuth rejection may cost the user their session. A
+    /// blanket 4xx rule would discard a perfectly good refresh token on a 429
+    /// from provider throttling, or on a 4xx synthesised by a proxy sitting in
+    /// front of the provider.
+    nonisolated static func refreshFailureIsFatal(status: Int, body: Data) -> Bool {
+        if let code = oauthErrorCode(from: body) {
+            return fatalTokenErrors.contains(code)
+        }
+        // A bare 400/401 from the token endpoint with no parseable OAuth error
+        // body still means the grant was refused. Treating it as transient
+        // would strand the app retrying a dead token forever.
+        return status == 400 || status == 401
+    }
+
     private func refreshAccessToken(_ refreshToken: String) async throws -> OIDCTokens {
         let params: [(String, String)] = [
             ("grant_type", "refresh_token"),
@@ -410,12 +444,14 @@ public final class AuthManager {
         if http.statusCode == 200 {
             return try JSONDecoder().decode(OIDCTokens.self, from: data)
         }
+
         let body = String(data: data, encoding: .utf8) ?? "unknown"
-        if (400...499).contains(http.statusCode) {
+        if Self.refreshFailureIsFatal(status: http.statusCode, body: data) {
             logger.error("Refresh rejected (\(http.statusCode)): \(body, privacy: .private)")
             throw AuthError.refreshTokenInvalid(body)
         }
-        logger.warning("Refresh failed transiently (\(http.statusCode))")
+
+        logger.warning("Refresh failed transiently (\(http.statusCode)): \(body, privacy: .private)")
         throw AuthError.transientRefreshFailure(URLError(.badServerResponse))
     }
 
