@@ -103,9 +103,11 @@ You'll need:
   machine.
 
 - **All-local mode** — _Settings → Privacy mode → "Switch everything to
-  on-device"_ flips transcription, both translation routes, and moderation to
-  Apple Intelligence in one step, keeping your upstream URLs so you can switch
-  back.
+  on-device"_ switches transcription, both translation routes, and moderation
+  to on-device processing in one step, keeping your upstream URLs so you can
+  switch back. Translation and moderation use Apple Intelligence; transcription
+  does too, unless you'd already selected the legacy Speech Recognizer, which
+  is kept because it is itself local.
 
 ### iOS app
 

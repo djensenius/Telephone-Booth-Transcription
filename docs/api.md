@@ -184,7 +184,7 @@ Every route can run entirely on this machine. _Settings → Privacy mode →
 | Endpoint | On-device engine |
 | --- | --- |
 | `POST /v1/audio/transcriptions` | `SpeechAnalyzer` (Apple Intelligence), or the legacy Speech Recognizer if that was already selected |
-| `POST /v1/audio/translations` | `SpeechAnalyzer` → Foundation Models |
+| `POST /v1/audio/translations` | `SpeechAnalyzer` → Foundation Models, or the legacy Speech Recognizer → Foundation Models if that was already selected |
 | `POST /v1/translations` | Foundation Models |
 | `POST /v1/moderations` | Foundation Models |
 
