@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import NIOCore
 import NIOHTTP1
+import TranscriptionShared
 
 /// Best-effort text translator that uses a chat-completions upstream to
 /// translate input text into English. The translation upstream is the same
@@ -61,12 +62,7 @@ public final class TextTranslator: Sendable {
         }
 
         let systemPrompt = Self.systemPrompt
-        let userPrompt: String
-        if let sourceLanguage, !sourceLanguage.isEmpty {
-            userPrompt = "Source language: \(sourceLanguage)\n<<<TEXT>>>\n\(input)\n<<<END>>>"
-        } else {
-            userPrompt = "<<<TEXT>>>\n\(input)\n<<<END>>>"
-        }
+        let userPrompt = Self.userPrompt(input: input, sourceLanguage: sourceLanguage)
 
         let payload: [String: Any] = [
             "model": model,
@@ -191,4 +187,16 @@ public final class TextTranslator: Sendable {
     detected, or null if unknown"
     }
     """
+
+    /// Frames the caller's text as data between the sentinels, escaping any
+    /// sentinels it already contains. The source-language hint is interpolated
+    /// outside that region, so it is dropped unless it parses as a language
+    /// tag — otherwise it could carry its own instructions into the prompt.
+    static func userPrompt(input: String, sourceLanguage: String?) -> String {
+        let safe = PromptSafety.sanitizeForDelimitedPrompt(input)
+        if let tag = PromptSafety.normalizedLanguageTag(sourceLanguage) {
+            return "Source language: \(tag)\n<<<TEXT>>>\n\(safe)\n<<<END>>>"
+        }
+        return "<<<TEXT>>>\n\(safe)\n<<<END>>>"
+    }
 }
