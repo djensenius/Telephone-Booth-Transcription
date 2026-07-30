@@ -37,7 +37,11 @@ APP_OWNER="Transcriber" # CFBundleName, used to find the macOS window
 DD="/tmp/tbt-dd"
 SHOTS="$ROOT/fastlane/screenshots"
 LOCALE="en-CA"
-TABS=(review status settings requests)
+# iOS only has the two tabs; ContentView.iOSSelection folds the macOS-only
+# `status` and `requests` values into Review, so asking for them there would
+# just capture the same screen three times.
+MAC_TABS=(review status settings requests)
+IOS_TABS=(review settings)
 
 log() { printf '\033[1;35m[shots]\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m[shots] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -83,7 +87,7 @@ capture_sim() {
   IFS=',' read -r -a sizearr <<< "$sizes"
   rm -f "$out/${prefix}_"*.png
   local i=1
-  for tab in "${TABS[@]}"; do
+  for tab in "${IOS_TABS[@]}"; do
     xcrun simctl terminate "$udid" "$APP_ID" >/dev/null 2>&1 || true
     xcrun simctl launch "$udid" "$APP_ID" -uiTestDemoMode YES -uiScreenshotTab "$tab" >/dev/null
     sleep 6
@@ -165,7 +169,7 @@ do_mac() {
   out="$SHOTS/mac/$LOCALE"; mkdir -p "$out"
   rm -f "$out"/mac_*.png
   local i=1
-  for tab in "${TABS[@]}"; do
+  for tab in "${MAC_TABS[@]}"; do
     mac_kill; sleep 1
     open -n "$app" --args -uiTestDemoMode YES -uiScreenshotTab "$tab"
     local wid="" tries=0

@@ -194,12 +194,16 @@ struct ReviewDetailView: View {
     }
 
     /// What a local moderation run should classify: the English the operator
-    /// moderates on. The Operator's translation is the one of record, then a
-    /// locally generated one, and only then the source transcript — which may
-    /// not be English at all, but is better than refusing to classify a message
-    /// nobody has translated yet.
+    /// moderates on. An edited draft wins, because it's what they're about to
+    /// submit and a recommendation describing anything else is misleading. Then
+    /// the Operator's translation, the one of record; then a locally generated
+    /// one; and only then the source transcript — which may not be English at
+    /// all, but is better than refusing to classify a message nobody has
+    /// translated yet.
     private var englishForModeration: String? {
-        let candidate = message.translationText
+        let draft = translationDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate = (draft.isEmpty ? nil : translationDraft)
+            ?? message.translationText
             ?? output?.translation
             ?? message.latestTranscription?.text
         guard let candidate,
