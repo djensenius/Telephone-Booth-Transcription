@@ -113,6 +113,14 @@ public final class OnDeviceReviewPipeline {
 
     // MARK: - Running
 
+    /// False when no local transcriber was injected — the device has no usable
+    /// on-device speech engine for the current locale, so the transcribe
+    /// affordances are hidden. A pipeline can still be worth having in that
+    /// state: Foundation Models can classify text the Operator already holds.
+    public var supportsTranscription: Bool {
+        dispatcher.supportedKinds.contains(.transcription)
+    }
+
     /// False when the device can transcribe but has no language model (Apple
     /// Intelligence disabled or still downloading). `run` would fail; only
     /// `transcribeOnly` is usable, so the UI hides the translate affordance.

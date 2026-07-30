@@ -96,7 +96,7 @@ struct ReviewDetailView: View {
             // The verdict was computed from the draft as it stood. Editing it
             // makes that verdict describe text that no longer exists, so drop
             // it rather than let it sit above the decision buttons.
-            guard let moderatedText, moderatedText != translationDraft else { return }
+            guard let moderatedText, moderatedText != englishForModeration else { return }
             onDevice?.clearModeration(message.id)
             self.moderatedText = nil
         }
@@ -199,9 +199,12 @@ struct ReviewDetailView: View {
                             )
                             // The draft is editable while this is suspended, so
                             // a verdict that arrives against text the operator
-                            // has since changed is already stale.
+                            // has since changed is already stale. Compared
+                            // against the candidate rather than the draft,
+                            // which is empty in the Decide state this button
+                            // exists for.
                             if recommendation != nil {
-                                if translationDraft == text {
+                                if englishForModeration == text {
                                     moderatedText = text
                                 } else {
                                     onDevice.clearModeration(message.id)
@@ -576,7 +579,7 @@ struct ReviewDetailView: View {
     /// translations pre-fill a draft.
     @ViewBuilder
     private var onDeviceTranscribeActions: some View {
-        if let onDevice {
+        if let onDevice, onDevice.supportsTranscription {
             let stage = onDevice.stage(for: message.id)
             let running = onDevice.isRunning(message.id)
 

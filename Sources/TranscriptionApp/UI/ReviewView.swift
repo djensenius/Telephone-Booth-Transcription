@@ -107,10 +107,13 @@ struct ReviewView: View {
             if onDevice == nil { onDevice = made }
             return
         }
-        guard existing.supportsTranslation == false else { return }
+        // Either half can be missing — Apple Intelligence turned off, or a
+        // current locale with no speech model — and either can arrive later.
+        guard !(existing.supportsTranscription && existing.supportsTranslation) else { return }
         guard visibleMessageIDs.allSatisfy({ !existing.isRunning($0) }) else { return }
         guard let refreshed = await OnDeviceReviewPipeline.makeAppleIntelligence(),
-              refreshed.supportsTranslation else { return }
+              (refreshed.supportsTranscription && !existing.supportsTranscription)
+                || (refreshed.supportsTranslation && !existing.supportsTranslation) else { return }
         // The probe suspended; re-check that the pipeline it would replace is
         // still the idle one it was chosen for.
         guard onDevice === existing,

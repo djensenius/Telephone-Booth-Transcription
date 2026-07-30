@@ -217,6 +217,28 @@ struct OnDeviceReviewPipelineTests {
 
     @Test func supportsTranslationWhenTheModelIsPresent() {
         #expect(makePipeline().supportsTranslation)
+        #expect(makePipeline().supportsTranscription)
+    }
+
+    /// The mirror case: Foundation Models can be available on a device whose
+    /// current locale has no speech model. Classifying text the Operator
+    /// already holds needs no transcriber at all.
+    @Test func moderationWorksWithoutATranscriber() async {
+        let pipeline = OnDeviceReviewPipeline(
+            dispatcher: InProcessOperatorJobDispatcher(
+                transcriber: nil,
+                translator: StubTranslator(),
+                moderator: StubModerator(),
+                audioFetcher: StubAudioFetcher()
+            ),
+            transcriptionModel: nil
+        )
+
+        #expect(pipeline.supportsTranscription == false)
+        #expect(pipeline.supportsModeration)
+        #expect(await pipeline.moderateOnly("hello", transcript: "bonjour",
+                                            language: "fr", for: "m1") == "block")
+        #expect(pipeline.stage(for: "m1") == .finished)
     }
 
     // MARK: - Failure handling
