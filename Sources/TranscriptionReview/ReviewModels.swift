@@ -95,8 +95,8 @@ public enum AiProvider: Codable, Sendable, Hashable {
         case .unknown(let value):
             let spaced = value.replacingOccurrences(of: "_", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            // A whitespace-only value would otherwise render as an invisible
-            // label; an empty one at least reads as "no engine named".
+            // Empty stays empty rather than becoming invisible whitespace;
+            // it's for the caller to decide how to label an unnamed provider.
             guard let first = spaced.first else { return spaced }
             return first.uppercased() + spaced.dropFirst()
         }
@@ -275,11 +275,11 @@ public struct Moderation: Codable, Sendable, Equatable, Identifiable {
         // A provider the Operator didn't name would otherwise render as nothing
         // at all, leaving the UI with a bare "…: Approve"; say "AI" instead.
         let engine = provider.displayName.isEmpty ? "AI" : provider.displayName
-        guard let model,
-              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let named = model?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !named.isEmpty else {
             return engine
         }
-        return "\(engine) · \(model)"
+        return "\(engine) · \(named)"
     }
 
     /// The highest category score, formatted for display, but only when the
