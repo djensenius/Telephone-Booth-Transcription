@@ -20,8 +20,14 @@ extension OnDeviceReviewPipeline {
     /// still gets the transcription queues. The pipeline reports
     /// `supportsTranslation == false` in that case and the UI hides just the
     /// translate/moderate affordance.
-    static func makeAppleIntelligence(locale: Locale = .current) -> OnDeviceReviewPipeline? {
-        guard OnDeviceCapability.isSpeechTranscriptionAvailable,
+    ///
+    /// The speech probe is **locale-aware**, which is why this is `async`:
+    /// `SpeechTranscriber.isAvailable` is device-wide, but the transcriber
+    /// later rejects a locale with no `SpeechTranscriber` equivalent. Probing
+    /// the device alone would build a pipeline — and show a transcribe button —
+    /// that always fails for messages with no language hint.
+    static func makeAppleIntelligence(locale: Locale = .current) async -> OnDeviceReviewPipeline? {
+        guard await OnDeviceCapability.isSpeechTranscriptionAvailable(for: locale),
               let transcriber = makeTranscriber(locale: locale) else {
             return nil
         }

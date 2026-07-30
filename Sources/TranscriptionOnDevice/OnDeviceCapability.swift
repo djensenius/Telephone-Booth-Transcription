@@ -18,10 +18,33 @@ import Speech
 /// disabled, or not have finished downloading the model.
 public enum OnDeviceCapability {
     /// True when `SpeechTranscriber` can run on this device right now.
+    ///
+    /// Device-wide only: it says nothing about any particular locale. Prefer
+    /// ``isSpeechTranscriptionAvailable(for:)`` when the caller knows which
+    /// locale it will transcribe in, since a device can satisfy this probe and
+    /// still have no `SpeechTranscriber` equivalent for that locale.
     public static var isSpeechTranscriptionAvailable: Bool {
         #if canImport(Speech)
         if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
             return SpeechTranscriber.isAvailable
+        }
+        #endif
+        return false
+    }
+
+    /// True when `SpeechTranscriber` can run on this device **and** supports an
+    /// equivalent of `locale`.
+    ///
+    /// `SpeechTranscriber.supportedLocale(equivalentTo:)` is the same lookup
+    /// `SpeechAnalyzerTranscriber` performs at use time — e.g. `en-CA` resolves
+    /// to `en-US` when only that is installable. Probing it here means a device
+    /// whose locale has no equivalent never gets offered a transcribe button
+    /// that would always fail.
+    public static func isSpeechTranscriptionAvailable(for locale: Locale) async -> Bool {
+        #if canImport(Speech)
+        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
+            guard SpeechTranscriber.isAvailable else { return false }
+            return await SpeechTranscriber.supportedLocale(equivalentTo: locale) != nil
         }
         #endif
         return false
