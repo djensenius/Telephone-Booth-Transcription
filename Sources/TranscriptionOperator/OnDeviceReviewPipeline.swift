@@ -101,6 +101,26 @@ public final class OnDeviceReviewPipeline {
     public private(set) var stages: [String: Stage] = [:]
     public private(set) var outputs: [String: Output] = [:]
 
+    /// Which entry point owns a message's current stage.
+    ///
+    /// A message has one stage, but the UI can offer two independent actions on
+    /// it at once — draft a translation, or just classify the text already
+    /// there. Without this, starting either one puts the *other* button into a
+    /// spinner and shows it the resulting error.
+    public enum Operation: Sendable, Equatable {
+        case transcribe
+        case translate
+        case moderate
+    }
+
+    public private(set) var operations: [String: Operation] = [:]
+
+    /// The operation that produced a message's current stage, or `nil` when it
+    /// is idle.
+    public func operation(for messageID: String) -> Operation? {
+        operations[messageID]
+    }
+
     public init(
         dispatcher: InProcessOperatorJobDispatcher,
         transcriptionModel: String? = nil,
@@ -207,6 +227,7 @@ public final class OnDeviceReviewPipeline {
         _ = beginGeneration(messageID)
         stages[messageID] = nil
         outputs[messageID] = nil
+        operations[messageID] = nil
     }
 
     /// Runs only the transcription stage for `message`, for the "needs
@@ -223,6 +244,7 @@ public final class OnDeviceReviewPipeline {
         guard !isRunning(message.id) else { return nil }
         let generation = beginGeneration(message.id)
         outputs[message.id] = nil
+        operations[message.id] = .transcribe
         stages[message.id] = .fetchingAndTranscribing
 
         let result: (text: String, language: String?, model: String?)
@@ -273,6 +295,7 @@ public final class OnDeviceReviewPipeline {
     ) async -> String? {
         guard !isRunning(messageID) else { return nil }
         let generation = beginGeneration(messageID)
+        operations[messageID] = .moderate
         stages[messageID] = .moderating
 
         let verdict: ModerationVerdict
@@ -309,6 +332,7 @@ public final class OnDeviceReviewPipeline {
         guard !isRunning(message.id) else { return nil }
         let generation = beginGeneration(message.id)
         outputs[message.id] = nil
+        operations[message.id] = .translate
         stages[message.id] = .fetchingAndTranscribing
 
         let transcriptResult: (text: String, language: String?, model: String?)

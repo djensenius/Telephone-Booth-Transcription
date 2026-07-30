@@ -157,7 +157,11 @@ struct ReviewDetailView: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("A recommendation, not a decision — you still approve or reject.")
+            // Only true while the decision is still open; the All filter shows
+            // decided messages, whose recommendation is now just history.
+            Text(message.isReviewable
+                 ? "A recommendation, not a decision — you still approve or reject."
+                 : "A recommendation — the decision was made by a person.")
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
         }
@@ -181,13 +185,20 @@ struct ReviewDetailView: View {
     private var noRecommendationCard: some View {
         if message.isReviewable, let onDevice, onDevice.supportsModeration,
            let text = englishForModeration {
-            let running = onDevice.isRunning(message.id)
+            // `running` drives this card's own spinner; `busy` disables it while
+            // any operation holds the pipeline, since a second one can't start.
+            let busy = onDevice.isRunning(message.id)
+            let running = busy && owns(.moderate)
             VStack(alignment: .leading, spacing: Theme.Spacing.small) {
                 Text("No recommendation yet")
                     .font(Theme.Fonts.bodyLarge)
                     .foregroundStyle(Theme.Colors.textPrimary)
-                caption("The Operator hasn't moderated this message. Apple Intelligence "
-                        + "can weigh in from here — the text never leaves this device.")
+                // Deliberately neutral about *why*: the Operator may never have
+                // been asked, or its moderation may have failed or still be
+                // running. All three land here.
+                caption("The Operator has no recommendation for this message. Apple "
+                        + "Intelligence can weigh in from here — the text never leaves "
+                        + "this device.")
                 HStack {
                     Button {
                         Task {
@@ -222,10 +233,10 @@ struct ReviewDetailView: View {
                         }
                     }
                     .buttonStyle(.tbtGlass)
-                    .disabled(running || isActing)
+                    .disabled(busy || isActing)
                     Spacer()
                 }
-                if case .failed(let reason) = onDevice.stage(for: message.id) {
+                if case .failed(let reason) = onDevice.stage(for: message.id), owns(.moderate) {
                     Text(reason)
                         .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Colors.error)
@@ -279,8 +290,11 @@ struct ReviewDetailView: View {
                 caption("Silent recording — the transcription returned no speech.")
             } else if message.transcriptionIsUnfinished, !message.transcriptionFailed {
                 caption("Transcribing…")
-            } else if let error = message.latestTranscription?.error, message.transcriptionFailed {
-                Text(error)
+            } else if message.transcriptionFailed {
+                // Branch on the failure, not on the error string: it's optional,
+                // and without this a failure that carries no detail would read
+                // as a message nobody has tried yet.
+                Text(message.latestTranscription?.error ?? "Transcription failed.")
                     .font(Theme.Fonts.bodyMedium)
                     .foregroundStyle(Theme.Colors.error)
                     .textSelection(.enabled)
@@ -328,7 +342,9 @@ struct ReviewDetailView: View {
         #if os(macOS)
         return true
         #else
-        return onDevice != nil
+        // A moderation-only pipeline exists but has no transcriber, so its
+        // presence alone doesn't mean there's a button under this footer.
+        return onDevice?.supportsTranscription == true
         #endif
     }
 
@@ -463,9 +479,13 @@ struct ReviewDetailView: View {
     /// still reviews and taps Submit.
     @ViewBuilder
     private var onDeviceTranslateActions: some View {
-        if let onDevice, onDevice.supportsTranslation {
+        // `run` transcribes the audio before it translates, so this needs both
+        // halves: a moderation-only pipeline would offer a button that always
+        // fails at the first stage.
+        if let onDevice, onDevice.supportsTranslation, onDevice.supportsTranscription {
             let stage = onDevice.stage(for: message.id)
-            let running = onDevice.isRunning(message.id)
+            let busy = onDevice.isRunning(message.id)
+            let running = busy && owns(.translate)
 
             VStack(alignment: .leading, spacing: Theme.Spacing.small) {
                 HStack {
@@ -503,11 +523,11 @@ struct ReviewDetailView: View {
                         }
                     }
                     .buttonStyle(.tbtGlass)
-                    .disabled(running || isActing)
+                    .disabled(busy || isActing)
                     Spacer()
                 }
 
-                if case .failed(let reason) = stage {
+                if case .failed(let reason) = stage, owns(.translate) {
                     Text(reason)
                         .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Colors.error)
@@ -581,7 +601,8 @@ struct ReviewDetailView: View {
     private var onDeviceTranscribeActions: some View {
         if let onDevice, onDevice.supportsTranscription {
             let stage = onDevice.stage(for: message.id)
-            let running = onDevice.isRunning(message.id)
+            let busy = onDevice.isRunning(message.id)
+            let running = busy && owns(.transcribe)
 
             HStack {
                 Button {
@@ -597,11 +618,11 @@ struct ReviewDetailView: View {
                     }
                 }
                 .buttonStyle(.tbtGlass)
-                .disabled(running || isActing)
+                .disabled(busy || isActing)
                 Spacer()
             }
 
-            if case .failed(let reason) = stage {
+            if case .failed(let reason) = stage, owns(.transcribe) {
                 Text(reason)
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Colors.error)
@@ -668,6 +689,14 @@ struct ReviewDetailView: View {
         } else {
             Label(title, systemImage: systemImage)
         }
+    }
+
+    /// True when the pipeline's current stage for this message belongs to
+    /// `operation`. Three cards can offer an on-device action on the same
+    /// message, but the pipeline runs one at a time — without this each of them
+    /// would show the others' spinner and error as its own.
+    private func owns(_ operation: OnDeviceReviewPipeline.Operation) -> Bool {
+        onDevice?.operation(for: message.id) == operation
     }
 
     private func stageLabel(_ stage: OnDeviceReviewPipeline.Stage) -> String {

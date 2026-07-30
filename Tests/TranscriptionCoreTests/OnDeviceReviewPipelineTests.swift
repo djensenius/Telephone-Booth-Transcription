@@ -541,4 +541,39 @@ struct OnDeviceReviewPipelineTests {
         pipeline.clearModeration("m1")
         #expect(pipeline.outputs["m1"] == nil)
     }
+
+    // MARK: - Operation ownership
+
+    /// Three cards can offer an on-device action on the same message, and they
+    /// share one stage — so each needs to know whether the stage is its own.
+    @Test("each entry point records itself as the owner of the stage")
+    func operationOwnership() async {
+        let pipeline = makePipeline()
+        #expect(pipeline.operation(for: "m1") == nil)
+
+        await pipeline.transcribeOnly(for: input())
+        #expect(pipeline.operation(for: "m1") == .transcribe)
+
+        await pipeline.moderateOnly("hello", transcript: "bonjour", language: "fr", for: "m1")
+        #expect(pipeline.operation(for: "m1") == .moderate)
+
+        await pipeline.run(for: input())
+        #expect(pipeline.operation(for: "m1") == .translate)
+
+        pipeline.reset("m1")
+        #expect(pipeline.operation(for: "m1") == nil)
+    }
+
+    @Test("the owner is set before the work suspends, so an in-flight stage is attributable")
+    func operationOwnershipWhileRunning() async {
+        let gate = Gate()
+        let pipeline = makePipeline(transcriber: StubTranscriber(gate: gate))
+        let task = Task { await pipeline.transcribeOnly(for: input()) }
+        while !pipeline.isRunning("m1") { await Task.yield() }
+
+        #expect(pipeline.operation(for: "m1") == .transcribe)
+
+        await gate.open()
+        _ = await task.value
+    }
 }

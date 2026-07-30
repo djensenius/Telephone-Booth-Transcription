@@ -171,11 +171,16 @@ public final class ReviewStore {
         }
 
         /// Shown when the filter's list is empty.
+        ///
+        /// Phrased as an absence of pending work rather than a claim about
+        /// every message: a decided message can have no transcript, and a
+        /// silent recording deliberately never gets translated, so "every
+        /// message has a transcript" would be false while this filter is empty.
         public var emptyText: String {
             switch self {
             case .needsAttention: return "Nothing needs you right now."
-            case .transcribe: return "Every message has a transcript."
-            case .translate: return "Every transcript is translated."
+            case .transcribe: return "Nothing is waiting to be transcribed."
+            case .translate: return "Nothing is waiting to be translated."
             case .decide: return "No message is ready for a decision."
             case .all: return "No messages yet."
             }
