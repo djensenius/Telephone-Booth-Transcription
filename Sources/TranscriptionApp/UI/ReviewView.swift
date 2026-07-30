@@ -38,6 +38,11 @@ struct ReviewView: View {
             store.transcriptionRerunner = host
             if auth.isSignedIn {
                 await store.poll()
+            } else {
+                // This view outlives the session, so locally generated
+                // transcripts would otherwise survive into the next sign-in.
+                // Pruning everything also supersedes any run still in flight.
+                onDevice?.prune(keeping: [])
             }
         }
         .onAppear { refreshOnDeviceCapability() }
@@ -368,9 +373,9 @@ private struct ReviewRow: View {
     }
 
     /// iOS has no Operator worker, but it can still transcribe locally with
-    /// Apple Intelligence. The transcript stays on the device: the Operator
-    /// exposes no operator-authenticated endpoint that accepts transcript text,
-    /// so there is nothing to submit to yet.
+    /// Apple Intelligence. The transcript stays on the device: this client
+    /// doesn't yet submit it to the Operator's transcript endpoint, tracked
+    /// by #68.
     @ViewBuilder
     private var onDeviceTranscribeActions: some View {
         if let onDevice {
