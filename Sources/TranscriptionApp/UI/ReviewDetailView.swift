@@ -328,6 +328,27 @@ struct ReviewDetailView: View {
         return moderatedText == operatorEnglish
     }
 
+    /// Retires the local work behind a translation that has just landed on the
+    /// Operator.
+    ///
+    /// The verdict is the exception: it was computed for exactly `submitted`,
+    /// which is now the Operator's translation of record, so it has become
+    /// submittable rather than stale. Throwing it away here would make the
+    /// card's "submit the translation and the recommendation can go with it"
+    /// promise unkeepable — the operator would have to recompute a verdict they
+    /// are already looking at. Anything else the pipeline produced is spent.
+    private func retireLocalWork(after submitted: String) {
+        guard moderatedText == submitted, output?.recommendation != nil else {
+            onDevice?.reset(message.id)
+            drafts.clear(message.id)
+            return
+        }
+        // Only the draft goes. `englishForModeration` then falls through to the
+        // Operator's translation, which is this same text, so the verdict stays
+        // matched rather than being dropped as stale.
+        translationDraft = ""
+    }
+
     /// Posts the on-device verdict to the Operator and, on success, clears the
     /// local result so it can't be submitted twice.
     private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
@@ -549,17 +570,13 @@ struct ReviewDetailView: View {
                     let text = translationDraft
                     Task {
                         let submitted = await store.submitTranslation(message, text: text)
-                        // Only on success: the message moves to Decide, where
-                        // the local verdict would be the only recommendation on
-                        // screen despite having been computed for the
-                        // pipeline's own translation rather than the text the
-                        // operator submitted. A failure has to keep the draft
-                        // and its output, or a transient error would discard
-                        // the work being retried.
-                        if submitted {
-                            onDevice?.reset(message.id)
-                            drafts.clear(message.id)
-                        }
+                        // Only on success: the message moves to Decide, where a
+                        // local verdict computed for the pipeline's own
+                        // translation rather than the text the operator
+                        // submitted would be the only recommendation on screen.
+                        // A failure has to keep the draft and its output, or a
+                        // transient error would discard the work being retried.
+                        if submitted { retireLocalWork(after: text) }
                     }
                 } label: {
                     actionLabel("Submit translation", systemImage: "arrow.up.circle.fill")
@@ -751,7 +768,12 @@ struct ReviewDetailView: View {
             language: output.language,
             model: output.model
         )
-        if submitted { onDevice.reset(message.id) }
+        if submitted {
+            onDevice.reset(message.id)
+            // The queue's snapshot rule leaves local work alone while this
+            // action is in flight, so clear the drafts here instead.
+            drafts.clear(message.id)
+        }
     }
 
     // MARK: - Building blocks

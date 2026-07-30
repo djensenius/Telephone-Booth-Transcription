@@ -403,6 +403,11 @@ public final class ReviewStore {
                     || updated.transcriptionId == base.latestTranscription?.id else {
                 return true
             }
+            // Nor should a slow round-trip displace a newer verdict a poll
+            // brought in from another operator while this one was in flight.
+            if let current = base.latestModeration, current.createdAt > updated.createdAt {
+                return true
+            }
             apply(base.replacingLatestModeration(updated))
             return true
         } catch {
