@@ -43,6 +43,14 @@ struct ReviewMessageRow: View {
                         Text("\(advice.source): \(advice.recommendation.displayName)")
                             .font(Theme.Fonts.caption)
                             .foregroundStyle(advice.tint)
+                    } else if moderationIsPending {
+                        Label("Moderating…", systemImage: "hourglass")
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    } else if moderationFailed {
+                        Label("Moderation failed", systemImage: "exclamationmark.triangle.fill")
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.error)
                     }
                     // Only worth a chip when the preview isn't already saying
                     // it: a failed transcription leaves no text, so the preview
@@ -71,6 +79,18 @@ struct ReviewMessageRow: View {
         AIRecommendation(message: message)
     }
 
+    /// The Operator is still moderating this message. Surfaced on the row so a
+    /// verdict that's still coming reads differently from one that never ran.
+    private var moderationIsPending: Bool {
+        message.latestModeration?.isPending ?? false
+    }
+
+    /// The Operator's moderation finished in failure. Surfaced so a failed step
+    /// doesn't look identical to one that was never asked for.
+    private var moderationFailed: Bool {
+        message.latestModeration?.didFail ?? false
+    }
+
     /// English first — that's what the operator moderates on. Falls back to the
     /// source transcript, then to an explanation of why there's no text.
     private var preview: String {
@@ -95,6 +115,8 @@ struct ReviewMessageRow: View {
     private var accessibilityLabel: String {
         var parts = [message.nextStep?.displayName ?? message.status.displayName]
         if let advice { parts.append("\(advice.source) recommends \(advice.recommendation.displayName)") }
+        else if moderationIsPending { parts.append("Moderating") }
+        else if moderationFailed { parts.append("Moderation failed") }
         // The visible failure chips carry the distinction the queue is built
         // around — a failed step needs a retry, an unstarted one needs a run —
         // so they belong in the label rather than being lost to `.combine`.
@@ -124,6 +146,8 @@ struct AIRecommendation {
     /// Which engine produced it, shown so the operator can weight it.
     var source: String
     var flagged: Bool
+    /// The highest category score, formatted, shown only when `flagged`.
+    var flaggedScoreLabel: String?
 
     /// The Operator's verdict is the single source of truth: AI is computed
     /// locally but its result is stored on the server, and every device reads
@@ -136,8 +160,9 @@ struct AIRecommendation {
               let recommendation = moderation.recommendation else { return nil }
         self.recommendation = recommendation
         self.reason = moderation.reasonSummary
-        self.source = "AI"
+        self.source = moderation.sourceLabel
         self.flagged = moderation.flagged ?? false
+        self.flaggedScoreLabel = moderation.flaggedScoreLabel
     }
 
     /// Builds the display holder for a verdict computed on this device that has
@@ -154,6 +179,9 @@ struct AIRecommendation {
         self.reason = nil
         self.source = "On device"
         self.flagged = localOutput.flagged ?? false
+        self.flaggedScoreLabel = flagged
+            ? localOutput.maxScore?.formatted(.percent.precision(.fractionLength(0)))
+            : nil
     }
 
     var tint: Color {

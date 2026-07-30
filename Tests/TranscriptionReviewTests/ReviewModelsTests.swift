@@ -202,6 +202,88 @@ struct ReviewModelsTests {
         let translated = message.replacingLatestTranscription(old.copy(id: old.id))
         #expect(translated.latestModeration == message.latestModeration)
     }
+
+    // MARK: - Moderation state
+
+    private func decodeModeration(
+        status: String,
+        flagged: String = "null",
+        recommendation: String = "null",
+        maxScore: String = "null",
+        model: String = "\"omni-moderation\"",
+        error: String = "null"
+    ) throws -> Moderation {
+        let json = """
+        {"items":[{
+          "id":"m","status":"pending","questionId":null,"notes":null,
+          "createdAt":"2026-01-02T03:04:05.123Z","receivedAt":null,
+          "audio":{"url":"https://example.com/a.flac","sha256":"abc","durationMs":1},
+          "latestTranscription":null,
+          "latestModeration":{
+            "id":"m1","messageId":"x","transcriptionId":"t1","provider":"openai",
+            "model":\(model),"status":"\(status)","flagged":\(flagged),
+            "recommendation":\(recommendation),"maxScore":\(maxScore),
+            "categories":null,"reasonSummary":null,"latencyMs":null,
+            "error":\(error),"createdAt":"2026-01-02T03:04:09Z","completedAt":null
+          }
+        }]}
+        """
+        let message = try #require(try decodeMessageList(json).items.first)
+        return try #require(message.latestModeration)
+    }
+
+    @Test("a pending moderation reports pending, not failed")
+    func moderationPending() throws {
+        let moderation = try decodeModeration(status: "pending")
+        #expect(moderation.isPending)
+        #expect(!moderation.didFail)
+    }
+
+    @Test("a failed moderation reports failed and carries its error")
+    func moderationFailed() throws {
+        let moderation = try decodeModeration(status: "failed", error: "\"upstream 500\"")
+        #expect(moderation.didFail)
+        #expect(!moderation.isPending)
+        #expect(moderation.error == "upstream 500")
+    }
+
+    @Test("a succeeded moderation is neither pending nor failed")
+    func moderationSucceeded() throws {
+        let moderation = try decodeModeration(status: "succeeded", recommendation: "\"approve\"")
+        #expect(!moderation.isPending)
+        #expect(!moderation.didFail)
+    }
+
+    @Test("the source label names the provider and model")
+    func moderationSourceLabel() throws {
+        let withModel = try decodeModeration(status: "succeeded")
+        #expect(withModel.sourceLabel == "OpenAI · omni-moderation")
+
+        // No model, or a blank one, falls back to just the provider.
+        let noModel = try decodeModeration(status: "succeeded", model: "null")
+        #expect(noModel.sourceLabel == "OpenAI")
+        let blankModel = try decodeModeration(status: "succeeded", model: "\"  \"")
+        #expect(blankModel.sourceLabel == "OpenAI")
+    }
+
+    @Test("the flagged score label only appears when flagged")
+    func moderationFlaggedScoreLabel() throws {
+        // Flagged with a score: a label is produced.
+        let flagged = try decodeModeration(
+            status: "succeeded", flagged: "true", recommendation: "\"reject\"", maxScore: "0.87"
+        )
+        #expect(flagged.flaggedScoreLabel != nil)
+
+        // Not flagged: no label, even with a score present.
+        let notFlagged = try decodeModeration(
+            status: "succeeded", flagged: "false", maxScore: "0.87"
+        )
+        #expect(notFlagged.flaggedScoreLabel == nil)
+
+        // Flagged but no score: nothing to show.
+        let noScore = try decodeModeration(status: "succeeded", flagged: "true")
+        #expect(noScore.flaggedScoreLabel == nil)
+    }
 }
 
 private extension Transcription {
