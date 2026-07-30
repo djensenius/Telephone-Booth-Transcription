@@ -278,6 +278,105 @@ struct ReviewClientTests {
         #expect(shown?.recommendation == .reject)
     }
 
+    @Test("submitTranscriptAndTranslation posts the transcript, then the translation")
+    @MainActor
+    func combinedSubmitPostsBoth() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+
+        // The Operator attaches a translation to the row the transcript created,
+        // so both responses have to come off the same transcription — otherwise
+        // the fake would answer the second call with the superseded row.
+        let submitted = target.latestTranscription!.retranscribed("bonjour")
+        client.transcriptionResult = .success(submitted)
+        client.translationResult = .success(submitted.translated("hello"))
+        let ok = await store.submitTranscriptAndTranslation(
+            target, transcript: "bonjour", language: "fr",
+            model: "apple-speech-analyzer", translation: "hello"
+        )
+
+        #expect(ok)
+        #expect(store.actionError == nil)
+        #expect(store.isActing(on: target.id) == false)
+        #expect(client.lastTranscriptionSubmission?.text == "bonjour")
+        #expect(client.lastTranscriptionSubmission?.language == "fr")
+        #expect(client.translationSubmissions == ["hello"])
+        let final = store.messages.first(where: { $0.id == target.id })
+        #expect(final?.latestTranscription?.text == "bonjour")
+        #expect(final?.translationText == "hello")
+    }
+
+    /// The Operator attaches a translation to the message's latest transcription,
+    /// so a transcript that never landed leaves nothing to translate — the
+    /// second POST must not be attempted.
+    @Test("a failed transcript skips the translation in the combined submit")
+    @MainActor
+    func combinedSubmitStopsWhenTranscriptFails() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+
+        client.transcriptionResult = .failure(.api(status: 404, code: "not_found"))
+        let ok = await store.submitTranscriptAndTranslation(
+            target, transcript: "bonjour", translation: "hello"
+        )
+
+        #expect(ok == false)
+        #expect(store.actionError != nil)
+        #expect(client.translationSubmissions.isEmpty)
+    }
+
+    /// The transcript already landed, so the caller must be told the whole
+    /// action failed (to keep the drafts) while the queue reflects the
+    /// transcript that did go through — leaving a plain translation retry.
+    @Test("a failed translation in the combined submit still submitted the transcript")
+    @MainActor
+    func combinedSubmitKeepsTranscriptWhenTranslationFails() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+
+        client.transcriptionResult = .success(target.latestTranscription!.retranscribed("bonjour"))
+        client.translationResult = .failure(OperatorReviewError.invalidResponse)
+        let ok = await store.submitTranscriptAndTranslation(
+            target, transcript: "bonjour", translation: "hello"
+        )
+
+        #expect(ok == false)
+        #expect(store.actionError != nil)
+        #expect(client.lastTranscriptionSubmission?.text == "bonjour")
+        #expect(client.translationSubmissions == ["hello"])
+        #expect(store.messages.first(where: { $0.id == target.id })?
+            .latestTranscription?.text == "bonjour")
+    }
+
+    /// The translation route attaches to whatever transcription is latest, so a
+    /// transcript that landed in the gap between the two writes would otherwise
+    /// receive a translation of text it never held.
+    @Test("a transcript superseded between the two writes blocks the translation")
+    @MainActor
+    func combinedSubmitStopsWhenTranscriptIsSuperseded() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+
+        // The Operator answers with a different transcript than the one posted:
+        // something else landed first and this row is not what was submitted.
+        client.transcriptionResult = .success(target.latestTranscription!.retranscribed("salut"))
+        let ok = await store.submitTranscriptAndTranslation(
+            target, transcript: "bonjour", translation: "hello"
+        )
+
+        #expect(ok == false)
+        #expect(store.actionError != nil)
+        #expect(client.translationSubmissions.isEmpty)
+    }
+
     @Test("a failed decision surfaces an actionError and clears the pending flag")
     @MainActor
     func decideFailureSurfacesError() async {
@@ -305,6 +404,7 @@ struct ReviewClientTests {
         private(set) var lastModerationSubmission: (
             transcriptionId: String?, flagged: Bool, recommendation: String, maxScore: Double, model: String?
         )?
+        private(set) var translationSubmissions: [String] = []
         private(set) var fetchCount = 0
         private var submittedTranscription: Transcription?
 
@@ -350,7 +450,8 @@ struct ReviewClientTests {
             translatedText: String,
             translatedLanguage: String?
         ) async throws -> Transcription {
-            try translationResult.get()
+            translationSubmissions.append(translatedText)
+            return try translationResult.get()
         }
 
         func submitModeration(

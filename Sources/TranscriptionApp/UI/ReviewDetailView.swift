@@ -42,6 +42,27 @@ struct ReviewDetailView: View {
         AIRecommendation(message: message)
     }
 
+    /// True when this device can run the whole review locally in one pass —
+    /// transcribe, translate, and moderate. When it can, an operator shouldn't
+    /// have to submit a transcript before the translation and recommendation can
+    /// run (issue #84); one button drafts all three.
+    private var supportsLocalFullPipeline: Bool {
+        onDevice?.supportsTranscription == true && onDevice?.supportsTranslation == true
+    }
+
+    /// A complete on-device draft — transcript, translation, and recommendation —
+    /// produced for a message the Operator still holds no transcript for. This
+    /// is what the one-press "Draft with Apple Intelligence" run leaves behind:
+    /// everything is ready to review, and a single Submit posts the transcript
+    /// and the translation together.
+    private var localReviewDraft: OnDeviceReviewPipeline.Output? {
+        guard message.needsTranscriptionWork,
+              let output,
+              !output.transcript.isEmpty,
+              output.translation != nil else { return nil }
+        return output
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.large) {
@@ -515,17 +536,25 @@ struct ReviewDetailView: View {
                 } else {
                     bodyText(output.transcript)
                 }
-                caption("Review it, then submit it to the Operator — nothing is sent "
-                        + "until you do.")
-                HStack {
-                    Spacer()
-                    Button {
-                        Task { await submitOnDeviceTranscript(output, using: onDevice) }
-                    } label: {
-                        actionLabel("Submit transcript", systemImage: "arrow.up.circle.fill")
+                if localReviewDraft != nil {
+                    // The transcript and the translation it produced are
+                    // submitted together from the translation card below, so
+                    // there is no separate transcript submit here.
+                    caption("Translated and checked below — review the translation, "
+                            + "then submit both in one step.")
+                } else {
+                    caption("Review it, then submit it to the Operator — nothing is sent "
+                            + "until you do.")
+                    HStack {
+                        Spacer()
+                        Button {
+                            Task { await submitOnDeviceTranscript(output, using: onDevice) }
+                        } label: {
+                            actionLabel("Submit transcript", systemImage: "arrow.up.circle.fill")
+                        }
+                        .buttonStyle(.tbtGlass)
+                        .disabled(onDevice.isRunning(message.id) || isActing)
                     }
-                    .buttonStyle(.tbtGlass)
-                    .disabled(onDevice.isRunning(message.id) || isActing)
                 }
             }
 
@@ -576,7 +605,19 @@ struct ReviewDetailView: View {
             Spacer()
         }
         #else
-        onDeviceTranscribeActions
+        if supportsLocalFullPipeline && message.needsTranscriptionWork {
+            // One press runs the whole review locally — transcribe, translate,
+            // and moderate — so the operator never has to submit a transcript
+            // just to unlock translation and a recommendation (issue #84).
+            if output == nil {
+                caption("Apple Intelligence can transcribe, translate, and check this "
+                        + "message in one pass — the audio never leaves this device. "
+                        + "Review the draft, then submit.")
+            }
+            onDeviceTranslateActions
+        } else {
+            onDeviceTranscribeActions
+        }
         #endif
 
         if message.latestTranscription != nil {
@@ -612,6 +653,10 @@ struct ReviewDetailView: View {
                 }
             } else if message.translationIsPending {
                 caption("Translating…")
+            } else if localReviewDraft != nil {
+                // A full on-device draft is ready below; the "waiting on a
+                // transcript" copy would be wrong here.
+                EmptyView()
             } else if !message.needsTranslation {
                 // No transcript to translate yet: say so rather than render an
                 // empty card.
@@ -623,8 +668,27 @@ struct ReviewDetailView: View {
             if message.needsTranslation {
                 onDeviceTranslateActions
                 translationEditor
+            } else if localReviewDraft != nil {
+                localReviewDraftEditor
             }
         }
+    }
+
+    /// The editor for a translation the operator has yet to submit, whether it
+    /// came from the Operator's queue or was drafted on this device.
+    private var translationTextField: some View {
+        TextField(
+            "English translation",
+            text: Binding(get: { translationDraft }, set: { translationDraft = $0 }),
+            axis: .vertical
+        )
+            .textFieldStyle(.plain)
+            .lineLimit(3...12)
+            .font(Theme.Fonts.bodyLarge)
+            .padding(Theme.Spacing.small)
+            .background(Theme.Colors.secondaryBackground.opacity(0.6),
+                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+            .disabled(isActing)
     }
 
     @ViewBuilder
@@ -634,18 +698,7 @@ struct ReviewDetailView: View {
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
-            TextField(
-                "English translation",
-                text: Binding(get: { translationDraft }, set: { translationDraft = $0 }),
-                axis: .vertical
-            )
-                .textFieldStyle(.plain)
-                .lineLimit(3...12)
-                .font(Theme.Fonts.bodyLarge)
-                .padding(Theme.Spacing.small)
-                .background(Theme.Colors.secondaryBackground.opacity(0.6),
-                            in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-                .disabled(isActing)
+            translationTextField
 
             HStack {
                 Spacer()
@@ -671,6 +724,57 @@ struct ReviewDetailView: View {
         }
     }
 
+    /// The editor for a fully local draft, whose single Submit posts the
+    /// transcript and the translation together — so an operator who ran the
+    /// whole review on-device never has to submit a transcript first (issue
+    /// #84).
+    @ViewBuilder
+    private var localReviewDraftEditor: some View {
+        if let draft = localReviewDraft {
+            VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                Text("Your translation")
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+
+                translationTextField
+
+                caption("Drafted on this device from the transcript above — no audio or "
+                        + "text was sent to an AI service. Submitting posts the transcript "
+                        + "and this translation together.")
+
+                HStack {
+                    Spacer()
+                    Button {
+                        let text = translationDraft
+                        Task {
+                            let submitted = await store.submitTranscriptAndTranslation(
+                                message,
+                                transcript: draft.transcript,
+                                language: draft.language,
+                                model: draft.model,
+                                translation: text
+                            )
+                            // Keep the drafts on any failure so the operator can
+                            // retry: the transcript may have landed while the
+                            // translation didn't, and the translation card will
+                            // then offer a plain "Submit translation" retry.
+                            if submitted {
+                                onDevice?.reset(message.id)
+                                drafts.clear(message.id)
+                            }
+                        }
+                    } label: {
+                        actionLabel("Submit", systemImage: "arrow.up.circle.fill")
+                    }
+                    .buttonStyle(.tbtGlass)
+                    .disabled(isActing || onDevice?.isRunning(message.id) == true
+                              || translationDraft.trimmingCharacters(
+                                in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
     /// Apple Intelligence entry point: re-transcribes the audio on this device,
     /// translates it, and pre-fills the draft. Never submits — the operator
     /// still reviews and taps Submit.
@@ -687,37 +791,7 @@ struct ReviewDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.small) {
                 HStack {
                     Button {
-                        Task {
-                            let draftBefore = translationDraft
-                            let translation = await onDevice.run(for: message)
-                            // `reset` can land between `run` returning and this
-                            // continuation resuming, so re-check against the
-                            // pipeline's current output rather than trusting the
-                            // returned value — otherwise a cleared draft gets
-                            // repopulated with a superseded translation.
-                            guard let translation,
-                                  onDevice.outputs[message.id]?.translation == translation
-                            else { return }
-
-                            // The editor stays enabled while this runs, so
-                            // anything typed meanwhile is the operator's own
-                            // work and outranks the generated text. The verdict
-                            // describes the translation they didn't take, so it
-                            // goes rather than sitting above their draft.
-                            guard translationDraft == draftBefore else {
-                                onDevice.clearModeration(message.id)
-                                return
-                            }
-
-                            translationDraft = translation
-                            // `run` moderates the translation it just produced,
-                            // so the draft starts out as the moderated text —
-                            // without this, editing it would leave that verdict
-                            // on screen.
-                            if onDevice.outputs[message.id]?.recommendation != nil {
-                                moderatedText = translation
-                            }
-                        }
+                        Task { await draftEverything(using: onDevice) }
                     } label: {
                         if running {
                             HStack(spacing: Theme.Spacing.small) {
@@ -750,6 +824,40 @@ struct ReviewDetailView: View {
                             + "service. Review the draft before submitting.")
                 }
             }
+        }
+    }
+
+    /// Runs the whole local pipeline for `message` — transcribe, translate, and
+    /// moderate — and pre-fills the translation draft. Never submits: the
+    /// operator still reviews and taps Submit. Shared by the translation step
+    /// and the transcription step, so a message with no transcript yet can be
+    /// drafted end to end in one press (issue #84).
+    private func draftEverything(using onDevice: OnDeviceReviewPipeline) async {
+        let draftBefore = translationDraft
+        let translation = await onDevice.run(for: message)
+        // `reset` can land between `run` returning and this continuation
+        // resuming, so re-check against the pipeline's current output rather
+        // than trusting the returned value — otherwise a cleared draft gets
+        // repopulated with a superseded translation.
+        guard let translation,
+              onDevice.outputs[message.id]?.translation == translation
+        else { return }
+
+        // The editor stays enabled while this runs, so anything typed meanwhile
+        // is the operator's own work and outranks the generated text. The
+        // verdict describes the translation they didn't take, so it goes rather
+        // than sitting above their draft.
+        guard translationDraft == draftBefore else {
+            onDevice.clearModeration(message.id)
+            return
+        }
+
+        translationDraft = translation
+        // `run` moderates the translation it just produced, so the draft starts
+        // out as the moderated text — without this, editing it would leave that
+        // verdict on screen.
+        if onDevice.outputs[message.id]?.recommendation != nil {
+            moderatedText = translation
         }
     }
 

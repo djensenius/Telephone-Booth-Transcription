@@ -119,20 +119,28 @@ rather than over HTTP:
 
 - **Review queue** — polls the Operator for messages needing transcription,
   translation, or a moderation decision.
-- **On-device pipeline** — _Transcribe & translate on device_ (in the "Needs
-  translation" bucket) downloads the message audio, verifies its SHA-256,
-  re-transcribes it with `SpeechAnalyzer`, translates the transcript with
-  FoundationModels, and computes a local moderation verdict. The "Needs
-  transcription" buckets offer a transcribe-only version of the same run.
-- **Human in the loop** — a translation result pre-fills the draft, and a local
+- **On-device pipeline** — _Draft with Apple Intelligence_ downloads the message
+  audio, verifies its SHA-256, re-transcribes it with `SpeechAnalyzer`,
+  translates the transcript with FoundationModels, and computes a local
+  moderation verdict. In the "Needs transcription" buckets a single press runs
+  the whole chain — transcribe, translate, and moderate — so the operator no
+  longer has to submit a transcript just to unlock translation and a
+  recommendation. A transcribe-only version is offered on devices that can't
+  translate locally.
+- **Human in the loop** — the run pre-fills the translation draft, and the local
   transcript is shown before it goes anywhere. Nothing is submitted
   automatically; the operator reviews and taps Submit.
-- **Transcript submission** — _Submit transcript_ posts a locally produced
-  transcript to the Operator's operator-authenticated
+- **Review submission** — a locally drafted review is submitted with one
+  _Submit_ that posts the transcript to the Operator's operator-authenticated
   `POST /v1/messages/{id}/transcription` ([Operator #122][op122]), attributed to
-  the `apple-speech-analyzer` engine. The Operator then translates and moderates
-  it server-side. macOS is unaffected — it posts transcripts back through its
-  worker as before.
+  the `apple-speech-analyzer` engine, and then — once that row has landed, since
+  the Operator attaches a translation to the message's latest transcription —
+  the translation drafted from it to `POST /v1/messages/{id}/translation`. The
+  two writes are not atomic; if the second fails the message keeps the submitted
+  transcript and the translation card offers a plain retry. (When only a
+  transcript is produced, _Submit transcript_ posts it alone and the Operator
+  translates and moderates it server-side.) macOS is unaffected — it posts
+  transcripts back through its worker as before.
 
 [op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
 
