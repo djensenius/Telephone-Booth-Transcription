@@ -67,6 +67,12 @@ actor DemoOperatorReviewClient: OperatorReviewClient {
             minutesAgo: 0
         )
         raw[index]["latestTranscription"] = transcription
+        // The verdict on record was computed for the replaced text, so it no
+        // longer applies. Dropping it mirrors the Operator, which re-runs
+        // moderation over a submitted transcript; leaving it would let the
+        // refresh that follows this call restore a stale recommendation against
+        // the new transcript.
+        raw[index]["latestModeration"] = NSNull()
         return try decode(Transcription.self, from: transcription)
     }
 

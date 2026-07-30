@@ -26,7 +26,23 @@ struct ReviewDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.large) {
                 header
-                if let advice { recommendationCard(advice) }
+                // Actions all live on this screen, so their failures do too —
+                // on iOS this is a pushed view, and an error reported back in
+                // the list would be hidden behind it.
+                if let actionError = store.actionError {
+                    Label(actionError, systemImage: "xmark.octagon.fill")
+                        .font(Theme.Fonts.bodyMedium)
+                        .foregroundStyle(Theme.Colors.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Theme.Spacing.medium)
+                        .background(Theme.Colors.error.opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                }
+                if let advice {
+                    recommendationCard(advice)
+                } else {
+                    noRecommendationCard
+                }
                 transcriptCard
                 translationCard
                 if message.awaitingModerationDecision { decisionCard }
@@ -35,11 +51,19 @@ struct ReviewDetailView: View {
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .onAppear {
+            // The pipeline outlives this view, so a translation generated
+            // before a navigation pop would otherwise be stranded: the output
+            // survives, but the draft it was copied into does not.
+            if translationDraft.isEmpty, let translation = output?.translation {
+                translationDraft = translation
+            }
+        }
         .onChange(of: message.latestTranscription?.id) {
             // A new transcript replaced the one being translated; drop the draft
-            // so it can't be submitted against the wrong source text.
+            // so it can't be submitted against the wrong source text. The
+            // pipeline output is reset by the queue, which sees every row.
             translationDraft = ""
-            onDevice?.reset(message.id)
         }
     }
 
@@ -110,6 +134,70 @@ struct ReviewDetailView: View {
             RoundedRectangle(cornerRadius: Theme.cornerRadius)
                 .stroke(advice.tint.opacity(0.35), lineWidth: 1)
         )
+    }
+
+    /// Shown when nobody has an opinion yet. The Operator's verdict is the one
+    /// of record, but it can be missing — moderation was never asked for, or it
+    /// failed — and until now the local fallback was only reachable through the
+    /// translate button, which is hidden once a message is translated. That left
+    /// exactly the Decide state, where the recommendation matters most, with no
+    /// way to get one.
+    @ViewBuilder
+    private var noRecommendationCard: some View {
+        if message.isReviewable, let onDevice, onDevice.supportsModeration,
+           let text = englishForModeration {
+            let running = onDevice.isRunning(message.id)
+            VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                Text("No recommendation yet")
+                    .font(Theme.Fonts.bodyLarge)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                caption("The Operator hasn't moderated this message. Apple Intelligence "
+                        + "can weigh in from here — the text never leaves this device.")
+                HStack {
+                    Button {
+                        Task {
+                            await onDevice.moderateOnly(
+                                text,
+                                transcript: message.latestTranscription?.text ?? text,
+                                language: message.latestTranscription?.language,
+                                for: message.id
+                            )
+                        }
+                    } label: {
+                        if running {
+                            HStack(spacing: Theme.Spacing.small) {
+                                ProgressView().controlSize(.small)
+                                Text(stageLabel(onDevice.stage(for: message.id)))
+                            }
+                        } else {
+                            Label("Get a recommendation", systemImage: "apple.intelligence")
+                        }
+                    }
+                    .buttonStyle(.tbtGlass)
+                    .disabled(running || isActing)
+                    Spacer()
+                }
+                if case .failed(let reason) = onDevice.stage(for: message.id) {
+                    Text(reason)
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.error)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Theme.Spacing.medium)
+            .background(Theme.Colors.tertiaryBackground.opacity(0.4),
+                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        }
+    }
+
+    /// What a local moderation run should classify: the English the operator
+    /// moderates on, falling back to the source transcript when there is no
+    /// translation. Nil when there is no text to judge.
+    private var englishForModeration: String? {
+        let candidate = message.translationText ?? message.latestTranscription?.text
+        guard let candidate,
+              !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return candidate
     }
 
     // MARK: - Transcript

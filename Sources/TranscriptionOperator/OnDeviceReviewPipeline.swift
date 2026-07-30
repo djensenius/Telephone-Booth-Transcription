@@ -120,6 +120,14 @@ public final class OnDeviceReviewPipeline {
         dispatcher.supportedKinds.contains(.translation)
     }
 
+    /// False when no local moderation service was injected — the "get a
+    /// recommendation" affordance is then hidden rather than offered and always
+    /// failing. Separate from ``supportsTranslation``: a device can be able to
+    /// classify text without being able to translate it.
+    public var supportsModeration: Bool {
+        dispatcher.supportedKinds.contains(.moderation)
+    }
+
     public func stage(for messageID: String) -> Stage {
         stages[messageID] ?? .idle
     }
@@ -215,6 +223,57 @@ public final class OnDeviceReviewPipeline {
         )
         stages[message.id] = .finished
         return trimmed
+    }
+
+    /// Classifies text the Operator already holds, without touching the audio.
+    ///
+    /// `run(for:)` is the wrong tool for a message that is already transcribed
+    /// and translated but carries no verdict: it would re-fetch the audio and
+    /// redo the transcription to answer a question about text that is already
+    /// on screen. It is also unreachable in that state, because the UI only
+    /// offers it where a translation is still outstanding.
+    ///
+    /// - Parameters:
+    ///   - english: the text to classify — the English translation when there
+    ///     is one, otherwise the transcript.
+    ///   - transcript: the Operator's transcript, recorded on the output so the
+    ///     UI can still tell this apart from a locally produced transcript.
+    /// - Returns: the recommendation, or `nil` if moderation failed.
+    @discardableResult
+    public func moderateOnly(
+        _ english: String,
+        transcript: String,
+        language: String?,
+        for messageID: String
+    ) async -> String? {
+        guard !isRunning(messageID) else { return nil }
+        let generation = beginGeneration(messageID)
+        stages[messageID] = .moderating
+
+        let verdict: ModerationVerdict
+        do {
+            verdict = try await moderate(english)
+        } catch {
+            guard isCurrent(messageID, generation) else { return nil }
+            fail(messageID, error, verb: "moderate that text")
+            return nil
+        }
+        guard isCurrent(messageID, generation) else { return nil }
+
+        // Merged into any existing output rather than replacing it: a local
+        // transcript or translation the operator hasn't submitted yet must
+        // survive asking for a second opinion on it.
+        let existing = outputs[messageID]
+        outputs[messageID] = Output(
+            transcript: existing?.transcript ?? transcript,
+            language: existing?.language ?? language,
+            model: existing?.model,
+            translation: existing?.translation,
+            recommendation: verdict.recommendation,
+            flagged: verdict.flagged
+        )
+        stages[messageID] = .finished
+        return verdict.recommendation
     }
 
     /// Runs transcribe → translate → moderate for `message` and stores the

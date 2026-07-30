@@ -98,7 +98,16 @@ struct ReviewMessageRow: View {
     private var accessibilityLabel: String {
         var parts = [message.nextStep?.displayName ?? message.status.displayName]
         if let advice { parts.append("\(advice.source) recommends \(advice.recommendation.displayName)") }
+        // The visible failure chips carry the distinction the queue is built
+        // around — a failed step needs a retry, an unstarted one needs a run —
+        // so they belong in the label rather than being lost to `.combine`.
+        if message.translationFailed {
+            parts.append("Translation failed")
+        } else if message.transcriptionFailed, !previewIsPlaceholder {
+            parts.append("Transcription failed")
+        }
         parts.append(preview)
+        parts.append(message.createdAt.formatted(.relative(presentation: .named)))
         return parts.joined(separator: ". ")
     }
 }

@@ -170,16 +170,43 @@ struct ReviewView: View {
 
     private var queue: some View {
         platformQueue
-            .onChange(of: visibleMessageIDs) { _, ids in
+            .onChange(of: activeMessageIDs) { _, ids in
                 // Transcripts and translations live in the pipeline until
-                // pruned; drop anything that has left the queue.
+                // pruned; drop anything that no longer needs work. Keyed to the
+                // *active* set rather than every fetched message: a decided
+                // message stays in the queue for the All filter, so pruning on
+                // the full set would keep its text resident until it fell out
+                // of the fetch window.
                 onDevice?.prune(keeping: ids)
+            }
+            .onChange(of: transcriptionIDs) { old, new in
+                // A poll can replace the transcript of a row the operator isn't
+                // looking at. Its on-device output was computed from the
+                // superseded text, so drop it here rather than in the detail
+                // view, which only sees the message it has open.
+                for (id, transcriptionID) in new where old[id] != nil && old[id] != transcriptionID {
+                    onDevice?.reset(id)
+                }
             }
     }
 
     /// Every message id currently held by the store.
     private var visibleMessageIDs: Set<String> {
         Set(store.messages.map(\.id))
+    }
+
+    /// The messages still waiting on the operator — the only ones whose local
+    /// transcripts and translations are still worth holding on to.
+    private var activeMessageIDs: Set<String> {
+        Set(store.messages.filter(\.needsAttention).map(\.id))
+    }
+
+    /// The transcription each message is currently on, so a replacement can be
+    /// detected for every row rather than only the open one.
+    private var transcriptionIDs: [String: String] {
+        store.messages.reduce(into: [:]) { result, message in
+            if let id = message.latestTranscription?.id { result[message.id] = id }
+        }
     }
 
     private var filtered: [Message] { store.messages(for: filter) }
@@ -335,10 +362,10 @@ struct ReviewView: View {
                 banner(message, systemImage: "exclamationmark.triangle.fill",
                        tint: Theme.Colors.warning)
             }
-
-            if let actionError = store.actionError {
-                banner(actionError, systemImage: "xmark.octagon.fill", tint: Theme.Colors.error)
-            }
+            // `store.actionError` is deliberately not shown here: every action
+            // now happens in the detail view, and on iOS that is a pushed screen
+            // covering this header. An error reported here would look like the
+            // button simply did nothing.
         }
         .padding(Theme.Spacing.large)
     }
