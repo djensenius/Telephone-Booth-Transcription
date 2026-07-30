@@ -124,16 +124,17 @@ rather than over HTTP:
   re-transcribes it with `SpeechAnalyzer`, translates the transcript with
   FoundationModels, and computes a local moderation verdict. The "Needs
   transcription" buckets offer a transcribe-only version of the same run.
-- **Human in the loop** — a translation result pre-fills the draft. Nothing is
-  submitted automatically; the operator reviews and taps Submit.
-- **Transcripts stay on the phone, for now.** iOS can transcribe locally but
-  doesn't yet submit the transcript to the Operator. The endpoint to do so
-  exists as of [Operator #122][op122]; wiring it up is client-side work tracked
-  in [#68][submit]. macOS is unaffected — it posts transcripts back through its
+- **Human in the loop** — a translation result pre-fills the draft, and a local
+  transcript is shown before it goes anywhere. Nothing is submitted
+  automatically; the operator reviews and taps Submit.
+- **Transcript submission** — _Submit transcript_ posts a locally produced
+  transcript to the Operator's operator-authenticated
+  `POST /v1/messages/{id}/transcription` ([Operator #122][op122]), attributed to
+  the `apple-speech-analyzer` engine. The Operator then translates and moderates
+  it server-side. macOS is unaffected — it posts transcripts back through its
   worker as before.
 
 [op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
-[submit]: https://github.com/djensenius/Telephone-Booth-Transcription/issues/68
 
 Audio is fetched with no `Authorization` header: the Operator hands out
 pre-signed, short-lived URLs, so attaching the operator's token would leak it to

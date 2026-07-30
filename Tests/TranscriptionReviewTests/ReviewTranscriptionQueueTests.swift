@@ -30,6 +30,15 @@ struct ReviewTranscriptionQueueTests {
             throw OperatorReviewError.invalidResponse
         }
 
+        func submitTranscription(
+            messageID: String,
+            text: String,
+            language: String?,
+            model: String?
+        ) async throws -> Transcription {
+            throw OperatorReviewError.invalidResponse
+        }
+
         func submitTranslation(
             messageID: String,
             translatedText: String,

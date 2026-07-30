@@ -95,7 +95,8 @@ struct OnDeviceReviewPipelineTests {
         transcriber: StubTranscriber = StubTranscriber(),
         translator: StubTranslator? = StubTranslator(),
         moderator: StubModerator? = StubModerator(),
-        fetcher: StubAudioFetcher = StubAudioFetcher()
+        fetcher: StubAudioFetcher = StubAudioFetcher(),
+        transcriptionModel: String? = "apple-speech-analyzer"
     ) -> OnDeviceReviewPipeline {
         OnDeviceReviewPipeline(
             dispatcher: InProcessOperatorJobDispatcher(
@@ -103,7 +104,8 @@ struct OnDeviceReviewPipelineTests {
                 translator: translator,
                 moderator: moderator,
                 audioFetcher: fetcher
-            )
+            ),
+            transcriptionModel: transcriptionModel
         )
     }
 
@@ -133,6 +135,8 @@ struct OnDeviceReviewPipelineTests {
         #expect(pipeline.stage(for: "m1") == .finished)
         #expect(pipeline.outputs["m1"] == OnDeviceReviewPipeline.Output(
             transcript: "bonjour",
+            language: "fr",
+            model: "apple-speech-analyzer",
             translation: "hello",
             recommendation: "block",
             flagged: true
@@ -147,6 +151,15 @@ struct OnDeviceReviewPipelineTests {
         #expect(pipeline.stage(for: "m1") == .finished)
         #expect(pipeline.outputs["m1"]?.translation == nil)
         #expect(pipeline.outputs["m1"]?.recommendation == nil)
+    }
+
+    /// The submit path attributes a transcript to the local engine, so the
+    /// output has to carry the model and language alongside the text.
+    @Test func transcribeOnlyCarriesAttribution() async {
+        let pipeline = makePipeline()
+        _ = await pipeline.transcribeOnly(for: input())
+        #expect(pipeline.outputs["m1"]?.model == "apple-speech-analyzer")
+        #expect(pipeline.outputs["m1"]?.language == "fr")
     }
 
     @Test func trimsWhitespaceFromTranscript() async {

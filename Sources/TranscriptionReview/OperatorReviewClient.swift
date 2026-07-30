@@ -26,8 +26,9 @@ public enum OperatorReviewError: Error, Sendable, Equatable {
 
 /// Client for the Operator message-review API. Every request carries the
 /// operator's OIDC bearer token. Covers the read path (queue + transcriptions)
-/// and the human write actions: recording a moderation decision and submitting
-/// a translation for a message's latest transcription.
+/// and the human write actions: recording a moderation decision, submitting a
+/// transcript produced on this device, and submitting a translation for a
+/// message's latest transcription.
 public protocol OperatorReviewClient: Sendable {
     func fetchMessages(status: MessageStatus?, since: Date?, limit: Int) async throws -> MessageList
     func fetchTranscriptions(messageID: String) async throws -> TranscriptionList
@@ -36,6 +37,12 @@ public protocol OperatorReviewClient: Sendable {
         decision: ReviewDecision,
         notes: String?
     ) async throws -> Message
+    func submitTranscription(
+        messageID: String,
+        text: String,
+        language: String?,
+        model: String?
+    ) async throws -> Transcription
     func submitTranslation(
         messageID: String,
         translatedText: String,
@@ -89,6 +96,32 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         return try await post("/v1/messages/\(messageID)/decision", body: body)
     }
 
+    /// Submits a transcript this device produced (Apple Intelligence) for
+    /// `messageID`. The Operator finalizes any pending row or appends a new
+    /// succeeded one, attributes it to the submitting operator, and runs
+    /// translation + moderation over it server-side.
+    ///
+    /// An empty `text` is a legitimate submission — it records a silent
+    /// recording — so it is sent rather than rejected here.
+    public func submitTranscription(
+        messageID: String,
+        text: String,
+        language: String?,
+        model: String?
+    ) async throws -> Transcription {
+        struct Body: Encodable {
+            let text: String
+            let language: String?
+            let model: String?
+        }
+        let body = Body(
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+            language: Self.normalized(language),
+            model: Self.normalized(model)
+        )
+        return try await post("/v1/messages/\(messageID)/transcription", body: body)
+    }
+
     public func submitTranslation(
         messageID: String,
         translatedText: String,
@@ -104,6 +137,13 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             translatedLanguage: (trimmedLanguage?.isEmpty == false) ? trimmedLanguage : nil
         )
         return try await post("/v1/messages/\(messageID)/translation", body: body)
+    }
+
+    /// Trims a metadata field and folds an empty result to `nil`, so a blank
+    /// hint is sent as JSON `null` rather than an empty string.
+    private static func normalized(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
     // MARK: - Request plumbing
