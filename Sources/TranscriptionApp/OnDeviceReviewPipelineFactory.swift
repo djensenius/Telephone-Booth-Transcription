@@ -38,8 +38,16 @@ extension OnDeviceReviewPipeline {
             moderator: foundationModels ? makeModerator() : nil,
             audioFetcher: URLSessionAudioFetcher()
         )
-        return OnDeviceReviewPipeline(dispatcher: dispatcher)
+        return OnDeviceReviewPipeline(
+            dispatcher: dispatcher,
+            transcriptionModel: Self.appleSpeechAnalyzerModel
+        )
     }
+
+    /// Attribution recorded on the Operator for transcripts this device
+    /// produces. Matches the identifier the Operator uses for Apple's
+    /// `SpeechAnalyzer` engine.
+    static let appleSpeechAnalyzerModel = "apple-speech-analyzer"
 
     private static func makeTranscriber(locale: Locale) -> (any AudioTranscriber)? {
         #if canImport(Speech)

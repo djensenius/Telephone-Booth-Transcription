@@ -385,9 +385,9 @@ private struct ReviewRow: View {
     }
 
     /// iOS has no Operator worker, but it can still transcribe locally with
-    /// Apple Intelligence. The transcript stays on the device: this client
-    /// doesn't yet submit it to the Operator's transcript endpoint, tracked
-    /// by #68.
+    /// Apple Intelligence. The transcript is shown first and only posted to the
+    /// Operator on a deliberate Submit tap — never automatically, matching how
+    /// translations pre-fill a draft.
     @ViewBuilder
     private var onDeviceTranscribeActions: some View {
         if let onDevice {
@@ -420,19 +420,52 @@ private struct ReviewRow: View {
                 }
 
                 if let output = onDevice.outputs[message.id] {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(output.transcript)
-                            .font(Theme.Fonts.bodyMedium)
-                            .foregroundStyle(Theme.Colors.textPrimary)
-                            .textSelection(.enabled)
-                        Text("Transcribed on this device. It stays here — this app can't "
-                             + "send a transcript to the Operator yet.")
+                    VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                        if output.transcript.isEmpty {
+                            Text("No speech detected.")
+                                .font(Theme.Fonts.bodyMedium)
+                                .italic()
+                                .foregroundStyle(Theme.Colors.textSecondary)
+                        } else {
+                            Text(output.transcript)
+                                .font(Theme.Fonts.bodyMedium)
+                                .foregroundStyle(Theme.Colors.textPrimary)
+                                .textSelection(.enabled)
+                        }
+                        Text("Transcribed on this device. Review it, then submit it "
+                             + "to the Operator — nothing is sent until you do.")
                             .font(Theme.Fonts.caption)
                             .foregroundStyle(Theme.Colors.textSecondary)
+
+                        HStack {
+                            Spacer()
+                            Button {
+                                Task { await submitOnDeviceTranscript(output, using: onDevice) }
+                            } label: {
+                                actionLabel("Submit transcript", systemImage: "arrow.up.circle.fill")
+                            }
+                            .buttonStyle(.tbtGlass)
+                            .disabled(running || isActing)
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Posts a locally produced transcript to the Operator and, on success,
+    /// clears the on-device result so the row can't be submitted twice.
+    private func submitOnDeviceTranscript(
+        _ output: OnDeviceReviewPipeline.Output,
+        using onDevice: OnDeviceReviewPipeline
+    ) async {
+        let submitted = await store.submitTranscription(
+            message,
+            text: output.transcript,
+            language: output.language,
+            model: output.model
+        )
+        if submitted { onDevice.reset(message.id) }
     }
 
     @ViewBuilder

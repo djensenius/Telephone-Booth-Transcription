@@ -88,6 +88,47 @@ struct ReviewClientTests {
         #expect(store.actionError == nil)
     }
 
+    @Test("submitTranscription posts the transcript and folds the row back in")
+    @MainActor
+    func transcriptionUpdatesState() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingModeration.first)
+
+        client.transcriptionResult = .success(target.latestTranscription!.retranscribed("bonjour"))
+        let ok = await store.submitTranscription(
+            target, text: "bonjour", language: "fr", model: "apple-speech-analyzer"
+        )
+
+        #expect(ok)
+        #expect(store.actionError == nil)
+        #expect(store.isActing(on: target.id) == false)
+        #expect(client.lastTranscriptionSubmission?.text == "bonjour")
+        #expect(client.lastTranscriptionSubmission?.language == "fr")
+        #expect(client.lastTranscriptionSubmission?.model == "apple-speech-analyzer")
+        #expect(store.messages.first(where: { $0.id == target.id })?.latestTranscription?.text == "bonjour")
+        // The Operator re-runs translation and moderation for the new row, so
+        // the queue is pulled rather than left up to a poll interval stale.
+        #expect(client.fetchCount == 2)
+    }
+
+    @Test("a failed transcript submit surfaces an actionError and returns false")
+    @MainActor
+    func transcriptionFailureSurfacesError() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingModeration.first)
+
+        client.transcriptionResult = .failure(.api(status: 404, code: "not_found"))
+        let ok = await store.submitTranscription(target, text: "bonjour", language: nil, model: nil)
+
+        #expect(ok == false)
+        #expect(store.actionError != nil)
+        #expect(store.isActing(on: target.id) == false)
+    }
+
     @Test("a failed decision surfaces an actionError and clears the pending flag")
     @MainActor
     func decideFailureSurfacesError() async {
@@ -108,14 +149,26 @@ struct ReviewClientTests {
     private final class ActionClient: OperatorReviewClient, @unchecked Sendable {
         var decisionResult: Result<Message, OperatorReviewError> = .failure(.invalidResponse)
         var translationResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
+        var transcriptionResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         private(set) var lastDecisionNotes: String?
+        private(set) var lastTranscriptionSubmission: (text: String, language: String?, model: String?)?
+        private(set) var fetchCount = 0
+        private var submittedTranscription: Transcription?
 
         func fetchTranscriptions(messageID: String) async throws -> TranscriptionList {
             TranscriptionList(items: [])
         }
 
         func fetchMessages(status: MessageStatus?, since: Date?, limit: Int) async throws -> MessageList {
-            try OperatorJSON.decoder.decode(MessageList.self, from: Data(ActionClient.seed.utf8))
+            fetchCount += 1
+            let list = try OperatorJSON.decoder.decode(MessageList.self, from: Data(ActionClient.seed.utf8))
+            // Once a transcript has been accepted, the server hands the new row
+            // back on every subsequent read — otherwise a refresh would look
+            // like it reverted the submission.
+            guard let submitted = submittedTranscription else { return list }
+            return MessageList(items: list.items.map {
+                $0.id == submitted.messageId ? $0.replacingLatestTranscription(submitted) : $0
+            })
         }
 
         func submitDecision(
@@ -125,6 +178,18 @@ struct ReviewClientTests {
         ) async throws -> Message {
             lastDecisionNotes = notes
             return try decisionResult.get()
+        }
+
+        func submitTranscription(
+            messageID: String,
+            text: String,
+            language: String?,
+            model: String?
+        ) async throws -> Transcription {
+            lastTranscriptionSubmission = (text, language, model)
+            let transcription = try transcriptionResult.get()
+            submittedTranscription = transcription
+            return transcription
         }
 
         func submitTranslation(
@@ -167,6 +232,15 @@ struct ReviewClientTests {
             throw OperatorReviewError.invalidResponse
         }
 
+        func submitTranscription(
+            messageID: String,
+            text: String,
+            language: String?,
+            model: String?
+        ) async throws -> Transcription {
+            throw OperatorReviewError.invalidResponse
+        }
+
         func submitTranslation(
             messageID: String,
             translatedText: String,
@@ -188,6 +262,15 @@ struct ReviewClientTests {
         }
 
         func submitDecision(messageID: String, decision: ReviewDecision, notes: String?) async throws -> Message {
+            throw OperatorReviewError.invalidResponse
+        }
+
+        func submitTranscription(
+            messageID: String,
+            text: String,
+            language: String?,
+            model: String?
+        ) async throws -> Transcription {
             throw OperatorReviewError.invalidResponse
         }
 
@@ -234,6 +317,17 @@ private extension Message {
 }
 
 private extension Transcription {
+    func retranscribed(_ text: String) -> Transcription {
+        Transcription(
+            id: "t2", messageId: messageId, provider: .macApp, model: "apple-speech-analyzer",
+            status: .succeeded, text: text, language: language, durationMs: durationMs,
+            latencyMs: latencyMs, error: nil, requestedById: "op", createdAt: createdAt,
+            completedAt: createdAt, translationStatus: nil, translatedText: nil,
+            translatedLanguage: nil, translationProvider: nil, translationModel: nil,
+            translationError: nil, translationLatencyMs: nil, translationCompletedAt: nil
+        )
+    }
+
     func translated(_ text: String) -> Transcription {
         Transcription(
             id: id, messageId: messageId, provider: provider, model: model,

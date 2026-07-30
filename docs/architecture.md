@@ -195,8 +195,9 @@ The consequences are worth stating plainly:
   `OnDeviceReviewPipeline` maps those codes — never the underlying error — to
   operator-facing copy, preserving the metadata-only logging rule.
 - **Manual and advisory.** The pipeline runs only when the operator taps the
-  button, and its output _pre-fills_ the translation draft. It never submits.
-  The human stays in the loop, which also means a bad on-device transcript is a
+  button, and its output _pre-fills_ the translation draft or waits behind an
+  explicit **Submit transcript** tap. It never submits on its own. The human
+  stays in the loop, which also means a bad on-device transcript is a
   correctable draft rather than a published result.
 - **Graceful absence.** `makeAppleIntelligence` (the Apple Intelligence wiring,
   which stays in `TranscriptionApp`) returns `nil` when the engines are
@@ -219,23 +220,28 @@ The consequences are worth stating plainly:
   queues, with `supportsTranslation == false` hiding just the translate
   affordance.
 
-#### Transcripts are read-only on iOS (client limitation)
+#### Submitting a transcript from iOS
 
 The transcription queues added by the discovery worker are actionable on macOS,
 which hands the job to its worker and gets the transcript posted back to the
-Operator. iOS can run the same transcription locally via `transcribeOnly`, but
-does not yet submit the result — it is shown to the operator and goes no
-further.
+Operator. iOS runs the same transcription locally via `transcribeOnly` and then
+submits it directly, with no worker involved.
 
-This started as an API constraint: the only endpoint accepting transcript text
-was `POST /v1/worker/messages/{id}/transcription`, gated on a worker-scoped API
-token that the iOS app (an OIDC human operator) has no business holding.
-[Operator #122][op122] has since shipped an operator-authenticated
-`POST /v1/messages/{id}/transcription`, so the constraint is now purely on this
-side: the client work is simply not written yet. Tracked in [#68][submit].
+The write goes to the operator-authenticated
+`POST /v1/messages/{id}/transcription` ([Operator #122][op122]), which sits
+behind the same `requireOperator()` guard as the decision and translation
+routes — so the phone never needs the worker-scoped API token that
+`POST /v1/worker/messages/{id}/transcription` requires.
+
+`OnDeviceReviewPipeline` records the engine identifier
+(`apple-speech-analyzer`) and any language hint alongside the transcript, and
+`ReviewStore.submitTranscription(_:text:language:model:)` sends them so the
+Operator can attribute the row. Submission is never automatic: the transcript is
+rendered first and posted only on a deliberate **Submit transcript** tap. The
+Operator translates and moderates the submitted text server-side, so those
+fields arrive on a later poll rather than in the response.
 
 [op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
-[submit]: https://github.com/djensenius/Telephone-Booth-Transcription/issues/68
 
 ---
 

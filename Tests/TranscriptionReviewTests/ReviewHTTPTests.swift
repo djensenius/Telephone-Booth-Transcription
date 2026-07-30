@@ -199,6 +199,52 @@ struct ReviewHTTPTests {
         #expect(json["translatedLanguage"] as? String == "en")
     }
 
+    @Test("submitTranscription POSTs the transcript and decodes the transcription")
+    func submitTranscription() async throws {
+        let body = """
+        {"id":"t","messageId":"m","provider":"mac_app","model":"apple-speech-analyzer",
+         "status":"succeeded","text":"bonjour","language":"fr","durationMs":null,"latencyMs":null,
+         "error":null,"requestedById":"op","createdAt":"2026-01-02T03:04:07Z","completedAt":null,
+         "translationStatus":null,"translatedText":null,"translatedLanguage":null,
+         "translationProvider":null,"translationModel":null,"translationError":null,
+         "translationLatencyMs":null,"translationCompletedAt":null}
+        """
+        let client = client(status: 202, body: body)
+        let transcription = try await client.submitTranscription(
+            messageID: "m", text: " bonjour ", language: "fr", model: "apple-speech-analyzer"
+        )
+        #expect(transcription.text == "bonjour")
+
+        let request = try #require(StubURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString.hasSuffix("/v1/messages/m/transcription") == true)
+
+        let sent = try #require(StubURLProtocol.lastBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        #expect(json["text"] as? String == "bonjour")
+        #expect(json["language"] as? String == "fr")
+        #expect(json["model"] as? String == "apple-speech-analyzer")
+    }
+
+    @Test("submitTranscription omits blank metadata but keeps empty text")
+    func submitTranscriptionBlankMetadata() async throws {
+        let body = """
+        {"id":"t","messageId":"m","provider":"mac_app","model":null,
+         "status":"succeeded","text":"","language":null,"durationMs":null,"latencyMs":null,
+         "error":null,"requestedById":"op","createdAt":"2026-01-02T03:04:07Z","completedAt":null,
+         "translationStatus":null,"translatedText":null,"translatedLanguage":null,
+         "translationProvider":null,"translationModel":null,"translationError":null,
+         "translationLatencyMs":null,"translationCompletedAt":null}
+        """
+        let client = client(status: 202, body: body)
+        _ = try await client.submitTranscription(messageID: "m", text: "  ", language: "  ", model: nil)
+        let sent = try #require(StubURLProtocol.lastBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        #expect(json["text"] as? String == "")
+        #expect(json["language"] == nil || json["language"] is NSNull)
+        #expect(json["model"] == nil || json["model"] is NSNull)
+    }
+
     @Test("decodes the Operator error envelope into .api")
     func decodesErrorEnvelope() async {
         let client = client(status: 409, body: #"{"error":"message_not_decidable"}"#)

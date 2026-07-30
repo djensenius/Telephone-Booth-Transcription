@@ -48,6 +48,12 @@ public final class OnDeviceReviewPipeline {
     public struct Output: Sendable, Equatable {
         /// Transcript produced locally from the audio.
         public var transcript: String
+        /// BCP-47 language of `transcript`, when known. Nil when the operator
+        /// had no language hint for the message.
+        public var language: String?
+        /// Identifier of the local engine that produced `transcript`, so a
+        /// submitted transcript can be attributed on the Operator.
+        public var model: String?
         /// English translation of `transcript`. Nil when only transcription was
         /// requested (the "needs transcription" buckets).
         public var translation: String?
@@ -57,11 +63,15 @@ public final class OnDeviceReviewPipeline {
 
         public init(
             transcript: String,
+            language: String? = nil,
+            model: String? = nil,
             translation: String? = nil,
             recommendation: String? = nil,
             flagged: Bool? = nil
         ) {
             self.transcript = transcript
+            self.language = language
+            self.model = model
             self.translation = translation
             self.recommendation = recommendation
             self.flagged = flagged
@@ -81,6 +91,10 @@ public final class OnDeviceReviewPipeline {
     private let dispatcher: InProcessOperatorJobDispatcher
     @ObservationIgnored
     private let logger: Logger
+    /// Identifier recorded against transcripts this pipeline produces, so the
+    /// Operator can attribute a submitted transcript to the local engine.
+    @ObservationIgnored
+    private let transcriptionModel: String?
 
     /// Per-message progress, keyed by message id, so several rows can run
     /// independently without sharing a single spinner.
@@ -89,9 +103,11 @@ public final class OnDeviceReviewPipeline {
 
     public init(
         dispatcher: InProcessOperatorJobDispatcher,
+        transcriptionModel: String? = nil,
         logger: Logger = Logger(label: "on-device-review")
     ) {
         self.dispatcher = dispatcher
+        self.transcriptionModel = transcriptionModel
         self.logger = logger
     }
 
@@ -162,13 +178,13 @@ public final class OnDeviceReviewPipeline {
 
     /// Runs only the transcription stage for `message`, for the "needs
     /// transcription" queues. Returns the local transcript, or `nil` on
-    /// failure.
+    /// failure. An empty string means the engine heard no speech, which is a
+    /// result the operator can still submit — unlike ``run(for:)``, which has
+    /// nothing to translate or moderate and rejects it.
     ///
-    /// The result stays on this device: there is no submit path wired up yet.
-    /// This began as an API gap (only a worker-token endpoint accepted
-    /// transcript text), but Operator #122 has since added an
-    /// operator-authenticated `POST /v1/messages/{id}/transcription`, so it is
-    /// now just client work that hasn't been done. Tracked in #68.
+    /// The transcript is stored, not submitted: the operator reviews it and
+    /// taps Submit, which posts it through
+    /// `ReviewStore.submitTranscription(_:text:language:model:)`.
     @discardableResult
     public func transcribeOnly(for message: Input) async -> String? {
         guard !isRunning(message.id) else { return nil }
@@ -176,9 +192,9 @@ public final class OnDeviceReviewPipeline {
         outputs[message.id] = nil
         stages[message.id] = .fetchingAndTranscribing
 
-        let transcript: String
+        let result: (text: String, language: String?, model: String?)
         do {
-            transcript = try await transcribe(message)
+            result = try await transcribe(message)
         } catch {
             guard isCurrent(message.id, generation) else { return nil }
             fail(message.id, error, verb: "transcribe that audio")
@@ -186,13 +202,17 @@ public final class OnDeviceReviewPipeline {
         }
         guard isCurrent(message.id, generation) else { return nil }
 
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            stages[message.id] = .failed("On-device transcription produced no speech.")
-            return nil
-        }
-
-        outputs[message.id] = Output(transcript: trimmed, translation: nil)
+        let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Unlike the full pipeline, an empty transcript is a legitimate result
+        // here: a genuinely silent recording. The Operator accepts empty text,
+        // so surface it and let the operator decide whether to submit it —
+        // that's the only way the queue ever clears a silent message.
+        outputs[message.id] = Output(
+            transcript: trimmed,
+            language: result.language,
+            model: result.model,
+            translation: nil
+        )
         stages[message.id] = .finished
         return trimmed
     }
@@ -207,9 +227,9 @@ public final class OnDeviceReviewPipeline {
         outputs[message.id] = nil
         stages[message.id] = .fetchingAndTranscribing
 
-        let transcript: String
+        let transcriptResult: (text: String, language: String?, model: String?)
         do {
-            transcript = try await transcribe(message)
+            transcriptResult = try await transcribe(message)
         } catch {
             guard isCurrent(message.id, generation) else { return nil }
             fail(message.id, error, verb: "transcribe that audio")
@@ -217,7 +237,7 @@ public final class OnDeviceReviewPipeline {
         }
         guard isCurrent(message.id, generation) else { return nil }
 
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = transcriptResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             stages[message.id] = .failed("On-device transcription produced no speech.")
             return nil
@@ -247,6 +267,8 @@ public final class OnDeviceReviewPipeline {
 
         outputs[message.id] = Output(
             transcript: trimmed,
+            language: transcriptResult.language,
+            model: transcriptResult.model,
             translation: translation,
             recommendation: recommendation,
             flagged: flagged
@@ -257,7 +279,7 @@ public final class OnDeviceReviewPipeline {
 
     // MARK: - Stages
 
-    private func transcribe(_ message: Input) async throws -> String {
+    private func transcribe(_ message: Input) async throws -> (text: String, language: String?, model: String?) {
         let job = OperatorJob(
             id: message.id,
             leaseToken: "",
@@ -266,13 +288,14 @@ public final class OnDeviceReviewPipeline {
                 audioURL: message.audioURL.absoluteString,
                 sha256: message.audioSHA256,
                 durationMs: message.audioDurationMs,
+                model: transcriptionModel,
                 language: message.language
             ))
         )
-        guard case .transcription(let text, _, _) = try await dispatcher.execute(job: job) else {
+        guard case .transcription(let text, let language, let model) = try await dispatcher.execute(job: job) else {
             throw OperatorJobError(code: "transcription_failed", message: "local transcription failed")
         }
-        return text
+        return (text, language, model ?? transcriptionModel)
     }
 
     /// `sourceLanguage` is the hint the Operator already recorded for the

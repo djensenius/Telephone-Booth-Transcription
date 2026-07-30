@@ -200,6 +200,52 @@ public final class ReviewStore {
         }
     }
 
+    /// Submits a transcript produced on this device for `message`'s latest (or
+    /// new) transcription row and folds the result back into local state so the
+    /// row leaves the "needs transcription" bucket immediately.
+    ///
+    /// The Operator runs translation and moderation over the submitted text
+    /// asynchronously, so those fields arrive on a later poll rather than in
+    /// this response. Returns `true` when the submission succeeded, so the
+    /// caller can clear its local draft.
+    @discardableResult
+    public func submitTranscription(
+        _ message: Message,
+        text: String,
+        language: String? = nil,
+        model: String? = nil
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
+        pendingActions.insert(message.id)
+        actionError = nil
+        defer { pendingActions.remove(message.id) }
+        do {
+            let updated = try await client.submitTranscription(
+                messageID: message.id,
+                text: text,
+                language: language,
+                model: model
+            )
+            // Merge into the *current* local message, not the captured one, so a
+            // poll that landed mid-request can't be clobbered with stale fields.
+            let base = messages.first(where: { $0.id == message.id }) ?? message
+            apply(base.replacingLatestTranscription(updated))
+            // A transcript that arrived this way satisfies any local re-run the
+            // operator had queued for the same message.
+            clearQueuedTranscription(message.id)
+            // The Operator re-runs translation and moderation for the new row,
+            // so pull the queue rather than leaving the phone up to 30 seconds
+            // behind the state everyone else can see. The fold above means the
+            // transcript is on screen already if this round-trip is slow.
+            await refresh()
+            return true
+        } catch {
+            actionError = Self.describe(error, verb: "submit that transcript")
+            logger.error("Transcript submit failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     /// Submits an operator-supplied translation for a message's latest
     /// transcription and folds the result back into local state.
     public func submitTranslation(
