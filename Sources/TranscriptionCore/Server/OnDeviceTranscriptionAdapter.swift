@@ -67,14 +67,19 @@ enum OnDeviceAudioFile {
 
 extension OnDeviceServiceError {
     /// Maps the transport-agnostic on-device error onto the HTTP route's error
-    /// type. `.unavailable` maps to `.unauthorized` to preserve the prior
-    /// 403 behavior for "engine not available on this device".
+    /// type.
+    ///
+    /// `.unavailable` maps to its own case rather than to `.unauthorized`:
+    /// "this device can't run the engine" is a capability problem, not an
+    /// authorization one. The caller is authenticated and the request is
+    /// well-formed, so the route renders it as `503 on_device_unavailable` —
+    /// retryable, and consistent with the translation and moderation routes.
     var asTranscriptionBackendError: TranscriptionBackendError {
         switch self {
         case .badRequest(let message): return .badRequest(message)
         case .unauthorized(let message): return .unauthorized(message)
         case .timeout(let message): return .timeout(message)
-        case .unavailable(let message): return .unauthorized(message)
+        case .unavailable(let message): return .unavailable(message)
         }
     }
 }
