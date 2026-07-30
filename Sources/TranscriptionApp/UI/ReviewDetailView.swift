@@ -374,14 +374,15 @@ struct ReviewDetailView: View {
                 Button {
                     let text = translationDraft
                     Task {
-                        await store.submitTranslation(message, text: text)
-                        // The message moves to Decide now, where the local
-                        // verdict would be the only recommendation on screen —
-                        // but it was computed for the pipeline's own
-                        // translation, not the (possibly edited) text just
-                        // submitted. Drop it and let the Operator's moderation
-                        // of the submitted English stand.
-                        onDevice?.reset(message.id)
+                        let submitted = await store.submitTranslation(message, text: text)
+                        // Only on success: the message moves to Decide, where
+                        // the local verdict would be the only recommendation on
+                        // screen despite having been computed for the
+                        // pipeline's own translation rather than the text the
+                        // operator submitted. A failure has to keep the draft
+                        // and its output, or a transient error would discard
+                        // the work being retried.
+                        if submitted { onDevice?.reset(message.id) }
                     }
                 } label: {
                     actionLabel("Submit translation", systemImage: "arrow.up.circle.fill")

@@ -326,12 +326,17 @@ public final class ReviewStore {
 
     /// Submits an operator-supplied translation for a message's latest
     /// transcription and folds the result back into local state.
+    ///
+    /// Returns `true` when the submission succeeded, so the caller can discard
+    /// the local draft it came from — and, just as importantly, keep it when it
+    /// didn't: a transient failure must leave the operator something to retry.
+    @discardableResult
     public func submitTranslation(
         _ message: Message,
         text: String,
         language: String? = nil
-    ) async {
-        guard !pendingActions.contains(message.id) else { return }
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
         pendingActions.insert(message.id)
         actionError = nil
         defer { pendingActions.remove(message.id) }
@@ -345,9 +350,11 @@ public final class ReviewStore {
             // poll that landed mid-request can't be clobbered with stale fields.
             let base = messages.first(where: { $0.id == message.id }) ?? message
             apply(base.replacingLatestTranscription(updated))
+            return true
         } catch {
             actionError = Self.describe(error, verb: "submit that translation")
             logger.error("Translation submit failed: \(String(describing: error), privacy: .public)")
+            return false
         }
     }
 

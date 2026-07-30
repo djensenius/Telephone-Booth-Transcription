@@ -179,12 +179,16 @@ struct ReviewView: View {
                 // of the fetch window.
                 onDevice?.prune(keeping: ids)
             }
-            .onChange(of: transcriptionIDs) { old, new in
+            .onChange(of: transcriptionSnapshots) { old, new in
                 // A poll can replace the transcript of a row the operator isn't
                 // looking at. Its on-device output was computed from the
                 // superseded text, so drop it here rather than in the detail
                 // view, which only sees the message it has open.
-                for (id, transcriptionID) in new where old[id] != nil && old[id] != transcriptionID {
+                //
+                // Keyed to the text rather than the transcription id: the
+                // Operator finalizes a pending row *in place*, so the id can
+                // stay put while the text it stands for changes completely.
+                for (id, snapshot) in new where old[id] != snapshot {
                     onDevice?.reset(id)
                 }
             }
@@ -201,11 +205,19 @@ struct ReviewView: View {
         Set(store.messages.filter(\.needsAttention).map(\.id))
     }
 
-    /// The transcription each message is currently on, so a replacement can be
-    /// detected for every row rather than only the open one.
-    private var transcriptionIDs: [String: String] {
+    /// What the Operator currently holds for each message, as a snapshot that
+    /// changes whenever the authoritative text does — a new transcription row,
+    /// a pending one finalized in place, or a translation arriving. Messages
+    /// with nothing on record are omitted, so local work on a message the
+    /// Operator hasn't transcribed yet is left alone until it lands.
+    private var transcriptionSnapshots: [String: String] {
         store.messages.reduce(into: [:]) { result, message in
-            if let id = message.latestTranscription?.id { result[message.id] = id }
+            guard let transcription = message.latestTranscription else { return }
+            result[message.id] = [
+                transcription.id,
+                transcription.text ?? "",
+                transcription.translatedText ?? "",
+            ].joined(separator: "\u{1F}")
         }
     }
 
