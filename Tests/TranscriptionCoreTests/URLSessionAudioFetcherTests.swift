@@ -321,4 +321,57 @@ struct StreamingAudioDownloadTests {
             _ = try await iterator.next()
         }
     }
+
+    /// An advertised body larger than the cap is refused at the response head,
+    /// so none of it is ever delivered.
+    @Test func refusesAnAdvertisedOversizedBody() async throws {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 4)
+        let response = HTTPURLResponse(
+            url: URL(string: "https://operator.test/a.flac")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Length": "64"]
+        )!
+
+        var disposition: URLSession.ResponseDisposition?
+        download.urlSession(session, dataTask: task, didReceive: response) { disposition = $0 }
+        #expect(disposition == .cancel)
+
+        // The head still reaches the caller, which reports the same failure
+        // staging would.
+        _ = try await download.awaitResponse()
+        var iterator = download.chunks.makeAsyncIterator()
+        await #expect(throws: AudioFetchError.tooLarge) {
+            _ = try await iterator.next()
+        }
+    }
+
+    /// Cancelling the consuming task unparks the wait instead of leaving it
+    /// blocked until the request times out.
+    @Test func cancellingTheConsumerUnparksTheWait() async throws {
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        let waiting = Task {
+            var iterator = download.chunks.makeAsyncIterator()
+            _ = try await iterator.next()
+        }
+        // Give the consumer a chance to park on the empty buffer.
+        try await Task.sleep(for: .milliseconds(20))
+        waiting.cancel()
+
+        await #expect(throws: CancellationError.self) { try await waiting.value }
+    }
+
+    /// `cancel()` is idempotent and safe after the transfer already finished.
+    @Test func cancelIsIdempotent() async throws {
+        let (session, task) = makeTask()
+        let download = StreamingAudioDownload(maxBytes: 1_000)
+        download.urlSession(session, dataTask: task, didReceive: Data([1, 2]))
+        download.urlSession(session, task: task, didCompleteWithError: nil)
+        download.cancel()
+        download.cancel()
+
+        var iterator = download.chunks.makeAsyncIterator()
+        #expect(try await iterator.next()?.readableBytes == 2)
+    }
 }

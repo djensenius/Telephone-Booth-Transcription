@@ -63,35 +63,41 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
         dataTask.resume()
     }
 
+    /// Stops the transfer and fails any parked waiter. Safe to call more than
+    /// once, and after the transfer has already finished.
     func cancel() {
-        lock.lock()
-        let dataTask = task
-        lock.unlock()
-        dataTask?.cancel()
+        fail(with: CancellationError(), cancelTask: true)
     }
 
     /// Awaits the response head. Throws once the transfer fails before any
     /// response arrives.
+    ///
+    /// Cancelling the calling task cancels the transfer, so an abandoned
+    /// download doesn't keep the caller parked for the request timeout.
     func awaitResponse() async throws -> URLResponse {
-        try await withCheckedThrowingContinuation { continuation in
-            lock.lock()
-            if let response {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                if let response {
+                    lock.unlock()
+                    continuation.resume(returning: response)
+                    return
+                }
+                if let failure {
+                    lock.unlock()
+                    continuation.resume(throwing: failure)
+                    return
+                }
+                if isFinished {
+                    lock.unlock()
+                    continuation.resume(throwing: AudioFetchError.fetchFailed)
+                    return
+                }
+                responseWaiter = continuation
                 lock.unlock()
-                continuation.resume(returning: response)
-                return
             }
-            if let failure {
-                lock.unlock()
-                continuation.resume(throwing: failure)
-                return
-            }
-            if isFinished {
-                lock.unlock()
-                continuation.resume(throwing: AudioFetchError.fetchFailed)
-                return
-            }
-            responseWaiter = continuation
-            lock.unlock()
+        } onCancel: {
+            cancel()
         }
     }
 
@@ -101,31 +107,37 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
     // MARK: - Consumer side
 
     fileprivate func nextChunk() async throws -> Data? {
-        try await withCheckedThrowingContinuation { continuation in
-            lock.lock()
-            if !pending.isEmpty {
-                let chunk = pending.removeFirst()
-                pendingBytes -= chunk.count
-                let shouldResume = isSuspended && pendingBytes < highWaterMark
-                if shouldResume { isSuspended = false }
-                let dataTask = task
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                if !pending.isEmpty {
+                    let chunk = pending.removeFirst()
+                    pendingBytes -= chunk.count
+                    // Resumed under the lock so the flag and the task's actual
+                    // state can never disagree.
+                    if isSuspended, pendingBytes < highWaterMark {
+                        isSuspended = false
+                        task?.resume()
+                    }
+                    lock.unlock()
+                    continuation.resume(returning: chunk)
+                    return
+                }
+                if let failure {
+                    lock.unlock()
+                    continuation.resume(throwing: failure)
+                    return
+                }
+                if isFinished {
+                    lock.unlock()
+                    continuation.resume(returning: nil)
+                    return
+                }
+                chunkWaiter = continuation
                 lock.unlock()
-                if shouldResume { dataTask?.resume() }
-                continuation.resume(returning: chunk)
-                return
             }
-            if let failure {
-                lock.unlock()
-                continuation.resume(throwing: failure)
-                return
-            }
-            if isFinished {
-                lock.unlock()
-                continuation.resume(returning: nil)
-                return
-            }
-            chunkWaiter = continuation
-            lock.unlock()
+        } onCancel: {
+            cancel()
         }
     }
 
@@ -143,6 +155,16 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
         responseWaiter = nil
         lock.unlock()
         waiter?.resume(returning: response)
+
+        // An advertised body larger than the cap is refused before a single
+        // byte of it is delivered; the caller still sees the response head and
+        // reports the same `tooLarge` failure staging would.
+        let advertised = response.expectedContentLength
+        guard advertised == NSURLSessionTransferSizeUnknown || advertised <= Int64(maxBytes) else {
+            completionHandler(.cancel)
+            fail(with: AudioFetchError.tooLarge, cancelTask: false)
+            return
+        }
         completionHandler(.allow)
     }
 
@@ -156,11 +178,8 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
         // Enforced here as well as in staging so an understated Content-Length
         // can't stream far past the cap before the consumer notices.
         guard receivedBytes <= maxBytes else {
-            let waiter = takeWaitersAndFail(AudioFetchError.tooLarge)
             lock.unlock()
-            dataTask.cancel()
-            waiter.0?.resume(throwing: AudioFetchError.tooLarge)
-            waiter.1?.resume(throwing: AudioFetchError.tooLarge)
+            fail(with: AudioFetchError.tooLarge, cancelTask: true)
             return
         }
         if let waiter = chunkWaiter {
@@ -171,10 +190,13 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
         }
         pending.append(data)
         pendingBytes += data.count
-        let shouldSuspend = !isSuspended && pendingBytes >= highWaterMark
-        if shouldSuspend { isSuspended = true }
+        // Suspended under the lock so a consumer draining concurrently can't
+        // observe `isSuspended` before the task has actually been suspended.
+        if !isSuspended, pendingBytes >= highWaterMark {
+            isSuspended = true
+            dataTask.suspend()
+        }
         lock.unlock()
-        if shouldSuspend { dataTask.suspend() }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
@@ -204,6 +226,26 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
             if !hasPending { waiters.0?.resume(returning: nil) }
             waiters.1?.resume(throwing: AudioFetchError.fetchFailed)
         }
+    }
+
+    /// Records `error` once, discards buffered chunks so a partial body can't
+    /// be consumed, optionally cancels the transfer, and resumes any parked
+    /// waiter. A no-op once the transfer has already failed or finished, so
+    /// every waiter is resumed exactly once.
+    private func fail(with error: any Error, cancelTask: Bool) {
+        lock.lock()
+        guard !isFinished, failure == nil else {
+            let dataTask = task
+            lock.unlock()
+            if cancelTask { dataTask?.cancel() }
+            return
+        }
+        let waiters = takeWaitersAndFail(error)
+        let dataTask = task
+        lock.unlock()
+        if cancelTask { dataTask?.cancel() }
+        waiters.0?.resume(throwing: error)
+        waiters.1?.resume(throwing: error)
     }
 
     /// Records `error`, discards buffered chunks so a partial body can't be
