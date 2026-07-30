@@ -171,37 +171,20 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             let model: String?
         }
         let body = Body(
-            transcriptionId: Self.normalized(transcriptionId),
+            transcriptionId: ModerationSubmission.metadata(transcriptionId),
             flagged: flagged,
-            recommendation: Self.normalizedRecommendation(recommendation),
-            // The Operator rejects a score outside `0...1`; clamp rather than
-            // let a stray value fail the whole submission.
-            maxScore: min(1, max(0, maxScore)),
-            reasonSummary: Self.normalized(reasonSummary),
-            model: Self.normalized(model)
+            recommendation: ModerationSubmission.recommendation(recommendation),
+            maxScore: ModerationSubmission.score(maxScore),
+            reasonSummary: ModerationSubmission.metadata(reasonSummary),
+            model: ModerationSubmission.metadata(model)
         )
         return try await post("/v1/messages/\(messageID)/moderation", body: body)
-    }
-
-    /// Folds a verdict onto the three values the Operator accepts. A local
-    /// model can phrase the same call as `block` or `allow`, and posting that
-    /// verbatim would fail the whole submission over vocabulary; anything
-    /// unrecognized becomes `review`, which is the safe answer to "a human
-    /// should look at this". Mirrors the worker path in
-    /// `TranscriptionOperator.OperatorClient`.
-    private static func normalizedRecommendation(_ value: String) -> String {
-        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "approve", "allow", "allowed": return "approve"
-        case "reject", "block", "blocked": return "reject"
-        default: return "review"
-        }
     }
 
     /// Trims a metadata field and folds an empty result to `nil`, so a blank
     /// hint is sent as JSON `null` rather than an empty string.
     private static func normalized(_ value: String?) -> String? {
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (trimmed?.isEmpty == false) ? trimmed : nil
+        ModerationSubmission.metadata(value)
     }
 
     // MARK: - Request plumbing

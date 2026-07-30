@@ -394,7 +394,11 @@ public final class ReviewStore {
     /// visible to every other operator too.
     ///
     /// Returns `true` when the submission succeeded, so the caller can clear the
-    /// local on-device verdict it came from.
+    /// local on-device verdict it came from. Note that "succeeded" is not
+    /// "displayed": if the message moved on while the request was in flight —
+    /// a new transcription, or a newer verdict from another operator — the row
+    /// is left with the Operator rather than folded onto text it never judged.
+    /// The caller still clears; the Operator holds the record either way.
     @discardableResult
     public func submitModeration(
         _ message: Message,

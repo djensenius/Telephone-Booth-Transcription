@@ -109,15 +109,17 @@ actor DemoOperatorReviewClient: OperatorReviewClient {
         let moderation: [String: Any] = [
             "id": "mod-demo-\(UUID().uuidString.prefix(8))",
             "messageId": messageID,
-            "transcriptionId": transcriptionId ?? NSNull(),
+            "transcriptionId": ModerationSubmission.metadata(transcriptionId) ?? NSNull(),
             "provider": "mac_app",
-            "model": model ?? NSNull(),
+            "model": ModerationSubmission.metadata(model) ?? NSNull(),
             "status": "succeeded",
             "flagged": flagged,
-            "recommendation": recommendation,
-            "maxScore": maxScore,
+            // Shaped exactly as the HTTP client shapes it, so demo mode can't
+            // show a verdict the real Operator would have rewritten.
+            "recommendation": ModerationSubmission.recommendation(recommendation),
+            "maxScore": ModerationSubmission.score(maxScore),
             "categories": NSNull(),
-            "reasonSummary": reasonSummary ?? NSNull(),
+            "reasonSummary": ModerationSubmission.metadata(reasonSummary) ?? NSNull(),
             "latencyMs": NSNull(),
             "error": NSNull(),
             "createdAt": OperatorJSON.iso8601String(from: Date()),
