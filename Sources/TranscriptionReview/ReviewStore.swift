@@ -335,7 +335,8 @@ public final class ReviewStore {
         _ message: Message,
         text: String,
         language: String?,
-        model: String?
+        model: String?,
+        refreshing: Bool = true
     ) async -> Bool {
         do {
             let updated = try await client.submitTranscription(
@@ -355,7 +356,12 @@ public final class ReviewStore {
             // so pull the queue rather than leaving the phone up to 30 seconds
             // behind the state everyone else can see. The fold above means the
             // transcript is on screen already if this round-trip is slow.
-            await refresh()
+            //
+            // Skipped when a translation write follows immediately: the round
+            // trip would only widen the window in which someone else's
+            // transcript can supersede this one, and the caller refreshes once
+            // both writes are done.
+            if refreshing { await refresh() }
             return true
         } catch {
             actionError = Self.describe(error, verb: "submit that transcript")
@@ -518,7 +524,8 @@ public final class ReviewStore {
         }
 
         guard await postTranscript(
-            message, text: transcript, language: language, model: model
+            message, text: transcript, language: language, model: model,
+            refreshing: false
         ) else { return false }
 
         // The transport trims, so the row that comes back is the trimmed form
@@ -534,7 +541,16 @@ public final class ReviewStore {
             logger.error("Combined submit aborted: transcript superseded before translation")
             return false
         }
-        return await postTranslation(message, text: translation, language: nil)
+        guard await postTranslation(message, text: translation, language: nil) else {
+            // The transcript did land, so pull the queue anyway: the operator is
+            // about to retry the translation and should be looking at what the
+            // Operator actually holds.
+            await refresh()
+            return false
+        }
+        // One pull for both writes, now that neither can be superseded by it.
+        await refresh()
+        return true
     }
 
     /// Replaces a message in the local queue by id, preserving ordering.

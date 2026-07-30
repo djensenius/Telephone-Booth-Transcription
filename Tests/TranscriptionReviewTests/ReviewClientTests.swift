@@ -451,7 +451,11 @@ struct ReviewClientTests {
             translatedLanguage: String?
         ) async throws -> Transcription {
             translationSubmissions.append(translatedText)
-            return try translationResult.get()
+            let transcription = try translationResult.get()
+            // Same contract as a transcript submission: once accepted, the
+            // server hands the updated row back on every subsequent read.
+            submittedTranscription = transcription
+            return transcription
         }
 
         func submitModeration(
