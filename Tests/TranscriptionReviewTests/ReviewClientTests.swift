@@ -108,6 +108,9 @@ struct ReviewClientTests {
         #expect(client.lastTranscriptionSubmission?.language == "fr")
         #expect(client.lastTranscriptionSubmission?.model == "apple-speech-analyzer")
         #expect(store.messages.first(where: { $0.id == target.id })?.latestTranscription?.text == "bonjour")
+        // The Operator re-runs translation and moderation for the new row, so
+        // the queue is pulled rather than left up to a poll interval stale.
+        #expect(client.fetchCount == 2)
     }
 
     @Test("a failed transcript submit surfaces an actionError and returns false")
@@ -149,13 +152,23 @@ struct ReviewClientTests {
         var transcriptionResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         private(set) var lastDecisionNotes: String?
         private(set) var lastTranscriptionSubmission: (text: String, language: String?, model: String?)?
+        private(set) var fetchCount = 0
+        private var submittedTranscription: Transcription?
 
         func fetchTranscriptions(messageID: String) async throws -> TranscriptionList {
             TranscriptionList(items: [])
         }
 
         func fetchMessages(status: MessageStatus?, since: Date?, limit: Int) async throws -> MessageList {
-            try OperatorJSON.decoder.decode(MessageList.self, from: Data(ActionClient.seed.utf8))
+            fetchCount += 1
+            let list = try OperatorJSON.decoder.decode(MessageList.self, from: Data(ActionClient.seed.utf8))
+            // Once a transcript has been accepted, the server hands the new row
+            // back on every subsequent read — otherwise a refresh would look
+            // like it reverted the submission.
+            guard let submitted = submittedTranscription else { return list }
+            return MessageList(items: list.items.map {
+                $0.id == submitted.messageId ? $0.replacingLatestTranscription(submitted) : $0
+            })
         }
 
         func submitDecision(
@@ -174,7 +187,9 @@ struct ReviewClientTests {
             model: String?
         ) async throws -> Transcription {
             lastTranscriptionSubmission = (text, language, model)
-            return try transcriptionResult.get()
+            let transcription = try transcriptionResult.get()
+            submittedTranscription = transcription
+            return transcription
         }
 
         func submitTranslation(

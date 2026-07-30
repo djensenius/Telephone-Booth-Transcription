@@ -216,10 +216,17 @@ struct OnDeviceReviewPipelineTests {
         #expect(pipeline.outputs["m1"] == nil)
     }
 
-    @Test func emptyTranscriptFailsTranscribeOnly() async {
-        let pipeline = makePipeline(transcriber: StubTranscriber(text: ""))
-        #expect(await pipeline.transcribeOnly(for: input()) == nil)
-        #expect(pipeline.stage(for: "m1") == .failed("On-device transcription produced no speech."))
+    /// A silent recording is a real outcome, not a failure: the Operator
+    /// accepts empty transcript text, and submitting it is the only way the
+    /// "needs transcription" queue ever clears such a message.
+    @Test func emptyTranscriptIsSubmittableFromTranscribeOnly() async {
+        let pipeline = makePipeline(transcriber: StubTranscriber(text: "   \n "))
+        #expect(await pipeline.transcribeOnly(for: input()) == "")
+        #expect(pipeline.stage(for: "m1") == .finished)
+        #expect(pipeline.outputs["m1"]?.transcript == "")
+        // Attribution still travels with it, so the Operator can record which
+        // engine heard nothing.
+        #expect(pipeline.outputs["m1"]?.model == "apple-speech-analyzer")
     }
 
     @Test func moderationFailureStillYieldsTranslation() async {

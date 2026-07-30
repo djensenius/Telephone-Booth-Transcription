@@ -178,7 +178,9 @@ public final class OnDeviceReviewPipeline {
 
     /// Runs only the transcription stage for `message`, for the "needs
     /// transcription" queues. Returns the local transcript, or `nil` on
-    /// failure.
+    /// failure. An empty string means the engine heard no speech, which is a
+    /// result the operator can still submit — unlike ``run(for:)``, which has
+    /// nothing to translate or moderate and rejects it.
     ///
     /// The transcript is stored, not submitted: the operator reviews it and
     /// taps Submit, which posts it through
@@ -201,11 +203,10 @@ public final class OnDeviceReviewPipeline {
         guard isCurrent(message.id, generation) else { return nil }
 
         let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            stages[message.id] = .failed("On-device transcription produced no speech.")
-            return nil
-        }
-
+        // Unlike the full pipeline, an empty transcript is a legitimate result
+        // here: a genuinely silent recording. The Operator accepts empty text,
+        // so surface it and let the operator decide whether to submit it —
+        // that's the only way the queue ever clears a silent message.
         outputs[message.id] = Output(
             transcript: trimmed,
             language: result.language,

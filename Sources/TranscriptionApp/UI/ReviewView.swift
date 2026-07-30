@@ -409,10 +409,17 @@ private struct ReviewRow: View {
 
                 if let output = onDevice.outputs[message.id] {
                     VStack(alignment: .leading, spacing: Theme.Spacing.small) {
-                        Text(output.transcript)
-                            .font(Theme.Fonts.bodyMedium)
-                            .foregroundStyle(Theme.Colors.textPrimary)
-                            .textSelection(.enabled)
+                        if output.transcript.isEmpty {
+                            Text("No speech detected.")
+                                .font(Theme.Fonts.bodyMedium)
+                                .italic()
+                                .foregroundStyle(Theme.Colors.textSecondary)
+                        } else {
+                            Text(output.transcript)
+                                .font(Theme.Fonts.bodyMedium)
+                                .foregroundStyle(Theme.Colors.textPrimary)
+                                .textSelection(.enabled)
+                        }
                         Text("Transcribed on this device. Review it, then submit it "
                              + "to the Operator — nothing is sent until you do.")
                             .font(Theme.Fonts.caption)

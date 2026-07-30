@@ -303,10 +303,20 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
 
 extension Message {
     /// Returns a copy with `latestTranscription` replaced. Used to fold an
-    /// operator-submitted translation back into local state without waiting for
-    /// the next poll.
+    /// operator-submitted transcript or translation back into local state
+    /// without waiting for the next poll.
+    ///
+    /// The existing moderation is carried over only when it belongs to the new
+    /// row (or to no row at all). A submitted transcript creates a *new*
+    /// transcription, and its moderation is re-run server-side; keeping the old
+    /// verdict would show the new transcript under a recommendation and reason
+    /// that were computed for different text.
     public func replacingLatestTranscription(_ transcription: Transcription) -> Message {
-        Message(
+        let moderation = latestModeration.flatMap { existing -> Moderation? in
+            guard let owner = existing.transcriptionId else { return existing }
+            return owner == transcription.id ? existing : nil
+        }
+        return Message(
             id: id,
             status: status,
             questionId: questionId,
@@ -315,7 +325,7 @@ extension Message {
             receivedAt: receivedAt,
             audio: audio,
             latestTranscription: transcription,
-            latestModeration: latestModeration
+            latestModeration: moderation
         )
     }
 }

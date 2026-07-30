@@ -233,6 +233,11 @@ public final class ReviewStore {
             // A transcript that arrived this way satisfies any local re-run the
             // operator had queued for the same message.
             clearQueuedTranscription(message.id)
+            // The Operator re-runs translation and moderation for the new row,
+            // so pull the queue rather than leaving the phone up to 30 seconds
+            // behind the state everyone else can see. The fold above means the
+            // transcript is on screen already if this round-trip is slow.
+            await refresh()
             return true
         } catch {
             actionError = Self.describe(error, verb: "submit that transcript")
