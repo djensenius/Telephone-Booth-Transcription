@@ -107,6 +107,7 @@ enum ConfigPersistence {
         // services and decode as nil → platform default in `asConfig`.
         var moderationBackendKind: String?          // "proxy" | "onDevice"
         var textTranslationBackendKind: String?     // "proxy" | "onDevice"
+        var audioTranslationBackendKind: String?    // "proxy" | "onDevice"
         // Retained for migration decoding only — never written to new saves.
         var transcriptionKey: String?
         var moderationBase: String
@@ -150,6 +151,7 @@ enum ConfigPersistence {
             transcriptionKey = nil
             moderationBackendKind = config.moderationBackend.rawValue
             textTranslationBackendKind = config.textTranslationBackend.rawValue
+            audioTranslationBackendKind = config.audioTranslationBackend.rawValue
             moderationBase = config.moderationUpstream.baseURL
             moderationKey = nil
             translationBase = config.translationUpstream.baseURL
@@ -197,6 +199,8 @@ enum ConfigPersistence {
                 moderationBackend: moderationBackendKind
                     .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
                 textTranslationBackend: textTranslationBackendKind
+                    .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
+                audioTranslationBackend: audioTranslationBackendKind
                     .flatMap(TextServiceBackend.init(rawValue:)) ?? ServerConfig.defaultTextServiceBackend,
                 moderationUpstream: .init(baseURL: moderationBase, apiKey: nil),
                 translationUpstream: translationUpstream,

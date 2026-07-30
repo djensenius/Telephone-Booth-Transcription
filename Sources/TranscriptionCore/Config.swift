@@ -23,17 +23,21 @@ public struct ServerConfig: Sendable, Equatable {
     /// `translationUpstream`'s `/chat/completions`; `.onDevice` translates with
     /// Apple's on-device Foundation Models. Does **not** affect the
     /// OpenAI-compatible audio endpoint `POST /v1/audio/translations`, which is
-    /// always a proxy.
+    /// controlled by `audioTranslationBackend`.
     public var textTranslationBackend: TextServiceBackend
+    /// Backend used for `POST /v1/audio/translations` (audio→English).
+    /// `.proxy` forwards the multipart body to `translationUpstream`;
+    /// `.onDevice` transcribes the audio with the on-device Speech engine and
+    /// then translates the resulting *text* with Apple's Foundation Models —
+    /// no network upstream is contacted.
+    public var audioTranslationBackend: TextServiceBackend
     /// Moderation upstream. Always a proxy — moderation classification needs
     /// an LLM, which the macOS Speech framework does not provide.
     public var moderationUpstream: UpstreamConfig
-    /// Translation upstream. Always a proxy — translation is audio→English
-    /// (OpenAI `/v1/audio/translations` semantics), which the macOS Speech
-    /// framework does not natively provide. Kept independent from the
-    /// transcription upstream because a deployment may want, say,
-    /// faster-whisper-server for transcription and a larger model on a
-    /// different host for translation.
+    /// Translation upstream, used by both translation routes when their
+    /// backend is `.proxy`. Kept independent from the transcription upstream
+    /// because a deployment may want, say, faster-whisper-server for
+    /// transcription and a larger model on a different host for translation.
     public var translationUpstream: UpstreamConfig
 
     /// Maximum request body the server will accept (bytes). Default 100 MB.
@@ -175,6 +179,7 @@ public struct ServerConfig: Sendable, Equatable {
         transcriptionBackend: TranscriptionBackend = ServerConfig.defaultTranscriptionBackend,
         moderationBackend: TextServiceBackend = ServerConfig.defaultTextServiceBackend,
         textTranslationBackend: TextServiceBackend = ServerConfig.defaultTextServiceBackend,
+        audioTranslationBackend: TextServiceBackend = ServerConfig.defaultTextServiceBackend,
         moderationUpstream: UpstreamConfig = .defaultModeration,
         translationUpstream: UpstreamConfig = .defaultTranslation,
         maxRequestBytes: Int = 100 * 1024 * 1024,
@@ -194,6 +199,7 @@ public struct ServerConfig: Sendable, Equatable {
         self.transcriptionBackend = transcriptionBackend
         self.moderationBackend = moderationBackend
         self.textTranslationBackend = textTranslationBackend
+        self.audioTranslationBackend = audioTranslationBackend
         self.moderationUpstream = moderationUpstream
         self.translationUpstream = translationUpstream
         self.maxRequestBytes = maxRequestBytes
@@ -239,6 +245,45 @@ public struct ServerConfig: Sendable, Equatable {
         if case .proxy(let cfg) = transcriptionBackend { return cfg }
         return nil
     }
+
+    // MARK: - All-local mode
+
+    /// True when every route runs entirely on this device and no request can
+    /// reach a network upstream: on-device transcription plus on-device
+    /// moderation, text translation, and audio translation.
+    ///
+    /// Note that `.onDevice` moderation with `moderationFallbackEnabled` still
+    /// counts as local — the fallback is only consulted by the `.proxy`
+    /// backend, never by the on-device classifier.
+    public var isFullyLocal: Bool {
+        transcriptionBackend.isOnDevice
+            && moderationBackend == .onDevice
+            && textTranslationBackend == .onDevice
+            && audioTranslationBackend == .onDevice
+    }
+
+    /// Returns a copy configured for fully-local operation: Apple Foundation
+    /// Models for moderation and both translation routes, and an on-device
+    /// speech engine for transcription.
+    ///
+    /// Transcription only switches to `SpeechAnalyzer` when it was proxied. An
+    /// existing `.nativeMacOS` selection is preserved, since it is already
+    /// on-device (it fails closed rather than reaching Apple's servers) and
+    /// overriding it would silently discard a deliberate choice — Speech
+    /// Analyzer needs per-locale assets the user may not have downloaded.
+    ///
+    /// Upstream URLs are left intact so switching back to proxy mode doesn't
+    /// lose the user's settings.
+    public func withAllLocalBackends() -> ServerConfig {
+        var copy = self
+        if case .proxy = copy.transcriptionBackend {
+            copy.transcriptionBackend = .appleSpeechAnalyzer
+        }
+        copy.moderationBackend = .onDevice
+        copy.textTranslationBackend = .onDevice
+        copy.audioTranslationBackend = .onDevice
+        return copy
+    }
 }
 
 /// Which engine handles `POST /v1/audio/transcriptions`.
@@ -250,12 +295,25 @@ public enum TranscriptionBackend: Sendable, Equatable {
     /// Widely supported (50+ locales, no separate asset download) but less
     /// accurate than the macOS 26 `SpeechAnalyzer`. Requires
     /// `NSSpeechRecognitionUsageDescription` and user approval at first use.
+    ///
+    /// Fails closed: `SFSpeechRecognizer` would otherwise silently use Apple's
+    /// servers for locales/devices without on-device support, so the
+    /// transcriber refuses rather than letting audio leave the machine. That's
+    /// what keeps `isOnDevice` below honest.
     case nativeMacOS
     /// Use macOS 26's `SpeechAnalyzer` + `SpeechTranscriber` (the same engine
     /// behind Apple Intelligence transcription in Notes/Voice Memos). Higher
     /// accuracy, handles long-form audio, fully on-device. Requires per-locale
     /// model assets to be downloaded the first time a given locale is used.
     case appleSpeechAnalyzer
+
+    /// True for the engines that run entirely on this device.
+    public var isOnDevice: Bool {
+        switch self {
+        case .proxy: return false
+        case .nativeMacOS, .appleSpeechAnalyzer: return true
+        }
+    }
 }
 
 /// Which engine handles a text-only service (`POST /v1/moderations`,

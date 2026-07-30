@@ -465,8 +465,15 @@ targets:
       - path: Resources/Assets.xcassets
         buildPhase: resources
     dependencies:
+      - target: TranscriptionShared_iOS
+      - target: TranscriptionOnDevice_iOS
+      - target: TranscriptionOperator_iOS
       - target: TranscriptionAuth_iOS
       - target: TranscriptionReview_iOS
+      # Linked directly because the on-device pipeline's `logger:` default
+      # arguments are inlined into this target's call sites.
+      - package: swift-log
+        product: Logging
     info:
       path: Resources/TranscriptionAppiOS-Info.plist
       properties:
@@ -482,6 +489,7 @@ targets:
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
+        NSSpeechRecognitionUsageDescription: "Transcriber uses on-device speech recognition to transcribe message audio locally with Apple Intelligence, so audio never leaves your device."
         OIDCIssuerBase: "https://auth.fluxhaus.io/application/o/telephone-booth-operator-mobile"
         OIDCClientID: "x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY"
         OIDCRedirectScheme: "tbtranscription"

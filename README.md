@@ -92,33 +92,57 @@ You'll need:
   Both run fully on-device, no separate server. Grant the permission prompt at
   first use.
 
-- **Moderation** and **text translation** (`/v1/translations`) can likewise be
-  switched in _Settings_ between **on-device Apple Intelligence** (Foundation
-  Models, `model: apple-foundation-models`) and a **proxy** upstream. On macOS
-  the default stays proxy (so existing setups are unchanged); pick on-device to
-  run with no LM Studio. Audio translation (`/v1/audio/translations`) is always
-  proxy — there is no on-device audio-translation engine.
+- **Moderation**, **text translation** (`/v1/translations`), and **audio
+  translation** (`/v1/audio/translations`) can likewise be switched in
+  _Settings_ between **on-device Apple Intelligence** (Foundation Models,
+  `model: apple-foundation-models`) and a **proxy** upstream. On macOS the
+  default stays proxy (so existing setups are unchanged); pick on-device to run
+  with no LM Studio. Because Apple ships no direct speech→English model,
+  on-device audio translation transcribes with the Speech engine and then
+  translates that text — slower than one Whisper call, but nothing leaves the
+  machine.
+
+- **All-local mode** — _Settings → Privacy mode → "Switch everything to
+  on-device"_ switches transcription, both translation routes, and moderation
+  to on-device processing in one step, keeping your upstream URLs so you can
+  switch back. Translation and moderation use Apple Intelligence; transcription
+  does too, unless you'd already selected the legacy Speech Recognizer, which
+  is kept because it is itself local.
 
 ### iOS app
 
 The same codebase ships an iOS app (also named **Transcriber**, bundle id
-`org.davidjensenius.TelephoneBoothTranscription`). On iOS the server runs in the
-foreground only and the defaults are **on-device via Apple Intelligence**:
+`org.davidjensenius.TelephoneBoothTranscription`). **iOS does not run the HTTP
+server** — that's a macOS-only feature. On iOS the app is a review client for
+the Operator, and it does its AI work **in-process with Apple Intelligence**
+rather than over HTTP:
 
-- **Transcription** defaults to the on-device Speech Analyzer.
-- **Moderation** and **text translation** default to on-device FoundationModels
-  (`model: apple-foundation-models`). These never fall back to a network
-  upstream — if Apple Intelligence is unavailable the relevant endpoint returns
-  `503 on_device_unavailable`. See [`docs/api.md`](./docs/api.md) and
-  [`docs/moderation.md`](./docs/moderation.md) for the on-device response shapes
-  (notably, on-device moderation returns a single `flagged` flag with all-zero
-  category scores).
-- **Audio translation** (`/v1/audio/translations`) remains proxy-only and is not
-  served on-device, so it requires a configured upstream to use on iOS.
+- **Review queue** — polls the Operator for messages needing transcription,
+  translation, or a moderation decision.
+- **On-device pipeline** — _Transcribe & translate on device_ (in the "Needs
+  translation" bucket) downloads the message audio, verifies its SHA-256,
+  re-transcribes it with `SpeechAnalyzer`, translates the transcript with
+  FoundationModels, and computes a local moderation verdict. The "Needs
+  transcription" buckets offer a transcribe-only version of the same run.
+- **Human in the loop** — a translation result pre-fills the draft. Nothing is
+  submitted automatically; the operator reviews and taps Submit.
+- **Transcripts stay on the phone, for now.** iOS can transcribe locally but
+  doesn't yet submit the transcript to the Operator. The endpoint to do so
+  exists as of [Operator #122][op122]; wiring it up is client-side work tracked
+  in [#68][submit]. macOS is unaffected — it posts transcripts back through its
+  worker as before.
 
+[op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
+[submit]: https://github.com/djensenius/Telephone-Booth-Transcription/issues/68
+
+Audio is fetched with no `Authorization` header: the Operator hands out
+pre-signed, short-lived URLs, so attaching the operator's token would leak it to
+blob storage for no benefit.
+
+The on-device buttons are hidden entirely when the device can't run the engines.
 iOS requires iOS 26 and a device with Apple Intelligence support; on-device
-features are unavailable on the simulator. The app ships Light, Dark, and Tinted
-home-screen icons.
+features are unavailable on the simulator. First use prompts for speech
+recognition permission. The app ships Light, Dark, and Tinted home-screen icons.
 
 The Settings panel auto-discovers available models by calling `GET /v1/models`
 on each upstream, and shows them in a picker. Refresh the list with the

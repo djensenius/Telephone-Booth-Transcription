@@ -37,6 +37,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Transcriber uses on-device speech recognition to transcribe message audio locally with Apple Intelligence, so audio never leaves your device.</string>
 	<key>OIDCClientID</key>
 	<string>x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY</string>
 	<key>OIDCIssuerBase</key>

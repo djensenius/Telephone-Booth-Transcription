@@ -13,28 +13,39 @@ import NIOCore
 ///
 /// `owned_by` is overloaded to indicate which of the local app's three
 /// upstreams reported the model: `transcription`, `translation`, or
-/// `moderation`. Native macOS transcription is reported as `"id":
-/// "macos-speech", "owned_by": "transcription"` so the picker UI can include
-/// it in the same list.
+/// `moderation`. On-device engines are reported with synthetic ids
+/// (`macos-speech-analyzer`, `macos-speech`, `apple-foundation-models`) so the
+/// picker UI can include them in the same list.
+///
+/// Realms configured for an on-device backend are **not** queried over the
+/// network, so in all-local mode this endpoint makes no outbound requests.
 public struct ModelsRoute<Context: RequestContext>: Sendable {
     public let upstream: OpenAIUpstream
     public let transcriptionUpstream: UpstreamConfig?
-    public let translationUpstream: UpstreamConfig
-    public let moderationUpstream: UpstreamConfig
+    public let translationUpstream: UpstreamConfig?
+    public let moderationUpstream: UpstreamConfig?
     public let includeNativeMacOS: Bool
+    /// Realms served by Apple's Foundation Models, e.g. `["translation",
+    /// "moderation"]`. One synthetic entry is emitted per realm so `owned_by`
+    /// keeps meaning what it does for proxied models — collapsing them into a
+    /// single entry would advertise a translation model when only moderation is
+    /// on-device.
+    public let foundationModelsRealms: [String]
 
     public init(
         upstream: OpenAIUpstream,
         transcriptionUpstream: UpstreamConfig?,
-        translationUpstream: UpstreamConfig,
-        moderationUpstream: UpstreamConfig,
-        includeNativeMacOS: Bool
+        translationUpstream: UpstreamConfig?,
+        moderationUpstream: UpstreamConfig?,
+        includeNativeMacOS: Bool,
+        foundationModelsRealms: [String] = []
     ) {
         self.upstream = upstream
         self.transcriptionUpstream = transcriptionUpstream
         self.translationUpstream = translationUpstream
         self.moderationUpstream = moderationUpstream
         self.includeNativeMacOS = includeNativeMacOS
+        self.foundationModelsRealms = foundationModelsRealms
     }
 
     public func handle(_ request: Request, context: Context) async throws -> Response {
@@ -42,6 +53,14 @@ public struct ModelsRoute<Context: RequestContext>: Sendable {
         async let translation:   [[String: Any]] = fetchModels(from: translationUpstream, owner: "translation")
         async let moderation:    [[String: Any]] = fetchModels(from: moderationUpstream, owner: "moderation")
         var combined = await transcription + (await translation) + (await moderation)
+        for realm in foundationModelsRealms.reversed() {
+            combined.insert([
+                "id": "apple-foundation-models",
+                "object": "model",
+                "owned_by": realm,
+                "created": 0
+            ], at: 0)
+        }
         if includeNativeMacOS {
             combined.insert([
                 "id": "macos-speech-analyzer",

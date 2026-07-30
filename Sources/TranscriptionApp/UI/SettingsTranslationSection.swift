@@ -45,11 +45,11 @@ extension SettingsView {
             }
             .help("Refresh model list from upstream")
         }
-        Text("Audio→English translation (`/v1/audio/translations`) always uses " +
-             "this upstream — there is no on-device audio-translation engine. " +
-             "Text translation uses it only when the backend above is set to " +
-             "Proxy. Default points at the same faster-whisper-server (`:8000`) " +
-             "as transcription.")
+        Text("Used by audio→English translation (`/v1/audio/translations`) and " +
+             "text translation (`/v1/translations`) whenever those backends are " +
+             "set to Proxy. Both can instead run on-device with Apple " +
+             "Intelligence. Default points at the same faster-whisper-server " +
+             "(`:8000`) as transcription.")
             .font(.caption)
             .foregroundStyle(Theme.Colors.textSecondary)
     }

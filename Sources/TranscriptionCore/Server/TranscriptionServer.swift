@@ -3,10 +3,8 @@ import Foundation
 import Hummingbird
 import Logging
 import NIOCore
-import TranscriptionShared
-#if canImport(FoundationModels)
 import TranscriptionOnDevice
-#endif
+import TranscriptionShared
 
 /// Composes the entire HTTP surface — router + middlewares + routes — into a
 /// `Hummingbird.Application` ready to run.
@@ -120,10 +118,10 @@ public struct TranscriptionServer: Sendable {
             backend: backendImpl,
             maxRequestBytes: config.maxRequestBytes
         )
-        let translationBackend = ProxyTranslationBackend(
+        let translationBackend = Self.makeTranslationBackend(
+            config: config,
             upstream: upstream,
-            upstreamConfig: config.translationUpstream,
-            defaultModel: config.defaultTranslationModel
+            logger: logger
         )
         let translation = TranslationRoute<BasicRequestContext>(
             backend: translationBackend,
@@ -148,13 +146,27 @@ public struct TranscriptionServer: Sendable {
         let models = ModelsRoute<BasicRequestContext>(
             upstream: upstream,
             transcriptionUpstream: config.transcriptionUpstream,
-            translationUpstream: config.translationUpstream,
-            moderationUpstream: config.moderationUpstream,
-            includeNativeMacOS: {
-                switch config.transcriptionBackend {
-                case .nativeMacOS, .appleSpeechAnalyzer: return true
-                case .proxy: return false
+            // A realm served on-device has no upstream to enumerate; passing
+            // nil keeps `/v1/models` from making a network call in all-local
+            // mode.
+            translationUpstream: (config.textTranslationBackend == .proxy
+                                  || config.audioTranslationBackend == .proxy)
+                ? config.translationUpstream : nil,
+            moderationUpstream: config.moderationBackend == .proxy
+                ? config.moderationUpstream : nil,
+            includeNativeMacOS: config.transcriptionBackend.isOnDevice,
+            foundationModelsRealms: {
+                // "translation" covers both translation routes; only list it
+                // once even when text and audio translation are both on-device.
+                var realms: [String] = []
+                if config.textTranslationBackend == .onDevice
+                    || config.audioTranslationBackend == .onDevice {
+                    realms.append("translation")
                 }
+                if config.moderationBackend == .onDevice {
+                    realms.append("moderation")
+                }
+                return realms
             }()
         )
         let health = HealthRoute<BasicRequestContext>()
@@ -192,5 +204,82 @@ public struct TranscriptionServer: Sendable {
         }
         #endif
         return nil
+    }
+
+    /// Builds the on-device transcriber matching `backend`. Returns `nil` when
+    /// the Speech framework is unavailable on this platform.
+    ///
+    /// A `.proxy` transcription backend maps to the `SpeechAnalyzer` engine
+    /// rather than `nil`, so all-local audio translation still works for users
+    /// who deliberately keep `/v1/audio/transcriptions` pointed at Whisper.
+    static func makeOnDeviceTranscriber(
+        backend: TranscriptionBackend,
+        locale: Locale,
+        logger: Logger
+    ) -> (any AudioTranscriber)? {
+        #if canImport(Speech)
+        if case .nativeMacOS = backend {
+            return NativeSpeechTranscriber(locale: locale, logger: logger)
+        }
+        if #available(macOS 26.0, iOS 26.0, visionOS 26.0, *) {
+            return SpeechAnalyzerTranscriber(locale: locale, logger: logger)
+        }
+        return NativeSpeechTranscriber(locale: locale, logger: logger)
+        #else
+        return nil
+        #endif
+    }
+
+    /// Chooses the `POST /v1/audio/translations` backend.
+    ///
+    /// `.onDevice` composes the Speech engine with Foundation Models so no
+    /// audio or text leaves the machine. If either half is unavailable, the
+    /// route reports `503 on_device_unavailable` rather than falling back to
+    /// the proxy: selecting on-device is a privacy boundary, and quietly
+    /// shipping the caller's audio to a network upstream because a local engine
+    /// was missing would break both `isFullyLocal` and the promise the Settings
+    /// UI makes. This matches the text-translation and moderation routes.
+    static func makeTranslationBackend(
+        config: ServerConfig,
+        upstream: OpenAIUpstream,
+        logger: Logger
+    ) -> any TranslationBackendImpl {
+        guard config.audioTranslationBackend == .onDevice else {
+            return ProxyTranslationBackend(
+                upstream: upstream,
+                upstreamConfig: config.translationUpstream,
+                defaultModel: config.defaultTranslationModel
+            )
+        }
+        guard let transcriber = makeOnDeviceTranscriber(
+            backend: config.transcriptionBackend,
+            locale: Locale(identifier: config.nativeTranscriptionLocale),
+            logger: logger
+        ), let translator = makeOnDeviceTranslator(logger: logger) else {
+            logger.warning(
+                """
+                on-device audio translation selected but unavailable on this OS; \
+                /v1/audio/translations will return 503 on_device_unavailable
+                """
+            )
+            return UnavailableTranslationBackend()
+        }
+        return OnDeviceTranslationBackend(
+            transcriber: transcriber,
+            translator: translator,
+            logger: logger
+        )
+    }
+}
+
+/// Stands in for the on-device audio-translation backend when this device can't
+/// run the engines. It always fails closed, so selecting on-device never causes
+/// audio to reach a network upstream.
+struct UnavailableTranslationBackend: TranslationBackendImpl {
+    func handle(body: ByteBuffer, contentType: String) async throws -> Response {
+        throw TranslationBackendError.unavailable(
+            "on-device audio translation is selected but Apple Intelligence is "
+            + "unavailable on this device"
+        )
     }
 }

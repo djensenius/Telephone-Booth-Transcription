@@ -1,5 +1,6 @@
 import SwiftUI
 import TranscriptionAuth
+import TranscriptionOperator
 import TranscriptionReview
 
 /// The review queue: the operator's primary surface. Surfaces messages whose
@@ -14,6 +15,15 @@ struct ReviewView: View {
     @State private var store = ReviewStore(
         client: HTTPOperatorReviewClient(tokenProvider: AuthBearerAdapter())
     )
+    /// Nil when this device can't run the on-device engines — the entry point
+    /// is then hidden rather than offered and always failing.
+    /// Nil when this device can't transcribe on-device.
+    ///
+    /// Re-probed when the view appears: Apple Intelligence can be enabled, or a
+    /// model finish downloading, while the app stays open. A use-time recheck
+    /// can't rescue that case, because with no pipeline there is no button to
+    /// press in the first place.
+    @State private var onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
 
     var body: some View {
         Group {
@@ -28,8 +38,33 @@ struct ReviewView: View {
             store.transcriptionRerunner = host
             if auth.isSignedIn {
                 await store.poll()
+            } else {
+                // This view outlives the session, so locally generated
+                // transcripts would otherwise survive into the next sign-in.
+                // Pruning everything also supersedes any run still in flight.
+                onDevice?.prune(keeping: [])
             }
         }
+        .onAppear { refreshOnDeviceCapability() }
+    }
+
+    /// Re-probes Apple Intelligence when the queue appears, so enabling it (or
+    /// finishing a model download) while the app is running surfaces the
+    /// affordance without a relaunch.
+    ///
+    /// Only ever upgrades, and never while work is outstanding: swapping the
+    /// pipeline would strand a running task's result on the discarded instance,
+    /// where nothing observes it. The next appearance picks the upgrade up.
+    private func refreshOnDeviceCapability() {
+        guard let existing = onDevice else {
+            onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
+            return
+        }
+        guard existing.supportsTranslation == false else { return }
+        guard visibleMessageIDs.allSatisfy({ !existing.isRunning($0) }) else { return }
+        guard let refreshed = OnDeviceReviewPipeline.makeAppleIntelligence(),
+              refreshed.supportsTranslation else { return }
+        onDevice = refreshed
     }
 
     private var signedOut: some View {
@@ -130,6 +165,20 @@ struct ReviewView: View {
             .padding(Theme.Spacing.large)
         }
         .refreshable { await store.refresh() }
+        .onChange(of: visibleMessageIDs) { _, ids in
+            // Transcripts and translations live in the pipeline until pruned;
+            // drop anything that has left the queue.
+            onDevice?.prune(keeping: ids)
+        }
+    }
+
+    /// Every message id currently rendered in any bucket.
+    private var visibleMessageIDs: Set<String> {
+        var ids = Set(store.awaitingTranscription.map(\.id))
+        ids.formUnion(store.awaitingTranslation.map(\.id))
+        ids.formUnion(store.awaitingModeration.map(\.id))
+        ids.formUnion(store.withTranscriptionHistory.map(\.id))
+        return ids
     }
 
     private var header: some View {
@@ -188,7 +237,7 @@ struct ReviewView: View {
                     .padding(.vertical, Theme.Spacing.small)
             } else {
                 ForEach(messages) { message in
-                    ReviewRow(message: message, kind: kind, store: store)
+                    ReviewRow(message: message, kind: kind, store: store, onDevice: onDevice)
                 }
             }
         }
@@ -243,6 +292,7 @@ private struct ReviewRow: View {
     let message: Message
     let kind: Kind
     let store: ReviewStore
+    let onDevice: OnDeviceReviewPipeline?
 
     @State private var translationDraft = ""
     @State private var notesDraft = ""
@@ -294,30 +344,90 @@ private struct ReviewRow: View {
 
     @ViewBuilder
     private func transcriptionActions(title: String) -> some View {
-        HStack(spacing: Theme.Spacing.small) {
-            if isQueued {
-                Label("Queued for the local worker", systemImage: "clock.arrow.circlepath")
-                    .font(Theme.Fonts.caption)
-                    .foregroundStyle(Theme.Colors.textSecondary)
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            HStack(spacing: Theme.Spacing.small) {
+                if isQueued {
+                    Label("Queued for the local worker", systemImage: "clock.arrow.circlepath")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+                Spacer()
+                #if os(macOS)
+                // Only the Mac runs the Operator worker, so only the Mac can
+                // hand the job off for a transcript that lands back on the
+                // Operator. iOS transcribes on-device instead (below).
+                Button {
+                    Task { await store.requestTranscription(message) }
+                } label: {
+                    actionLabel(title, systemImage: "waveform")
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(isActing || isQueued)
+                #endif
             }
-            Spacer()
-            #if os(macOS)
-            // Only the Mac runs the local push worker, so only the Mac can
-            // start a transcription. iOS still shows the state.
-            Button {
-                Task { await store.requestTranscription(message) }
-            } label: {
-                actionLabel(title, systemImage: "waveform")
-            }
-            .buttonStyle(.tbtGlass)
-            .disabled(isActing || isQueued)
+
+            #if !os(macOS)
+            onDeviceTranscribeActions
             #endif
+        }
+    }
+
+    /// iOS has no Operator worker, but it can still transcribe locally with
+    /// Apple Intelligence. The transcript stays on the device: this client
+    /// doesn't yet submit it to the Operator's transcript endpoint, tracked
+    /// by #68.
+    @ViewBuilder
+    private var onDeviceTranscribeActions: some View {
+        if let onDevice {
+            let stage = onDevice.stage(for: message.id)
+            let running = onDevice.isRunning(message.id)
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                HStack(spacing: Theme.Spacing.small) {
+                    Button {
+                        Task { await onDevice.transcribeOnly(for: message) }
+                    } label: {
+                        if running {
+                            HStack(spacing: Theme.Spacing.small) {
+                                ProgressView().controlSize(.small)
+                                Text(stageLabel(stage))
+                            }
+                        } else {
+                            Label("Transcribe on device", systemImage: "apple.intelligence")
+                        }
+                    }
+                    .buttonStyle(.tbtGlass)
+                    .disabled(running || isActing)
+                    Spacer()
+                }
+
+                if case .failed(let reason) = stage {
+                    Text(reason)
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.error)
+                }
+
+                if let output = onDevice.outputs[message.id] {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(output.transcript)
+                            .font(Theme.Fonts.bodyMedium)
+                            .foregroundStyle(Theme.Colors.textPrimary)
+                            .textSelection(.enabled)
+                        Text("Transcribed on this device. It stays here — this app can't "
+                             + "send a transcript to the Operator yet.")
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                }
+            }
         }
     }
 
     @ViewBuilder
     private var translationActions: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            onDeviceActions
+
             TextField("English translation", text: $translationDraft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(2...5)
@@ -330,6 +440,7 @@ private struct ReviewRow: View {
                     // A new transcription replaced the one being translated;
                     // drop the draft so it can't be applied to the wrong source.
                     translationDraft = ""
+                    onDevice?.reset(message.id)
                 }
 
             HStack {
@@ -343,6 +454,83 @@ private struct ReviewRow: View {
                 .buttonStyle(.tbtGlass)
                 .disabled(isActing || translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+        }
+    }
+
+    /// Apple Intelligence entry point: re-transcribes the message audio on this
+    /// device, translates it, and pre-fills the draft below. Never submits —
+    /// the operator still reviews and taps Submit.
+    @ViewBuilder
+    private var onDeviceActions: some View {
+        if let onDevice, onDevice.supportsTranslation {
+            let stage = onDevice.stage(for: message.id)
+            let running = onDevice.isRunning(message.id)
+
+            HStack(spacing: Theme.Spacing.small) {
+                Button {
+                    Task {
+                        let translation = await onDevice.run(for: message)
+                        // `reset` can land between `run` returning and this
+                        // continuation resuming, so re-check against the
+                        // pipeline's current output rather than trusting the
+                        // returned value — otherwise a cleared draft gets
+                        // repopulated with a superseded translation.
+                        if let translation,
+                           onDevice.outputs[message.id]?.translation == translation {
+                            translationDraft = translation
+                        }
+                    }
+                } label: {
+                    if running {
+                        HStack(spacing: Theme.Spacing.small) {
+                            ProgressView().controlSize(.small)
+                            Text(stageLabel(stage))
+                        }
+                    } else {
+                        Label("Transcribe & translate on device", systemImage: "apple.intelligence")
+                    }
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(running || isActing)
+                Spacer()
+            }
+
+            if case .failed(let reason) = stage {
+                Text(reason)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.error)
+            }
+
+            if let output = onDevice.outputs[message.id] {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("On-device transcript: \(output.transcript)")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .lineLimit(3)
+                    if let recommendation = output.recommendation {
+                        Text("On-device moderation: \(recommendation)"
+                             + ((output.flagged ?? false) ? " (flagged)" : ""))
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                    // The audio itself *was* downloaded from blob storage, so
+                    // don't claim nothing left the device — only that no
+                    // content reached an AI processor.
+                    Text("Processed on this device — no audio or text was sent "
+                         + "to an AI service. Review the draft before submitting.")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func stageLabel(_ stage: OnDeviceReviewPipeline.Stage) -> String {
+        switch stage {
+        case .fetchingAndTranscribing: return "Transcribing…"
+        case .translating: return "Translating…"
+        case .moderating: return "Checking…"
+        default: return "Working…"
         }
     }
 

@@ -1,0 +1,167 @@
+import Foundation
+import Logging
+import NIOCore
+import TranscriptionShared
+
+/// `AudioFetching` backed by `URLSession` rather than `AsyncHTTPClient`.
+///
+/// Preferred on iOS: it uses the platform networking stack (ATS, cellular
+/// policy, proxy support, background-friendly) and needs no NIO event-loop
+/// group to be created and shut down alongside the app. Verification,
+/// byte-capping, temp-file staging, and cleanup are all delegated to the shared
+/// `AudioFileStaging`, so behavior matches `HTTPClientAudioFetcher` exactly.
+///
+/// **Privacy:** errors are the same content-free `AudioFetchError` cases used
+/// elsewhere. The URL, bytes, and hash never reach a log line.
+///
+/// **No credentials are sent.** The Operator returns `message.audio.url` as a
+/// pre-signed, short-lived Azure Blob SAS URL — the credential is already in
+/// the query string, and the host is blob storage rather than the Operator.
+/// Attaching the operator's bearer token would hand it to a third party for no
+/// benefit, so this fetcher deliberately sends no `Authorization` header, the
+/// same as `HTTPClientAudioFetcher`.
+public final class URLSessionAudioFetcher: AudioFetching {
+    private let urlSession: URLSession
+    private let allowInsecureURLs: Bool
+    private let logger: Logger
+
+    /// Total wall-clock budget for one audio fetch, matching
+    /// `HTTPClientAudioFetcher`'s deadline so both fetchers bound a run the
+    /// same way.
+    static let fetchTimeout: TimeInterval = 120
+
+    /// Ephemeral, non-caching, credential-free session.
+    ///
+    /// `URLSession.shared` keeps a persistent URL cache and shared
+    /// cookie/credential storage, so a cacheable audio response could survive on
+    /// disk after `AudioFileStaging` deleted its temp file — audio outliving the
+    /// staging lifecycle is exactly what that cleanup exists to prevent.
+    private static func makeDefaultSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        // `timeoutIntervalForResource` defaults to seven days, so a response
+        // that trickles bytes would otherwise pin a review row (and its staging
+        // task) effectively forever.
+        configuration.timeoutIntervalForRequest = fetchTimeout
+        configuration.timeoutIntervalForResource = fetchTimeout
+        return URLSession(configuration: configuration)
+    }
+
+    public init(
+        urlSession: URLSession? = nil,
+        allowInsecureURLs: Bool = false,
+        logger: Logger = Logger(label: "audio-fetcher-urlsession")
+    ) {
+        self.urlSession = urlSession ?? Self.makeDefaultSession()
+        self.allowInsecureURLs = allowInsecureURLs
+        self.logger = logger
+    }
+
+    public func withFetchedAudioFile<T: Sendable>(
+        url: String,
+        expectedSHA256: String,
+        maxBytes: Int,
+        suggestedExtension: String?,
+        _ body: @Sendable (URL) async throws -> T
+    ) async throws -> T {
+        // Validate the hash before opening any connection, matching
+        // HTTPClientAudioFetcher's ordering.
+        guard AudioFileStaging.normalizedSHA256(expectedSHA256) != nil else {
+            throw AudioFetchError.invalidExpectedHash
+        }
+        if !allowInsecureURLs {
+            guard url.lowercased().hasPrefix("https://") else {
+                throw AudioFetchError.insecureURL
+            }
+        }
+        guard let requestURL = URL(string: url) else {
+            throw AudioFetchError.fetchFailed
+        }
+
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await urlSession.bytes(for: request)
+        } catch {
+            logger.debug("audio fetch transport failed: \(type(of: error))")
+            throw AudioFetchError.fetchFailed
+        }
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode) else {
+            throw AudioFetchError.fetchFailed
+        }
+
+        // Fail fast on an advertised length over the cap so we don't stream a
+        // huge body just to reject it. `stage` still enforces the real cap.
+        if http.expectedContentLength > 0, http.expectedContentLength > Int64(maxBytes) {
+            throw AudioFetchError.tooLarge
+        }
+
+        return try await AudioFileStaging.stage(
+            chunks: Self.buffered(bytes),
+            expectedSHA256: expectedSHA256,
+            maxBytes: maxBytes,
+            suggestedExtension: suggestedExtension,
+            body
+        )
+    }
+
+    /// Regroups `URLSession`'s byte-at-a-time sequence into `ByteBuffer` chunks
+    /// so it can feed `AudioFileStaging.stage`. Chunking keeps the per-element
+    /// overhead of the async sequence from dominating large downloads.
+    ///
+    /// Deliberately a pull-based sequence rather than an `AsyncThrowingStream`:
+    /// that type buffers `.unbounded` by default and its bounded policies drop
+    /// elements, which would silently corrupt the audio. Without backpressure a
+    /// fast connection can race ahead of the consumer's disk writes, so a
+    /// response with a missing or understated `Content-Length` could balloon in
+    /// memory and download far past `maxBytes` before `stage` notices the cap.
+    /// Here nothing is read until the consumer asks for the next chunk.
+    static func buffered(
+        _ bytes: URLSession.AsyncBytes,
+        chunkSize: Int = 64 * 1024
+    ) -> ChunkedBytes<URLSession.AsyncBytes> {
+        ChunkedBytes(source: bytes, chunkSize: chunkSize)
+    }
+}
+
+/// Groups a byte sequence into `ByteBuffer` chunks, pulling from the source
+/// only as the consumer requests. See `URLSessionAudioFetcher.buffered`.
+public struct ChunkedBytes<Source: AsyncSequence & Sendable>: AsyncSequence, Sendable
+where Source.Element == UInt8 {
+    public typealias Element = ByteBuffer
+
+    let source: Source
+    let chunkSize: Int
+
+    public init(source: Source, chunkSize: Int) {
+        self.source = source
+        self.chunkSize = chunkSize
+    }
+
+    public struct AsyncIterator: AsyncIteratorProtocol {
+        var inner: Source.AsyncIterator
+        let chunkSize: Int
+
+        public mutating func next() async throws -> ByteBuffer? {
+            var scratch = [UInt8]()
+            scratch.reserveCapacity(chunkSize)
+            while scratch.count < chunkSize {
+                guard let byte = try await inner.next() else { break }
+                scratch.append(byte)
+            }
+            return scratch.isEmpty ? nil : ByteBuffer(bytes: scratch)
+        }
+    }
+
+    public func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(inner: source.makeAsyncIterator(), chunkSize: chunkSize)
+    }
+}

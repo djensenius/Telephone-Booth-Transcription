@@ -16,23 +16,13 @@ enum OnDeviceTranscriptionAdapter {
         contentType: String,
         transcribe: (URL) async throws -> String
     ) async throws -> Response {
-        guard let part = MultipartFilePart.extractFile(from: body, contentType: contentType) else {
-            throw TranscriptionBackendError.badRequest("multipart body did not include a `file` field")
-        }
-
-        let ext = AudioExtension.from(mimeType: part.mimeType) ?? "wav"
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("transcription-\(UUID().uuidString).\(ext)")
-        var buf = part.data
-        guard let fileData = buf.readData(length: buf.readableBytes) else {
-            throw TranscriptionBackendError.badRequest("failed to read audio data from multipart body")
-        }
-        try fileData.write(to: tmp)
-        defer { try? FileManager.default.removeItem(at: tmp) }
-
         let text: String
         do {
-            text = try await transcribe(tmp)
+            text = try await OnDeviceAudioFile.withTemporaryFile(
+                body: body,
+                contentType: contentType,
+                perform: transcribe
+            )
         } catch let error as OnDeviceServiceError {
             throw error.asTranscriptionBackendError
         }
@@ -42,6 +32,36 @@ enum OnDeviceTranscriptionAdapter {
         var headers = HTTPFields()
         headers[.contentType] = "application/json"
         return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(bytes: data)))
+    }
+}
+
+/// Extracts the multipart `file` part into a temporary file on disk, hands the
+/// URL to `perform`, and cleans up afterwards. Shared by every on-device
+/// backend that needs a file URL to feed the Speech framework.
+///
+/// Throws `OnDeviceServiceError.badRequest` for malformed bodies so callers can
+/// map it onto their own route error type.
+enum OnDeviceAudioFile {
+    static func withTemporaryFile<T>(
+        body: ByteBuffer,
+        contentType: String,
+        perform: (URL) async throws -> T
+    ) async throws -> T {
+        guard let part = MultipartFilePart.extractFile(from: body, contentType: contentType) else {
+            throw OnDeviceServiceError.badRequest("multipart body did not include a `file` field")
+        }
+
+        let ext = AudioExtension.from(mimeType: part.mimeType) ?? "wav"
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("transcription-\(UUID().uuidString).\(ext)")
+        var buf = part.data
+        guard let fileData = buf.readData(length: buf.readableBytes) else {
+            throw OnDeviceServiceError.badRequest("failed to read audio data from multipart body")
+        }
+        try fileData.write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        return try await perform(tmp)
     }
 }
 

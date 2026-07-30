@@ -49,14 +49,22 @@
 This app exposes three OpenAI-compatible upstream realms:
 
 - **Transcription** — `POST /v1/audio/transcriptions`, proxied to a
-  Whisper-compatible server (faster-whisper-server, OpenAI, or the native
-  macOS Speech engines).
+  Whisper-compatible server (faster-whisper-server, OpenAI) or served by the
+  on-device macOS Speech engines.
 - **Translation** — `POST /v1/audio/translations` (audio → English) and the
-  custom `POST /v1/translations` (text → English). Proxied to an
-  independently-configured upstream because a deployment may want a larger
-  translation model than its transcription model.
+  custom `POST /v1/translations` (text → English). Each has its own backend
+  setting: proxy to an independently-configured upstream (a deployment may want
+  a larger translation model than its transcription model), or on-device via
+  Apple Foundation Models. On-device audio translation is a composition —
+  transcribe with the Speech engine, then translate that text — because Apple
+  ships no direct speech→English model.
 - **Moderation** — `POST /v1/moderations`, proxied to LM Studio (or any
-  chat-completions server) with a best-effort local classifier fallback.
+  chat-completions server) with a best-effort local classifier fallback, or
+  served on-device by Foundation Models.
+
+Setting every realm to its on-device backend ("all-local mode",
+`ServerConfig.isFullyLocal`) means no request the server handles reaches the
+network.
 
 ## Key decisions
 
@@ -149,6 +157,79 @@ HTTPS/WebSocket access to the Operator is required.
 
 See [`operator-push.md`](operator-push.md) for setup, wire format, and
 status semantics.
+
+### iOS: in-process, no server
+
+The iOS target is deliberately **not** a second copy of the server. It links
+`TranscriptionShared`, `TranscriptionOnDevice`, and `TranscriptionOperator`,
+but not `TranscriptionCore` — there is no Hummingbird listener, no GRDB request
+log, and no `ConfigPersistence` (that file is `#if os(macOS)` in its entirety).
+`ServerHostIOS` is an empty shim that exists only so the shared SwiftUI code
+compiles.
+
+Instead, the iOS review UI runs the same pipeline **in-process**.
+`OnDeviceReviewPipeline` (in `TranscriptionOperator`, alongside the dispatcher
+it drives, so its state machine is unit-testable without an app host) wraps
+`InProcessOperatorJobDispatcher` — the identical type the macOS push worker
+uses — with:
+
+- `URLSessionAudioFetcher` for the audio fetch, so we get ATS, cellular policy,
+  and proxy support from the platform rather than standing up a NIO event-loop
+  group inside a phone app. It delegates hashing, byte-capping, temp-file
+  staging, and cleanup to the shared `AudioFileStaging`, so its observable
+  behavior matches `HTTPClientAudioFetcher` exactly. It sends **no**
+  `Authorization` header: `message.audio.url` is a pre-signed, short-lived blob
+  URL whose credential is already in the query string, and whose host is
+  storage rather than the Operator — attaching the operator's bearer token
+  would leak it to a third party for no benefit.
+- `SpeechAnalyzerTranscriber` and the FoundationModels translation/moderation
+  services, constructed directly rather than reached through HTTP.
+
+The consequences are worth stating plainly:
+
+- **No HTTP hop.** The transcript never leaves the process, so there is no
+  loopback listener to secure and no bearer token to manage on iOS.
+- **Same error vocabulary.** Because the dispatcher is shared, iOS surfaces the
+  same sanitized `OperatorJobError` codes (`audio_fetch_failed`,
+  `audio_sha256_mismatch`, `*_unavailable`, `*_timeout`) as the macOS worker.
+  `OnDeviceReviewPipeline` maps those codes — never the underlying error — to
+  operator-facing copy, preserving the metadata-only logging rule.
+- **Manual and advisory.** The pipeline runs only when the operator taps the
+  button, and its output _pre-fills_ the translation draft. It never submits.
+  The human stays in the loop, which also means a bad on-device transcript is a
+  correctable draft rather than a published result.
+- **Graceful absence.** `makeAppleIntelligence` (the Apple Intelligence wiring,
+  which stays in `TranscriptionApp`) returns `nil` when the engines are
+  unavailable, and the UI hides the affordance entirely rather than offering a
+  button that always fails. It consults `OnDeviceCapability`, which probes
+  `SpeechTranscriber.isAvailable` and `SystemLanguageModel.availability` — an
+  OS-version check alone is not enough, since a device can run iOS 26 and still
+  be ineligible, have Apple Intelligence turned off, or not have finished
+  downloading the model. The engines re-check at use time as well, because
+  availability can change after the probe, and the review queue re-probes on
+  appear so enabling Apple Intelligence mid-session surfaces the affordance
+  without a relaunch. Speech and Foundation Models are gated separately:
+  transcription needs only the former, so a device with Apple Intelligence off
+  still gets the transcription queues, with `supportsTranslation == false`
+  hiding just the translate affordance.
+
+#### Transcripts are read-only on iOS (client limitation)
+
+The transcription queues added by the discovery worker are actionable on macOS,
+which hands the job to its worker and gets the transcript posted back to the
+Operator. iOS can run the same transcription locally via `transcribeOnly`, but
+does not yet submit the result — it is shown to the operator and goes no
+further.
+
+This started as an API constraint: the only endpoint accepting transcript text
+was `POST /v1/worker/messages/{id}/transcription`, gated on a worker-scoped API
+token that the iOS app (an OIDC human operator) has no business holding.
+[Operator #122][op122] has since shipped an operator-authenticated
+`POST /v1/messages/{id}/transcription`, so the constraint is now purely on this
+side: the client work is simply not written yet. Tracked in [#68][submit].
+
+[op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
+[submit]: https://github.com/djensenius/Telephone-Booth-Transcription/issues/68
 
 ---
 
