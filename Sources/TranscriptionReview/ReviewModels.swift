@@ -272,11 +272,14 @@ public struct Moderation: Codable, Sendable, Equatable, Identifiable {
     /// server-side one are calibrated differently, so the operator being asked
     /// to weigh the recommendation needs to know which one they're weighing.
     public var sourceLabel: String {
+        // A provider the Operator didn't name would otherwise render as nothing
+        // at all, leaving the UI with a bare "…: Approve"; say "AI" instead.
+        let engine = provider.displayName.isEmpty ? "AI" : provider.displayName
         guard let model,
               !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return provider.displayName
+            return engine
         }
-        return "\(provider.displayName) · \(model)"
+        return "\(engine) · \(model)"
     }
 
     /// The highest category score, formatted for display, but only when the

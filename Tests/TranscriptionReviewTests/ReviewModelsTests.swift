@@ -211,6 +211,7 @@ struct ReviewModelsTests {
         recommendation: String = "null",
         maxScore: String = "null",
         model: String = "\"omni-moderation\"",
+        provider: String = "\"openai\"",
         error: String = "null"
     ) throws -> Moderation {
         let json = """
@@ -220,7 +221,7 @@ struct ReviewModelsTests {
           "audio":{"url":"https://example.com/a.flac","sha256":"abc","durationMs":1},
           "latestTranscription":null,
           "latestModeration":{
-            "id":"m1","messageId":"x","transcriptionId":"t1","provider":"openai",
+            "id":"m1","messageId":"x","transcriptionId":"t1","provider":\(provider),
             "model":\(model),"status":"\(status)","flagged":\(flagged),
             "recommendation":\(recommendation),"maxScore":\(maxScore),
             "categories":null,"reasonSummary":null,"latencyMs":null,
@@ -264,6 +265,11 @@ struct ReviewModelsTests {
         #expect(noModel.sourceLabel == "OpenAI")
         let blankModel = try decodeModeration(status: "succeeded", model: "\"  \"")
         #expect(blankModel.sourceLabel == "OpenAI")
+
+        // An unnamed provider still gets a visible label rather than a bare
+        // separator in the UI.
+        let unnamed = try decodeModeration(status: "succeeded", provider: "\"  \"")
+        #expect(unnamed.sourceLabel == "AI · omni-moderation")
     }
 
     @Test("an unrecognized provider is presented as prose, not as a wire value")
