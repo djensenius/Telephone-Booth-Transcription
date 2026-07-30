@@ -89,7 +89,14 @@ public enum AiProvider: Codable, Sendable, Hashable {
         case .openai: return "OpenAI"
         case .macApp: return "Mac app"
         case .disabled: return "Disabled"
-        case .unknown(let value): return value
+        // A provider this build doesn't know about still reaches the operator
+        // as a label next to a verdict, so present it as prose rather than as
+        // a raw wire value: "on_device" reads as "On device".
+        case .unknown(let value):
+            let spaced = value.replacingOccurrences(of: "_", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let first = spaced.first else { return value }
+            return first.uppercased() + spaced.dropFirst()
         }
     }
 }

@@ -266,6 +266,17 @@ struct ReviewModelsTests {
         #expect(blankModel.sourceLabel == "OpenAI")
     }
 
+    @Test("an unrecognized provider is presented as prose, not as a wire value")
+    func unknownProviderDisplayName() {
+        #expect(AiProvider(rawValue: "on_device").displayName == "On device")
+        #expect(AiProvider(rawValue: "foundation_models").displayName == "Foundation models")
+        // Known providers keep their curated spelling.
+        #expect(AiProvider(rawValue: "openai").displayName == "OpenAI")
+        #expect(AiProvider(rawValue: "mac_app").displayName == "Mac app")
+        // Degenerate input doesn't crash or produce an empty label.
+        #expect(AiProvider(rawValue: "").displayName == "")
+    }
+
     @Test("the flagged score label only appears when flagged")
     func moderationFlaggedScoreLabel() throws {
         // Flagged with a score: a label is produced.
