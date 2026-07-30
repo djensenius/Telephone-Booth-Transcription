@@ -202,6 +202,35 @@ struct ReviewClientTests {
         #expect(store.messages.first(where: { $0.id == target.id })?.latestModeration == nil)
     }
 
+    @Test("a verdict tied to a superseded transcription is not folded in")
+    @MainActor
+    func moderationForStaleTranscriptionIsDropped() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingModeration.first)
+
+        client.moderationResult = .success(
+            Moderation(
+                id: "mod", messageId: target.id, transcriptionId: "an-older-transcription",
+                provider: .macApp, model: "apple-foundation-models", status: .succeeded,
+                flagged: true, recommendation: .reject, maxScore: 0.82, categories: nil,
+                reasonSummary: nil, latencyMs: 140, error: nil,
+                createdAt: target.createdAt, completedAt: target.createdAt
+            )
+        )
+        let ok = await store.submitModeration(
+            target, flagged: true, recommendation: "reject", maxScore: 0.82,
+            model: "apple-foundation-models"
+        )
+
+        // The submission itself succeeded, so the caller still clears its local
+        // verdict — but the verdict describes text this message no longer has.
+        #expect(ok)
+        #expect(store.actionError == nil)
+        #expect(store.messages.first(where: { $0.id == target.id })?.latestModeration == nil)
+    }
+
     @Test("a failed decision surfaces an actionError and clears the pending flag")
     @MainActor
     func decideFailureSurfacesError() async {

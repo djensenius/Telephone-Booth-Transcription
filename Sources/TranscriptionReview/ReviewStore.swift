@@ -395,6 +395,14 @@ public final class ReviewStore {
             // Merge into the *current* local message, not the captured one, so a
             // poll that landed mid-request can't be clobbered with stale fields.
             let base = messages.first(where: { $0.id == message.id }) ?? message
+            // That same poll can also swap in a *new* transcription. A verdict
+            // recorded against the one it replaced describes text that is no
+            // longer on screen, so leave the polled state alone rather than show
+            // a recommendation beside a transcript it never judged.
+            guard updated.transcriptionId == nil
+                    || updated.transcriptionId == base.latestTranscription?.id else {
+                return true
+            }
             apply(base.replacingLatestModeration(updated))
             return true
         } catch {

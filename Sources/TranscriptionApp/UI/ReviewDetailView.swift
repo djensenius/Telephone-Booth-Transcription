@@ -290,23 +290,49 @@ struct ReviewDetailView: View {
                 Computed on this device. Submit it to the Operator so every reviewer \
                 sees the same recommendation — nothing is sent until you do.
                 """)
-            HStack {
-                Spacer()
-                Button {
-                    Task { await submitLocalVerdict(using: onDevice) }
-                } label: {
-                    actionLabel("Submit recommendation", systemImage: "arrow.up.circle.fill")
+            if localVerdictIsSubmittable {
+                HStack {
+                    Spacer()
+                    Button {
+                        Task { await submitLocalVerdict(using: onDevice) }
+                    } label: {
+                        actionLabel("Submit recommendation", systemImage: "arrow.up.circle.fill")
+                    }
+                    .buttonStyle(.tbtGlass)
+                    .disabled(onDevice.isRunning(message.id) || isActing)
                 }
-                .buttonStyle(.tbtGlass)
-                .disabled(onDevice.isRunning(message.id) || isActing)
+            } else {
+                // The verdict is stored against the Operator's transcription, so
+                // publishing one computed from a draft nobody has submitted would
+                // attach a recommendation to text the Operator doesn't hold.
+                caption("""
+                    This judged a draft the Operator doesn't have yet. Submit the \
+                    translation and the recommendation can go with it.
+                    """)
             }
         }
+    }
+
+    /// The English the Operator actually holds for this message — its
+    /// translation of record, or the transcript when nothing is translated yet.
+    private var operatorEnglish: String? {
+        message.translationText ?? message.latestTranscription?.text
+    }
+
+    /// Whether the verdict on screen describes the text the Operator holds. A
+    /// submitted verdict is attached to `latestTranscription`, so a verdict
+    /// computed from an unsubmitted local draft would read, on every other
+    /// device, as a recommendation about entirely different text.
+    private var localVerdictIsSubmittable: Bool {
+        guard let moderatedText, let operatorEnglish else { return false }
+        return moderatedText == operatorEnglish
     }
 
     /// Posts the on-device verdict to the Operator and, on success, clears the
     /// local result so it can't be submitted twice.
     private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
-        guard let output, let recommendation = output.recommendation else { return }
+        guard localVerdictIsSubmittable,
+              let output, let recommendation = output.recommendation else { return }
         let submitted = await store.submitModeration(
             message,
             flagged: output.flagged ?? false,
