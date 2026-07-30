@@ -491,22 +491,34 @@ struct ReviewDetailView: View {
                 HStack {
                     Button {
                         Task {
+                            let draftBefore = translationDraft
                             let translation = await onDevice.run(for: message)
                             // `reset` can land between `run` returning and this
                             // continuation resuming, so re-check against the
                             // pipeline's current output rather than trusting the
                             // returned value — otherwise a cleared draft gets
                             // repopulated with a superseded translation.
-                            if let translation,
-                               onDevice.outputs[message.id]?.translation == translation {
-                                translationDraft = translation
-                                // `run` moderates the translation it just
-                                // produced, so the draft starts out as the
-                                // moderated text — without this, editing it
-                                // would leave that verdict on screen.
-                                if onDevice.outputs[message.id]?.recommendation != nil {
-                                    moderatedText = translation
-                                }
+                            guard let translation,
+                                  onDevice.outputs[message.id]?.translation == translation
+                            else { return }
+
+                            // The editor stays enabled while this runs, so
+                            // anything typed meanwhile is the operator's own
+                            // work and outranks the generated text. The verdict
+                            // describes the translation they didn't take, so it
+                            // goes rather than sitting above their draft.
+                            guard translationDraft == draftBefore else {
+                                onDevice.clearModeration(message.id)
+                                return
+                            }
+
+                            translationDraft = translation
+                            // `run` moderates the translation it just produced,
+                            // so the draft starts out as the moderated text —
+                            // without this, editing it would leave that verdict
+                            // on screen.
+                            if onDevice.outputs[message.id]?.recommendation != nil {
+                                moderatedText = translation
                             }
                         }
                     } label: {
