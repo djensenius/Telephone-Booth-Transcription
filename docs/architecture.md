@@ -205,13 +205,19 @@ The consequences are worth stating plainly:
   `SpeechTranscriber.isAvailable` and `SystemLanguageModel.availability` — an
   OS-version check alone is not enough, since a device can run iOS 26 and still
   be ineligible, have Apple Intelligence turned off, or not have finished
-  downloading the model. The engines re-check at use time as well, because
-  availability can change after the probe, and the review queue re-probes on
-  appear so enabling Apple Intelligence mid-session surfaces the affordance
-  without a relaunch. Speech and Foundation Models are gated separately:
-  transcription needs only the former, so a device with Apple Intelligence off
-  still gets the transcription queues, with `supportsTranslation == false`
-  hiding just the translate affordance.
+  downloading the model. The speech probe is also **locale-aware**: it resolves
+  `SpeechTranscriber.supportedLocale(equivalentTo:)` for the locale the
+  pipeline would transcribe in, because `isAvailable` is device-wide and a
+  capable device can still have no equivalent for its current locale. That
+  lookup is `async`, which is why `makeAppleIntelligence` is `async` and the
+  review queue probes from a `.task` rather than inline `@State`. The engines
+  re-check at use time as well, because availability can change after the
+  probe, and the review queue re-probes on appear so enabling Apple
+  Intelligence mid-session surfaces the affordance without a relaunch. Speech
+  and Foundation Models are gated separately: transcription needs only the
+  former, so a device with Apple Intelligence off still gets the transcription
+  queues, with `supportsTranslation == false` hiding just the translate
+  affordance.
 
 #### Transcripts are read-only on iOS (client limitation)
 

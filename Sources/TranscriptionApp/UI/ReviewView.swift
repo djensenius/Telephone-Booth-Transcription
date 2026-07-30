@@ -15,15 +15,20 @@ struct ReviewView: View {
     @State private var store = ReviewStore(
         client: HTTPOperatorReviewClient(tokenProvider: AuthBearerAdapter())
     )
-    /// Nil when this device can't run the on-device engines — the entry point
-    /// is then hidden rather than offered and always failing.
-    /// Nil when this device can't transcribe on-device.
+    /// Nil when this device can't transcribe on-device — the entry point is
+    /// then hidden rather than offered and always failing.
     ///
-    /// Re-probed when the view appears: Apple Intelligence can be enabled, or a
-    /// model finish downloading, while the app stays open. A use-time recheck
-    /// can't rescue that case, because with no pipeline there is no button to
-    /// press in the first place.
-    @State private var onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
+    /// Probed asynchronously rather than set up front: the capability check is
+    /// locale-aware and `SpeechTranscriber.supportedLocale(equivalentTo:)` is
+    /// `async`. Re-probed when the view appears, because Apple Intelligence can
+    /// be enabled, or a model finish downloading, while the app stays open. A
+    /// use-time recheck can't rescue that case, because with no pipeline there
+    /// is no button to press in the first place.
+    @State private var onDevice: OnDeviceReviewPipeline?
+    /// Bumped on every appearance to re-run the capability probe. `.task(id:)`
+    /// gives the probe a task to run in (and cancellation on disappear), which
+    /// a synchronous `.onAppear` can't.
+    @State private var probeGeneration = 0
 
     var body: some View {
         Group {
@@ -45,7 +50,8 @@ struct ReviewView: View {
                 onDevice?.prune(keeping: [])
             }
         }
-        .onAppear { refreshOnDeviceCapability() }
+        .onAppear { probeGeneration &+= 1 }
+        .task(id: probeGeneration) { await refreshOnDeviceCapability() }
     }
 
     /// Re-probes Apple Intelligence when the queue appears, so enabling it (or
@@ -55,15 +61,21 @@ struct ReviewView: View {
     /// Only ever upgrades, and never while work is outstanding: swapping the
     /// pipeline would strand a running task's result on the discarded instance,
     /// where nothing observes it. The next appearance picks the upgrade up.
-    private func refreshOnDeviceCapability() {
+    private func refreshOnDeviceCapability() async {
         guard let existing = onDevice else {
-            onDevice = OnDeviceReviewPipeline.makeAppleIntelligence()
+            let made = await OnDeviceReviewPipeline.makeAppleIntelligence()
+            // A concurrent probe may have won the race while this one awaited.
+            if onDevice == nil { onDevice = made }
             return
         }
         guard existing.supportsTranslation == false else { return }
         guard visibleMessageIDs.allSatisfy({ !existing.isRunning($0) }) else { return }
-        guard let refreshed = OnDeviceReviewPipeline.makeAppleIntelligence(),
+        guard let refreshed = await OnDeviceReviewPipeline.makeAppleIntelligence(),
               refreshed.supportsTranslation else { return }
+        // The probe suspended; re-check that the pipeline it would replace is
+        // still the idle one it was chosen for.
+        guard onDevice === existing,
+              visibleMessageIDs.allSatisfy({ !existing.isRunning($0) }) else { return }
         onDevice = refreshed
     }
 
