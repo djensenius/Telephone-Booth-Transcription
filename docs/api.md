@@ -88,7 +88,10 @@ translation and moderation routes:
 `503` is retryable — enabling Apple Intelligence or finishing a model download
 makes the same request succeed. It never silently falls back to the proxy
 upstream. (Before this contract was unified, an unavailable engine returned
-`403 permission_denied` here, which was indistinguishable from a bad token.)
+`403 permission_denied` here, which was indistinguishable from a genuine
+Speech Recognition denial — a permanent, user-actionable failure — so clients
+couldn't tell a retryable condition from one that needed the user to grant
+permission.)
 
 Common fields:
 
