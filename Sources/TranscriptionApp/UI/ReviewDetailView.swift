@@ -56,7 +56,8 @@ struct ReviewDetailView: View {
     }
 
     /// A complete on-device draft — transcript, translation, and recommendation —
-    /// produced for a message the Operator still holds no transcript for. This
+    /// produced for a message the Operator holds no *usable* transcript for:
+    /// none at all, or a newest row that is still pending or has failed. This
     /// is what the one-press "Draft with Apple Intelligence" run leaves behind:
     /// everything is ready to review, and a single Submit posts the transcript
     /// and the translation together.
