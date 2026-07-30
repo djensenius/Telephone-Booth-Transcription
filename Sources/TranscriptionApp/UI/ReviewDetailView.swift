@@ -47,7 +47,12 @@ struct ReviewDetailView: View {
     /// have to submit a transcript before the translation and recommendation can
     /// run (issue #84); one button drafts all three.
     private var supportsLocalFullPipeline: Bool {
-        onDevice?.supportsTranscription == true && onDevice?.supportsTranslation == true
+        onDevice?.supportsTranscription == true
+            && onDevice?.supportsTranslation == true
+            // Moderation too: the copy on this button promises a recommendation,
+            // and a one-press run that quietly can't produce one would send the
+            // operator looking for a verdict that was never coming.
+            && onDevice?.supportsModeration == true
     }
 
     /// A complete on-device draft — transcript, translation, and recommendation —
