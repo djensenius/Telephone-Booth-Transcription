@@ -754,13 +754,22 @@ struct ReviewDetailView: View {
                                 model: draft.model,
                                 translation: text
                             )
-                            // Keep the drafts on any failure so the operator can
-                            // retry: the transcript may have landed while the
-                            // translation didn't, and the translation card will
-                            // then offer a plain "Submit translation" retry.
                             if submitted {
                                 onDevice?.reset(message.id)
                                 drafts.clear(message.id)
+                            } else {
+                                // A transcript that landed before the translation
+                                // failed moves the message to the "needs
+                                // translation" step and, via the
+                                // `transcriptionSnapshot` change, clears the
+                                // draft. Restore the reviewed translation (and
+                                // its verdict) so the plain "Submit translation"
+                                // retry now shown by the translation card isn't
+                                // empty.
+                                translationDraft = text
+                                if onDevice?.outputs[message.id]?.recommendation != nil {
+                                    moderatedText = text
+                                }
                             }
                         }
                     } label: {
