@@ -17,7 +17,18 @@ struct AccountSettingsSection: View {
                 Button("Sign Out", role: .destructive) {
                     auth.signOut()
                 }
-            case .signedOut, .unknown:
+            case .unknown:
+                // A stored session exists but couldn't be validated yet (still
+                // refreshing, or the provider is unreachable). Don't offer a
+                // sign-in button here — it would send the user through a
+                // browser flow they almost certainly don't need.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Restoring your session…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            case .signedOut:
                 Text("Sign in with your Operator account to review and translate "
                      + "messages without running a server.")
                     .font(.caption)
