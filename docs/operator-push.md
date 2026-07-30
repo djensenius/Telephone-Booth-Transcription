@@ -159,9 +159,10 @@ translate, but it still needs a verdict.
 
 Rows show distinct "Silent", "Transcribing…", "Transcription failed", and
 "Translation failed" states, and carry the AI's recommendation — always the
-Operator's moderation verdict. A verdict computed on this device shows only in
-the detail view, as an unsubmitted preview, until it is submitted; the badge
-everyone shares comes from the Operator.
+Operator's moderation verdict, labelled with the engine that produced it and
+distinguishing "still checking" from "the check failed". A verdict computed on
+this device shows only in the detail view, as an unsubmitted preview, until it
+is submitted; the badge everyone shares comes from the Operator.
 Selecting a message opens the detail view, which holds the full transcript and
 translation plus every action.
 
