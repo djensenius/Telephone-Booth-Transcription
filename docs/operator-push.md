@@ -173,8 +173,8 @@ Review is a human decision. This is Review filtering only — the worker's
 discovery pass has its own rules and may still retry a message whose newest row
 failed. The detail view's Transcript card offers a button that hands the message
 to the local worker; that request bypasses the discovery attempt cap. On iOS,
-where there is no worker, a single _Draft with Apple Intelligence_ runs the whole
-review on-device — transcribe, translate, and moderate — and one _Submit_ posts
+where there is no worker, a single **Draft with Apple Intelligence** runs the whole
+review on-device — transcribe, translate, and moderate — and one **Submit** posts
 the transcript and then, once it lands, the translation drafted from it (two
 sequential writes, `…/transcription` followed by `…/translation`), so the
 operator never has to submit a transcript just to unlock the rest.
