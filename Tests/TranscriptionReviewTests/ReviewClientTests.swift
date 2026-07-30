@@ -82,10 +82,30 @@ struct ReviewClientTests {
         let target = try! #require(store.awaitingTranslation.first)
 
         client.translationResult = .success(target.latestTranscription!.translated("hello"))
-        await store.submitTranslation(target, text: "hello", language: "en")
+        let ok = await store.submitTranslation(target, text: "hello", language: "en")
 
+        #expect(ok)
         #expect(store.awaitingTranslation.isEmpty)
         #expect(store.actionError == nil)
+    }
+
+    /// The caller discards its local draft on success, so a failure has to be
+    /// distinguishable: otherwise a transient error throws away the translation
+    /// the operator was trying to submit.
+    @Test("a failed translation submit reports failure and leaves the queue alone")
+    @MainActor
+    func translationFailureIsReported() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingTranslation.first)
+
+        client.translationResult = .failure(OperatorReviewError.invalidResponse)
+        let ok = await store.submitTranslation(target, text: "hello", language: "en")
+
+        #expect(ok == false)
+        #expect(store.awaitingTranslation.isEmpty == false)
+        #expect(store.actionError != nil)
     }
 
     @Test("submitTranscription posts the transcript and folds the row back in")

@@ -101,6 +101,26 @@ public final class OnDeviceReviewPipeline {
     public private(set) var stages: [String: Stage] = [:]
     public private(set) var outputs: [String: Output] = [:]
 
+    /// Which entry point owns a message's current stage.
+    ///
+    /// A message has one stage, but the UI can offer two independent actions on
+    /// it at once — draft a translation, or just classify the text already
+    /// there. Without this, starting either one puts the *other* button into a
+    /// spinner and shows it the resulting error.
+    public enum Operation: Sendable, Equatable {
+        case transcribe
+        case translate
+        case moderate
+    }
+
+    public private(set) var operations: [String: Operation] = [:]
+
+    /// The operation that produced a message's current stage, or `nil` when it
+    /// is idle.
+    public func operation(for messageID: String) -> Operation? {
+        operations[messageID]
+    }
+
     public init(
         dispatcher: InProcessOperatorJobDispatcher,
         transcriptionModel: String? = nil,
@@ -113,11 +133,27 @@ public final class OnDeviceReviewPipeline {
 
     // MARK: - Running
 
+    /// False when no local transcriber was injected — the device has no usable
+    /// on-device speech engine for the current locale, so the transcribe
+    /// affordances are hidden. A pipeline can still be worth having in that
+    /// state: Foundation Models can classify text the Operator already holds.
+    public var supportsTranscription: Bool {
+        dispatcher.supportedKinds.contains(.transcription)
+    }
+
     /// False when the device can transcribe but has no language model (Apple
     /// Intelligence disabled or still downloading). `run` would fail; only
     /// `transcribeOnly` is usable, so the UI hides the translate affordance.
     public var supportsTranslation: Bool {
         dispatcher.supportedKinds.contains(.translation)
+    }
+
+    /// False when no local moderation service was injected — the "get a
+    /// recommendation" affordance is then hidden rather than offered and always
+    /// failing. Separate from ``supportsTranslation``: a device can be able to
+    /// classify text without being able to translate it.
+    public var supportsModeration: Bool {
+        dispatcher.supportedKinds.contains(.moderation)
     }
 
     public func stage(for messageID: String) -> Stage {
@@ -168,12 +204,30 @@ public final class OnDeviceReviewPipeline {
         }
     }
 
+    /// Drops only the local verdict for a message, keeping any transcript or
+    /// translation it was computed alongside.
+    ///
+    /// Asking for a recommendation classifies the operator's current draft, so
+    /// editing that draft afterwards leaves a prominent verdict describing text
+    /// that no longer exists. `reset` is too blunt here — it would also discard
+    /// the generated transcript and translation the draft came from.
+    public func clearModeration(_ messageID: String) {
+        guard let existing = outputs[messageID], existing.recommendation != nil else { return }
+        outputs[messageID] = Output(
+            transcript: existing.transcript,
+            language: existing.language,
+            model: existing.model,
+            translation: existing.translation
+        )
+    }
+
     /// Clears any surfaced result/error for a message, and supersedes any run
     /// still in flight for it.
     public func reset(_ messageID: String) {
         _ = beginGeneration(messageID)
         stages[messageID] = nil
         outputs[messageID] = nil
+        operations[messageID] = nil
     }
 
     /// Runs only the transcription stage for `message`, for the "needs
@@ -190,6 +244,7 @@ public final class OnDeviceReviewPipeline {
         guard !isRunning(message.id) else { return nil }
         let generation = beginGeneration(message.id)
         outputs[message.id] = nil
+        operations[message.id] = .transcribe
         stages[message.id] = .fetchingAndTranscribing
 
         let result: (text: String, language: String?, model: String?)
@@ -217,6 +272,58 @@ public final class OnDeviceReviewPipeline {
         return trimmed
     }
 
+    /// Classifies text the Operator already holds, without touching the audio.
+    ///
+    /// `run(for:)` is the wrong tool for a message that is already transcribed
+    /// and translated but carries no verdict: it would re-fetch the audio and
+    /// redo the transcription to answer a question about text that is already
+    /// on screen. It is also unreachable in that state, because the UI only
+    /// offers it where a translation is still outstanding.
+    ///
+    /// - Parameters:
+    ///   - english: the text to classify — the English translation when there
+    ///     is one, otherwise the transcript.
+    ///   - transcript: the Operator's transcript, recorded on the output so the
+    ///     UI can still tell this apart from a locally produced transcript.
+    /// - Returns: the recommendation, or `nil` if moderation failed.
+    @discardableResult
+    public func moderateOnly(
+        _ english: String,
+        transcript: String,
+        language: String?,
+        for messageID: String
+    ) async -> String? {
+        guard !isRunning(messageID) else { return nil }
+        let generation = beginGeneration(messageID)
+        operations[messageID] = .moderate
+        stages[messageID] = .moderating
+
+        let verdict: ModerationVerdict
+        do {
+            verdict = try await moderate(english)
+        } catch {
+            guard isCurrent(messageID, generation) else { return nil }
+            fail(messageID, error, verb: "moderate that text")
+            return nil
+        }
+        guard isCurrent(messageID, generation) else { return nil }
+
+        // Merged into any existing output rather than replacing it: a local
+        // transcript or translation the operator hasn't submitted yet must
+        // survive asking for a second opinion on it.
+        let existing = outputs[messageID]
+        outputs[messageID] = Output(
+            transcript: existing?.transcript ?? transcript,
+            language: existing?.language ?? language,
+            model: existing?.model,
+            translation: existing?.translation,
+            recommendation: verdict.recommendation,
+            flagged: verdict.flagged
+        )
+        stages[messageID] = .finished
+        return verdict.recommendation
+    }
+
     /// Runs transcribe → translate → moderate for `message` and stores the
     /// result. Returns the English translation so the caller can pre-fill the
     /// operator's draft, or `nil` if any stage failed.
@@ -225,6 +332,7 @@ public final class OnDeviceReviewPipeline {
         guard !isRunning(message.id) else { return nil }
         let generation = beginGeneration(message.id)
         outputs[message.id] = nil
+        operations[message.id] = .translate
         stages[message.id] = .fetchingAndTranscribing
 
         let transcriptResult: (text: String, language: String?, model: String?)
@@ -256,10 +364,15 @@ public final class OnDeviceReviewPipeline {
 
         // Moderation is advisory, so a failure here must not discard the
         // translation the operator is waiting on.
+        //
+        // The translation is what gets classified, not the transcript: it's the
+        // text the operator reviews and decides on, and for a non-English
+        // message it's the only one the moderator can read. `moderateOnly`
+        // makes the same choice.
         stages[message.id] = .moderating
         var recommendation: String?
         var flagged: Bool?
-        if let verdict = try? await moderate(trimmed) {
+        if let verdict = try? await moderate(translation) {
             recommendation = verdict.recommendation
             flagged = verdict.flagged
         }

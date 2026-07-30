@@ -128,6 +128,89 @@ public final class ReviewStore {
         messages.filter(\.awaitingModerationDecision)
     }
 
+    /// Messages whose latest translation attempt failed. These still count as
+    /// `.translation` work, but the UI calls them out separately so a failed
+    /// run doesn't look like one that never happened.
+    public var translationFailures: [Message] {
+        messages.filter { $0.isReviewable && $0.translationFailed }
+    }
+
+    /// The queue filter the operator has selected. One list of messages,
+    /// narrowed by which step of the review chain each one is waiting on —
+    /// replacing the old per-stage buckets, which showed the same message up to
+    /// four times.
+    public enum Filter: String, CaseIterable, Identifiable, Sendable {
+        /// Everything still waiting on the operator, in one list.
+        case needsAttention
+        case transcribe
+        case translate
+        case decide
+        /// Everything, including already-approved and already-rejected messages.
+        case all
+
+        public var id: Self { self }
+
+        public var title: String {
+            switch self {
+            case .needsAttention: return "Needs You"
+            case .transcribe: return "Transcribe"
+            case .translate: return "Translate"
+            case .decide: return "Decide"
+            case .all: return "All"
+            }
+        }
+
+        public var systemImage: String {
+            switch self {
+            case .needsAttention: return "tray.full"
+            case .transcribe: return "waveform"
+            case .translate: return "character.book.closed"
+            case .decide: return "checkmark.seal"
+            case .all: return "archivebox"
+            }
+        }
+
+        /// Shown when the filter's list is empty.
+        ///
+        /// Phrased as an absence of pending work rather than a claim about
+        /// every message: a decided message can have no transcript, and a
+        /// silent recording deliberately never gets translated, so "every
+        /// message has a transcript" would be false while this filter is empty.
+        public var emptyText: String {
+            switch self {
+            case .needsAttention: return "Nothing needs you right now."
+            case .transcribe: return "Nothing is waiting to be transcribed."
+            case .translate: return "Nothing is waiting to be translated."
+            case .decide: return "No message is ready for a decision."
+            case .all: return "No messages yet."
+            }
+        }
+    }
+
+    /// The messages shown for a filter, newest first (the order the Operator
+    /// returns them in).
+    public func messages(for filter: Filter) -> [Message] {
+        switch filter {
+        case .all: return messages
+        case .needsAttention: return messages.filter(\.needsAttention)
+        case .transcribe: return messages.filter { $0.nextStep == .transcription }
+        case .translate: return messages.filter { $0.nextStep == .translation }
+        case .decide: return messages.filter { $0.nextStep == .decision }
+        }
+    }
+
+    /// Badge count for a filter. `.all` returns nil: a total isn't a workload,
+    /// and a badge on it would read as outstanding work.
+    public func count(for filter: Filter) -> Int? {
+        filter == .all ? nil : messages(for: filter).count
+    }
+
+    /// Looks a message up by id, so a detail view can follow local writes and
+    /// polls instead of holding a stale copy captured at selection time.
+    public func message(id: String) -> Message? {
+        messages.first { $0.id == id }
+    }
+
     /// True when the given message has a write action in flight.
     public func isActing(on messageID: String) -> Bool {
         pendingActions.contains(messageID)
@@ -248,12 +331,17 @@ public final class ReviewStore {
 
     /// Submits an operator-supplied translation for a message's latest
     /// transcription and folds the result back into local state.
+    ///
+    /// Returns `true` when the submission succeeded, so the caller can discard
+    /// the local draft it came from — and, just as importantly, keep it when it
+    /// didn't: a transient failure must leave the operator something to retry.
+    @discardableResult
     public func submitTranslation(
         _ message: Message,
         text: String,
         language: String? = nil
-    ) async {
-        guard !pendingActions.contains(message.id) else { return }
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
         pendingActions.insert(message.id)
         actionError = nil
         defer { pendingActions.remove(message.id) }
@@ -267,9 +355,11 @@ public final class ReviewStore {
             // poll that landed mid-request can't be clobbered with stale fields.
             let base = messages.first(where: { $0.id == message.id }) ?? message
             apply(base.replacingLatestTranscription(updated))
+            return true
         } catch {
             actionError = Self.describe(error, verb: "submit that translation")
             logger.error("Translation submit failed: \(String(describing: error), privacy: .public)")
+            return false
         }
     }
 

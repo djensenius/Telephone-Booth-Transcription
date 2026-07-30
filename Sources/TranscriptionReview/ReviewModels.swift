@@ -203,6 +203,27 @@ public struct Transcription: Codable, Sendable, Equatable, Identifiable {
         }
         return true
     }
+
+    /// True when a translation was attempted and failed outright. Distinct from
+    /// "never translated": there is an error to show and a retry to offer, and
+    /// the operator shouldn't have to guess which of the two they're looking at.
+    public var translationFailed: Bool {
+        translationStatus == .failed
+    }
+
+    /// True when a translation attempt is still running.
+    public var translationIsPending: Bool {
+        translationStatus == .pending
+    }
+
+    /// The best English text available for this transcription, if any.
+    public var completedTranslation: String? {
+        guard translationStatus == .succeeded,
+              let translatedText,
+              !translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return translatedText
+    }
 }
 
 public struct TranscriptionList: Codable, Sendable, Equatable {
@@ -227,6 +248,29 @@ public struct Moderation: Codable, Sendable, Equatable, Identifiable {
     public let error: String?
     public let createdAt: Date
     public let completedAt: Date?
+}
+
+/// The single next thing an operator has to do for a message.
+///
+/// Review is a chain — transcribe, then translate, then decide — so a message
+/// has exactly one next step rather than a set of independent chores. This is
+/// what lets the queue be one list of messages instead of one list per stage,
+/// where the same message showed up three times.
+public enum ReviewStep: String, Codable, Sendable, Hashable, CaseIterable, Identifiable {
+    case transcription
+    case translation
+    case decision
+
+    public var id: Self { self }
+
+    /// Short label for the chip on a queue row.
+    public var displayName: String {
+        switch self {
+        case .transcription: return "Needs transcript"
+        case .translation: return "Needs translation"
+        case .decision: return "Needs decision"
+        }
+    }
 }
 
 public struct Message: Codable, Sendable, Equatable, Identifiable {
@@ -298,6 +342,58 @@ public struct Message: Codable, Sendable, Equatable, Identifiable {
     /// own rules and may still retry such a message.
     public var needsTranscription: Bool {
         isReviewable && latestTranscription == nil
+    }
+
+    /// True when the message is reviewable and has no usable transcript yet —
+    /// never transcribed, still running, or failed. Broader than
+    /// `needsTranscription`, which is only the "no row at all" case; this is the
+    /// question the queue actually asks ("can I read this yet?").
+    public var needsTranscriptionWork: Bool {
+        isReviewable && !hasSucceededTranscription
+    }
+
+    /// True when a translation was attempted for the latest transcript and
+    /// failed. Surfaced separately so a failed translation reads differently
+    /// from one that was never attempted, and so the error can be shown.
+    public var translationFailed: Bool {
+        latestTranscription?.translationFailed ?? false
+    }
+
+    /// True when a translation attempt for the latest transcript is running.
+    public var translationIsPending: Bool {
+        latestTranscription?.translationIsPending ?? false
+    }
+
+    /// The completed English translation of the latest transcript, if any.
+    public var translationText: String? {
+        latestTranscription?.completedTranslation
+    }
+
+    /// The single next action an operator has to take, or `nil` when the
+    /// message is already decided and needs nothing.
+    ///
+    /// A silent recording skips straight to `.decision`: there is nothing to
+    /// transcribe or translate, but it still needs approving or rejecting.
+    public var nextStep: ReviewStep? {
+        guard isReviewable else { return nil }
+        if transcriptionIsSilent { return .decision }
+        if needsTranscriptionWork { return .transcription }
+        if needsTranslation { return .translation }
+        return .decision
+    }
+
+    /// True when the message is waiting on the operator for anything at all.
+    public var needsAttention: Bool { nextStep != nil }
+
+    /// The best text to show as a one-glance preview: the English translation
+    /// when there is one, otherwise the source transcript.
+    public var previewText: String? {
+        if let translationText { return translationText }
+        if let text = latestTranscription?.text,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return text
+        }
+        return nil
     }
 }
 
