@@ -354,6 +354,7 @@ struct ReviewDetailView: View {
               output?.recommendation != nil else {
             onDevice?.reset(message.id)
             drafts.clear(message.id)
+            moderatedText = nil
             return
         }
         // Only the draft goes. `englishForModeration` then falls through to the

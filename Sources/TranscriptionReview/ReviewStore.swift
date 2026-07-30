@@ -77,7 +77,9 @@ public final class ReviewStore {
     public private(set) var state: LoadState = .idle
     public private(set) var lastUpdated: Date?
 
-    /// IDs of messages with an approve/reject/translation request in flight.
+    /// IDs of messages with a write in flight — a decision, a transcript, a
+    /// translation, a re-run request, or a moderation verdict. One at a time
+    /// per message, so the UI can disable every action on that row at once.
     public private(set) var pendingActions: Set<String> = []
     /// The subset of `pendingActions` that is writing a message's transcript or
     /// translation — the writes that move the authoritative text themselves.
@@ -446,7 +448,10 @@ public final class ReviewStore {
             return true
         } catch {
             actionError = Self.describe(error, verb: "submit that recommendation")
-            logger.error("Moderation submit failed: \(String(describing: error), privacy: .public)")
+            logger.error("""
+                Moderation submit failed for \(message.id, privacy: .public): \
+                \(String(describing: error), privacy: .public)
+                """)
             return false
         }
     }

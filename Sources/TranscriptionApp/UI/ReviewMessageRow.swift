@@ -145,7 +145,12 @@ struct AIRecommendation {
     /// preview never masquerades as the Operator's verdict of record.
     init?(localOutput: OnDeviceReviewPipeline.Output) {
         guard let raw = localOutput.recommendation else { return nil }
-        self.recommendation = ModerationRecommendation(rawValue: raw)
+        // Through the same shaping the submission uses, so the preview reads as
+        // what would actually be stored — a model that says "block" means
+        // reject, not an unrecognized verdict.
+        self.recommendation = ModerationRecommendation(
+            rawValue: OperatorSubmission.recommendation(raw)
+        )
         self.reason = nil
         self.source = "On device"
         self.flagged = localOutput.flagged ?? false
