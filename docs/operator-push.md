@@ -148,16 +148,28 @@ succeeded row.
 
 ## Re-running transcription from the app
 
-The **Review** tab separates reviewable messages with no transcription at all
-("Needs transcription") from ones that already have transcription history
-("Transcription history"), and shows distinct "Silent", "Transcribing…", and
-"Transcription failed" states. Messages whose newest transcription is pending or failed stay in the
-second bucket: the review payload only carries the newest row, so an older
-successful transcript could otherwise be masked, and re-running from Review is a
-human decision. This is Review bucketing only — the worker's discovery pass has
-its own rules and may still retry a message whose newest row failed. Both
-buckets offer a button that hands the message to the local worker; that request
-bypasses the discovery attempt cap.
+The **Review** tab is a single list of messages, newest first, narrowed by a
+filter bar: **Needs You** (everything still awaiting the operator), plus
+**Transcribe**, **Translate**, and **Decide** for each step of the review chain,
+and **All** (which also includes approved and rejected messages). Review is a
+chain, so every reviewable message has exactly one *next step* and therefore
+appears in exactly one work filter — a message is never listed twice. A silent
+recording skips straight to `Decide`: there's nothing to transcribe or
+translate, but it still needs a verdict.
+
+Rows show distinct "Silent", "Transcribing…", "Transcription failed", and
+"Translation failed" states, and carry the AI's recommendation — the Operator's
+moderation verdict when there is one, otherwise a local Apple Intelligence run.
+Selecting a message opens the detail view, which holds the full transcript and
+translation plus every action.
+
+A message whose newest transcription is pending or failed still counts as
+needing transcription: the review payload only carries the newest row, so an
+older successful transcript could otherwise be masked, and re-running from
+Review is a human decision. This is Review filtering only — the worker's
+discovery pass has its own rules and may still retry a message whose newest row
+failed. The detail view's Transcript card offers a button that hands the message
+to the local worker; that request bypasses the discovery attempt cap.
 
 Review runs on the operator's own OIDC session while the worker uses its
 worker-scoped API token — the app bridges the two locally, so no extra Operator

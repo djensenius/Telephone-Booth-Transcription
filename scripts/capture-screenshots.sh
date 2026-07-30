@@ -37,7 +37,7 @@ APP_OWNER="Transcriber" # CFBundleName, used to find the macOS window
 DD="/tmp/tbt-dd"
 SHOTS="$ROOT/fastlane/screenshots"
 LOCALE="en-CA"
-TABS=(status settings requests)
+TABS=(review status settings requests)
 
 log() { printf '\033[1;35m[shots]\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m[shots] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
