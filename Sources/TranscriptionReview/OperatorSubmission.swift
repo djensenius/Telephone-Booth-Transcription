@@ -1,10 +1,10 @@
 import Foundation
 
-/// Shaping rules the Operator's moderation endpoint imposes on a submitted
-/// verdict. They live here, rather than in the HTTP client, so demo mode is
-/// shaped identically — a divergence there would show QA a verdict the real
-/// Operator would have rewritten or refused.
-public enum ModerationSubmission {
+/// Shaping rules the Operator imposes on what this app submits. They live here,
+/// rather than in the HTTP client, so demo mode is shaped identically — a
+/// divergence there would show QA a value the real Operator would have
+/// rewritten or refused.
+public enum OperatorSubmission {
     /// Folds a verdict onto the three values the Operator accepts. A local model
     /// can phrase the same call as `block` or `allow`, and posting that verbatim
     /// would fail the whole submission over vocabulary; anything unrecognized

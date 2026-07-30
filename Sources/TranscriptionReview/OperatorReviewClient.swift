@@ -130,8 +130,8 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         }
         let body = Body(
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            language: Self.normalized(language),
-            model: Self.normalized(model)
+            language: OperatorSubmission.metadata(language),
+            model: OperatorSubmission.metadata(model)
         )
         return try await post("/v1/messages/\(messageID)/transcription", body: body)
     }
@@ -171,20 +171,14 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             let model: String?
         }
         let body = Body(
-            transcriptionId: ModerationSubmission.metadata(transcriptionId),
+            transcriptionId: OperatorSubmission.metadata(transcriptionId),
             flagged: flagged,
-            recommendation: ModerationSubmission.recommendation(recommendation),
-            maxScore: ModerationSubmission.score(maxScore),
-            reasonSummary: ModerationSubmission.metadata(reasonSummary),
-            model: ModerationSubmission.metadata(model)
+            recommendation: OperatorSubmission.recommendation(recommendation),
+            maxScore: OperatorSubmission.score(maxScore),
+            reasonSummary: OperatorSubmission.metadata(reasonSummary),
+            model: OperatorSubmission.metadata(model)
         )
         return try await post("/v1/messages/\(messageID)/moderation", body: body)
-    }
-
-    /// Trims a metadata field and folds an empty result to `nil`, so a blank
-    /// hint is sent as JSON `null` rather than an empty string.
-    private static func normalized(_ value: String?) -> String? {
-        ModerationSubmission.metadata(value)
     }
 
     // MARK: - Request plumbing

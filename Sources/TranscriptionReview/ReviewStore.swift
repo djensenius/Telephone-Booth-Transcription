@@ -412,9 +412,14 @@ public final class ReviewStore {
         actionError = nil
         defer { pendingActions.remove(message.id) }
         do {
+            // Tie the verdict to the transcription the *store* currently holds,
+            // not the one the caller captured: a poll may have moved it while
+            // the view sat open, and the guard below would then drop a verdict
+            // that was recorded against the wrong row anyway.
+            let latest = messages.first(where: { $0.id == message.id }) ?? message
             let updated = try await client.submitModeration(
                 messageID: message.id,
-                transcriptionId: message.latestTranscription?.id,
+                transcriptionId: latest.latestTranscription?.id,
                 flagged: flagged,
                 recommendation: recommendation,
                 maxScore: maxScore,
