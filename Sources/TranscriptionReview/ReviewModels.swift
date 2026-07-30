@@ -89,7 +89,16 @@ public enum AiProvider: Codable, Sendable, Hashable {
         case .openai: return "OpenAI"
         case .macApp: return "Mac app"
         case .disabled: return "Disabled"
-        case .unknown(let value): return value
+        // A provider this build doesn't know about still reaches the operator
+        // as a label next to a verdict, so present it as prose rather than as
+        // a raw wire value: "on_device" reads as "On device".
+        case .unknown(let value):
+            let spaced = value.replacingOccurrences(of: "_", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            // Empty stays empty rather than becoming invisible whitespace;
+            // it's for the caller to decide how to label an unnamed provider.
+            guard let first = spaced.first else { return spaced }
+            return first.uppercased() + spaced.dropFirst()
         }
     }
 }
@@ -248,6 +257,38 @@ public struct Moderation: Codable, Sendable, Equatable, Identifiable {
     public let error: String?
     public let createdAt: Date
     public let completedAt: Date?
+
+    /// True while the automated moderation run is still in progress. Distinct
+    /// from "never asked": the AI is thinking and a verdict is coming.
+    public var isPending: Bool { status == .pending }
+
+    /// True when the automated moderation run finished in failure. Distinct
+    /// from "never asked": there is an `error` to show and a re-run to offer,
+    /// and the operator shouldn't have to guess which of the two they see.
+    public var didFail: Bool { status == .failed }
+
+    /// Which engine produced the verdict, for display next to the
+    /// recommendation. An on-device Apple Intelligence verdict and a
+    /// server-side one are calibrated differently, so the operator being asked
+    /// to weigh the recommendation needs to know which one they're weighing.
+    public var sourceLabel: String {
+        // A provider the Operator didn't name would otherwise render as nothing
+        // at all, leaving the UI with a bare "…: Approve"; say "AI" instead.
+        let engine = provider.displayName.isEmpty ? "AI" : provider.displayName
+        guard let named = model?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !named.isEmpty else {
+            return engine
+        }
+        return "\(engine) · \(named)"
+    }
+
+    /// The highest category score, formatted for display, but only when the
+    /// message was flagged — that's where the gap between "barely over the
+    /// line" and "obviously over it" actually matters. Nil otherwise.
+    public var flaggedScoreLabel: String? {
+        guard flagged == true, let maxScore else { return nil }
+        return maxScore.formatted(.percent.precision(.fractionLength(0)))
+    }
 }
 
 /// The single next thing an operator has to do for a message.

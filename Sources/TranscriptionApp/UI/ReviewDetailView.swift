@@ -149,11 +149,18 @@ struct ReviewDetailView: View {
                     .foregroundStyle(advice.tint)
                 if advice.flagged {
                     StatusPill(text: "Flagged", tint: Theme.Colors.error)
+                    if let score = advice.flaggedScoreLabel {
+                        Text(score)
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.error)
+                    }
                 }
                 Spacer(minLength: 0)
                 Text(advice.source)
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             if let reason = advice.reason, !reason.isEmpty {
                 Text(reason)
@@ -180,79 +187,35 @@ struct ReviewDetailView: View {
         )
     }
 
-    /// Shown when nobody has an opinion yet. The Operator's verdict is the one
-    /// of record, but it can be missing — moderation was never asked for, or it
-    /// failed — and until now the local fallback was only reachable through the
-    /// translate button, which is hidden once a message is translated. That left
-    /// exactly the Decide state, where the recommendation matters most, with no
-    /// way to get one.
+    /// Shown when there is no verdict to render. The Operator's verdict is the
+    /// one of record, but it can be missing for three genuinely different
+    /// reasons — moderation was never asked for, it's still **pending**, or it
+    /// **failed** — and a blank space collapsed all three into one. This card
+    /// names the state (and shows a failure's error), then offers the local
+    /// Apple Intelligence fallback when one is available. Without that fallback
+    /// the Decide state — where the recommendation matters most — had no way to
+    /// get one.
     @ViewBuilder
     private var noRecommendationCard: some View {
-        if message.isReviewable, let onDevice, onDevice.supportsModeration,
-           let text = englishForModeration {
-            // `running` drives this card's own spinner; `busy` disables it while
-            // any operation holds the pipeline, since a second one can't start.
-            let busy = onDevice.isRunning(message.id)
-            let running = busy && owns(.moderate)
+        let state = moderationDisplayState
+        let canRunLocal = message.isReviewable
+            && (onDevice?.supportsModeration ?? false)
+            && englishForModeration != nil
+        // Nothing to say and nothing to do — don't render an empty card. Only
+        // the "never asked, and can't ask locally" case falls through here.
+        if canRunLocal || state.hasStatus {
             VStack(alignment: .leading, spacing: Theme.Spacing.small) {
-                Text("No recommendation yet")
-                    .font(Theme.Fonts.bodyLarge)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-                // Deliberately neutral about *why*: the Operator may never have
-                // been asked, or its moderation may have failed or still be
-                // running. All three land here.
-                caption("The Operator has no recommendation for this message. Apple "
-                        + "Intelligence can weigh in from here — the text never leaves "
-                        + "this device.")
-
-                // A verdict computed on this device stays local until submitted:
-                // the pipeline never uploads on its own. Show it with a Submit
-                // action, exactly as a locally produced transcript is shown.
-                if let localAdvice, moderatedText != nil {
-                    localVerdictReview(localAdvice, using: onDevice)
-                } else {
-                    HStack {
-                        Button {
-                            Task {
-                                let recommendation = await onDevice.moderateOnly(
-                                    text,
-                                    transcript: message.latestTranscription?.text ?? text,
-                                    language: message.latestTranscription?.language,
-                                    for: message.id
-                                )
-                                // The draft is editable while this is suspended, so
-                                // a verdict that arrives against text the operator
-                                // has since changed is already stale. Compared
-                                // against the candidate rather than the draft,
-                                // which is empty in the Decide state this button
-                                // exists for.
-                                if recommendation != nil {
-                                    if englishForModeration == text {
-                                        moderatedText = text
-                                    } else {
-                                        onDevice.clearModeration(message.id)
-                                    }
-                                }
-                            }
-                        } label: {
-                            if running {
-                                HStack(spacing: Theme.Spacing.small) {
-                                    ProgressView().controlSize(.small)
-                                    Text(stageLabel(onDevice.stage(for: message.id)))
-                                }
-                            } else {
-                                Label("Get a recommendation", systemImage: "apple.intelligence")
-                            }
-                        }
-                        .buttonStyle(.tbtGlass)
-                        .disabled(busy || isActing)
-                        Spacer()
+                moderationStateHeader(state)
+                if canRunLocal, let onDevice, let text = englishForModeration {
+                    // A verdict computed on this device stays local until
+                    // submitted: the pipeline never uploads on its own. Show it
+                    // with a Submit action, exactly as a locally produced
+                    // transcript is shown.
+                    if let localAdvice, moderatedText != nil {
+                        localVerdictReview(localAdvice, using: onDevice)
+                    } else {
+                        onDeviceModerationAction(onDevice: onDevice, text: text)
                     }
-                }
-                if case .failed(let reason) = onDevice.stage(for: message.id), owns(.moderate) {
-                    Text(reason)
-                        .font(Theme.Fonts.caption)
-                        .foregroundStyle(Theme.Colors.error)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -285,6 +248,11 @@ struct ReviewDetailView: View {
                     .foregroundStyle(advice.tint)
                 if advice.flagged {
                     StatusPill(text: "Flagged", tint: Theme.Colors.error)
+                    if let score = advice.flaggedScoreLabel {
+                        Text(score)
+                            .font(Theme.Fonts.caption)
+                            .foregroundStyle(Theme.Colors.error)
+                    }
                 }
                 Spacer(minLength: 0)
                 Text(advice.source)
@@ -379,6 +347,106 @@ struct ReviewDetailView: View {
         if submitted {
             onDevice.clearModeration(message.id)
             moderatedText = nil
+        }
+    }
+
+    /// The Operator's moderation state, reduced to the three cases the UI draws
+    /// differently. `succeeded` moderation carries its own recommendation and is
+    /// rendered by `recommendationCard`, so it collapses to `.none` here.
+    private var moderationDisplayState: ModerationDisplayState {
+        guard let moderation = message.latestModeration else { return .none }
+        if moderation.isPending { return .pending(moderation) }
+        if moderation.didFail { return .failed(moderation) }
+        return .none
+    }
+
+    /// Names why there's no recommendation, in the same visual language the
+    /// transcript and translation cards use: a failure is red and carries its
+    /// error, a pending run reads as still-working, and a never-asked message
+    /// stays neutral. All three name the engine so an operator knows what would
+    /// have produced (or is producing) the verdict.
+    @ViewBuilder
+    private func moderationStateHeader(_ state: ModerationDisplayState) -> some View {
+        switch state {
+        case .pending(let moderation):
+            Text("Moderation in progress")
+                .font(Theme.Fonts.bodyLarge)
+                .foregroundStyle(Theme.Colors.textPrimary)
+            caption("The Operator is still checking this message with \(moderation.sourceLabel).")
+        case .failed(let moderation):
+            Text("Moderation failed")
+                .font(Theme.Fonts.bodyLarge)
+                .foregroundStyle(Theme.Colors.textPrimary)
+            // A failed run must not look like one that never happened: the fix
+            // is different (retry vs. start), and the error explains why.
+            Label("The automatic moderation failed.", systemImage: "exclamationmark.triangle.fill")
+                .font(Theme.Fonts.bodyMedium)
+                .foregroundStyle(Theme.Colors.error)
+            if let error = moderation.error, !error.isEmpty {
+                caption(error)
+            }
+            caption("Engine: \(moderation.sourceLabel)")
+        case .none:
+            Text("No recommendation yet")
+                .font(Theme.Fonts.bodyLarge)
+                .foregroundStyle(Theme.Colors.textPrimary)
+            caption("The Operator has no recommendation for this message.")
+        }
+    }
+
+    /// The local Apple Intelligence fallback: a button that classifies the
+    /// English on screen without the text leaving the device.
+    @ViewBuilder
+    private func onDeviceModerationAction(
+        onDevice: OnDeviceReviewPipeline,
+        text: String
+    ) -> some View {
+        // `running` drives this card's own spinner; `busy` disables it while
+        // any operation holds the pipeline, since a second one can't start.
+        let busy = onDevice.isRunning(message.id)
+        let running = busy && owns(.moderate)
+        caption("Apple Intelligence can weigh in from here — the text never leaves "
+                + "this device.")
+        HStack {
+            Button {
+                Task {
+                    let recommendation = await onDevice.moderateOnly(
+                        text,
+                        transcript: message.latestTranscription?.text ?? text,
+                        language: message.latestTranscription?.language,
+                        for: message.id
+                    )
+                    // The draft is editable while this is suspended, so a
+                    // verdict that arrives against text the operator has since
+                    // changed is already stale. Compared against the candidate
+                    // rather than the draft, which is empty in the Decide state
+                    // this button exists for.
+                    if recommendation != nil {
+                        if englishForModeration == text {
+                            moderatedText = text
+                        } else {
+                            onDevice.clearModeration(message.id)
+                        }
+                    }
+                }
+            } label: {
+                if running {
+                    HStack(spacing: Theme.Spacing.small) {
+                        ProgressView().controlSize(.small)
+                        Text(stageLabel(onDevice.stage(for: message.id)))
+                    }
+                } else {
+                    Label("Get a recommendation", systemImage: "apple.intelligence")
+                }
+            }
+            .buttonStyle(.tbtGlass)
+            .disabled(busy || isActing)
+            Spacer()
+        }
+        if case .failed(let reason) = onDevice.stage(for: message.id), owns(.moderate) {
+            Text(reason)
+                .font(Theme.Fonts.caption)
+                .foregroundStyle(Theme.Colors.error)
         }
     }
 
@@ -851,6 +919,24 @@ struct ReviewDetailView: View {
         case .translating: return "Translating…"
         case .moderating: return "Checking…"
         default: return "Working…"
+        }
+    }
+}
+
+/// The Operator's moderation reduced to the states the detail view renders
+/// differently. A succeeded verdict is handled by `recommendationCard`, so only
+/// pending, failed, and "nothing to show" reach here.
+private enum ModerationDisplayState {
+    case none
+    case pending(Moderation)
+    case failed(Moderation)
+
+    /// True when there is a state worth drawing even without a local fallback:
+    /// a pending run or a failure the operator needs to see.
+    var hasStatus: Bool {
+        switch self {
+        case .none: return false
+        case .pending, .failed: return true
         }
     }
 }
