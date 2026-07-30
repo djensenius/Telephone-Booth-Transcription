@@ -201,8 +201,10 @@ struct ReviewView: View {
                     // still in flight: that write moved this snapshot itself and
                     // owns the local work — it decides what to retire and what
                     // has just become submittable — so clearing here would race
-                    // it. Scoped to text writes, so a poll that replaces the
-                    // transcript during a moderation submit still clears.
+                    // it. The combined submit lands a transcript halfway
+                    // through, and its drafts have to survive that. Scoped to
+                    // text writes, so a poll that replaces the transcript
+                    // during a moderation submit still clears.
                     guard !store.isWritingText(for: id) else { continue }
                     onDevice?.reset(id)
                     // The detail view clears its own drafts on the same signal,

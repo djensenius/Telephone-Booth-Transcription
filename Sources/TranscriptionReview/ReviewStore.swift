@@ -325,6 +325,19 @@ public final class ReviewStore {
             pendingActions.remove(message.id)
             pendingTextWrites.remove(message.id)
         }
+        return await postTranscript(message, text: text, language: language, model: model)
+    }
+
+    /// The transcript submission itself, without the pending-action bookkeeping,
+    /// so `submitTranscriptAndTranslation` can hold that marker across both of
+    /// its writes rather than dropping it between them.
+    private func postTranscript(
+        _ message: Message,
+        text: String,
+        language: String?,
+        model: String?,
+        refreshing: Bool = true
+    ) async -> Bool {
         do {
             let updated = try await client.submitTranscription(
                 messageID: message.id,
@@ -343,7 +356,12 @@ public final class ReviewStore {
             // so pull the queue rather than leaving the phone up to 30 seconds
             // behind the state everyone else can see. The fold above means the
             // transcript is on screen already if this round-trip is slow.
-            await refresh()
+            //
+            // Skipped when a translation write follows immediately: the round
+            // trip would only widen the window in which someone else's
+            // transcript can supersede this one, and the caller refreshes once
+            // both writes are done.
+            if refreshing { await refresh() }
             return true
         } catch {
             actionError = Self.describe(error, verb: "submit that transcript")
@@ -372,6 +390,16 @@ public final class ReviewStore {
             pendingActions.remove(message.id)
             pendingTextWrites.remove(message.id)
         }
+        return await postTranslation(message, text: text, language: language)
+    }
+
+    /// The translation submission itself, without the pending-action
+    /// bookkeeping. See `postTranscript`.
+    private func postTranslation(
+        _ message: Message,
+        text: String,
+        language: String?
+    ) async -> Bool {
         do {
             let updated = try await client.submitTranslation(
                 messageID: message.id,
@@ -454,6 +482,75 @@ public final class ReviewStore {
                 """)
             return false
         }
+    }
+
+    /// Submits a locally produced transcript and, when it lands, the English
+    /// translation drafted from it — in a single operator action.
+    ///
+    /// The whole review can be run on-device in one pass (transcribe →
+    /// translate → moderate), so requiring the operator to submit the
+    /// transcript, wait for it to land, and only then submit the translation
+    /// is busywork. The Operator attaches a translation to the message's latest
+    /// transcription, so the transcript still has to go first — but the operator
+    /// only presses once. The translation is only attempted when the transcript
+    /// submission succeeds; a failure at either step keeps the drafts so the
+    /// operator has something to retry. Returns `true` only when both succeeded.
+    ///
+    /// The two writes are not atomic — the Operator has no combined endpoint —
+    /// so this brackets them instead. The pending-action marker is held across
+    /// both, which keeps the UI from treating the transcript landing mid-action
+    /// as a signal to discard the drafts this action still owns, and the
+    /// transcript the Operator resolves for the translation is re-checked in
+    /// between: the translation route attaches to whatever row is latest, so a
+    /// transcript that landed from somewhere else in the gap would otherwise be
+    /// given a translation of different text. If the transcript lands and the
+    /// translation doesn't, the message keeps the transcript and sits in the
+    /// "needs translation" step even though this returns `false`.
+    @discardableResult
+    public func submitTranscriptAndTranslation(
+        _ message: Message,
+        transcript: String,
+        language: String? = nil,
+        model: String? = nil,
+        translation: String
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
+        pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
+        actionError = nil
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
+
+        guard await postTranscript(
+            message, text: transcript, language: language, model: model,
+            refreshing: false
+        ) else { return false }
+
+        // The transport trims, so the row that comes back is the trimmed form
+        // of what was sent; compare like for like or a draft with trailing
+        // whitespace would look superseded by its own write.
+        let sent = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let current = messages.first(where: { $0.id == message.id }) ?? message
+        let landed = current.latestTranscription?.text?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard landed == sent else {
+            actionError = "The transcript changed before the translation could be sent. "
+                + "Review it and submit the translation again."
+            logger.error("Combined submit aborted: transcript superseded before translation")
+            return false
+        }
+        guard await postTranslation(message, text: translation, language: nil) else {
+            // The transcript did land, so pull the queue anyway: the operator is
+            // about to retry the translation and should be looking at what the
+            // Operator actually holds.
+            await refresh()
+            return false
+        }
+        // One pull for both writes, now that neither can be superseded by it.
+        await refresh()
+        return true
     }
 
     /// Replaces a message in the local queue by id, preserving ordering.
