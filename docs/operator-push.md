@@ -34,7 +34,10 @@ transcript row.
 ## Operator wire format
 
 All requests carry `Authorization: Bearer <Operator API token>` and
-`User-Agent: Telephone-Booth-Transcription/<version>`.
+`User-Agent: Telephone-Booth-Transcription/<version>`, where the version is
+the app's `CFBundleShortVersionString` (`0.0.0` when run outside an app
+bundle). Both are recorded by the Operator's audit trail — see
+[Audit trail](#audit-trail).
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -162,6 +165,39 @@ permission is needed. The bridge is only wired up when the Review base URL and
 the worker's Operator base URL agree; when they don't, the re-run is refused
 with an error rather than transcribing against a different backend.
 
+## Audit trail
+
+The Operator records every write with the acting principal, the client IP, the
+path, the response status and a timestamp; see
+[`docs/audit-log.md`](https://github.com/djensenius/Telephone-Booth-Operator/blob/main/docs/audit-log.md)
+in the operator repo. The three result posts are writes, so each one lands in
+that trail:
+
+| Call | Recorded as |
+| --- | --- |
+| `POST /v1/worker/messages/{id}/transcription` | `transcription.push` |
+| `POST /v1/worker/messages/{id}/translation` | `translation.push` |
+| `POST /v1/worker/messages/{id}/moderation` | `moderation.push` |
+
+Discovery (`GET /v1/worker/messages`), work fetches and the status WebSocket are
+reads and are not recorded.
+
+No operator is signed in behind these calls, so **the worker's API token is the
+identity**: entries read `token:<label>`, the label typed when the token was
+created in the Operator UI. Give each machine running this app its own token,
+labelled after the machine (`transcription-studio-mac`), rather than sharing one
+with a booth or another worker — otherwise the trail cannot tell them apart.
+The `User-Agent` is stored too, which distinguishes an app-generated push from a
+`curl` run by hand with the same token.
+
+Entries are append-only and keep the label captured at the time of the action,
+so revoking or renaming a token never rewrites its history. Rejected pushes are
+recorded as well: if a token is revoked while the worker is running, the `401`s
+show up in the trail with the label, the IP and the time.
+
+Nothing here needs configuring in this app — the point is only that pushes are
+attributable, which is why the token should identify one machine.
+
 ## Configuration
 
 All settings live in the **Operator push worker** section of Settings:
@@ -169,7 +205,8 @@ All settings live in the **Operator push worker** section of Settings:
 - **Enable worker** — master toggle. Off by default.
 - **Operator base URL** — e.g. `https://operator.example.com`.
 - **Operator API token** — static Operator token stored in the macOS Keychain,
-  never in `UserDefaults`.
+  never in `UserDefaults`. Its label is what the Operator's audit trail
+  attributes this app's pushes to, so make it machine-specific.
 - **Reconnect / discovery delay** — 1–300 seconds; reconnects back off
   exponentially and cap around 30 seconds, discovery up to 300 seconds.
 - **Per-realm toggles** — transcription, translation, moderation.
