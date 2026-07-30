@@ -197,15 +197,15 @@ struct ReviewDetailView: View {
     /// get one.
     @ViewBuilder
     private var noRecommendationCard: some View {
-        let moderation = message.latestModeration
+        let state = moderationDisplayState
         let canRunLocal = message.isReviewable
             && (onDevice?.supportsModeration ?? false)
             && englishForModeration != nil
         // Nothing to say and nothing to do — don't render an empty card. Only
         // the "never asked, and can't ask locally" case falls through here.
-        if canRunLocal || moderation?.isPending == true || moderation?.didFail == true {
+        if canRunLocal || state.hasStatus {
             VStack(alignment: .leading, spacing: Theme.Spacing.small) {
-                moderationStateHeader(moderation)
+                moderationStateHeader(state)
                 if canRunLocal, let onDevice, let text = englishForModeration {
                     // A verdict computed on this device stays local until
                     // submitted: the pipeline never uploads on its own. Show it
@@ -350,20 +350,30 @@ struct ReviewDetailView: View {
         }
     }
 
+    /// The Operator's moderation state, reduced to the three cases the UI draws
+    /// differently. `succeeded` moderation carries its own recommendation and is
+    /// rendered by `recommendationCard`, so it collapses to `.none` here.
+    private var moderationDisplayState: ModerationDisplayState {
+        guard let moderation = message.latestModeration else { return .none }
+        if moderation.isPending { return .pending(moderation) }
+        if moderation.didFail { return .failed(moderation) }
+        return .none
+    }
+
     /// Names why there's no recommendation, in the same visual language the
     /// transcript and translation cards use: a failure is red and carries its
     /// error, a pending run reads as still-working, and a never-asked message
     /// stays neutral. All three name the engine so an operator knows what would
     /// have produced (or is producing) the verdict.
     @ViewBuilder
-    private func moderationStateHeader(_ moderation: Moderation?) -> some View {
-        if moderation?.isPending == true {
+    private func moderationStateHeader(_ state: ModerationDisplayState) -> some View {
+        switch state {
+        case .pending(let moderation):
             Text("Moderation in progress")
                 .font(Theme.Fonts.bodyLarge)
                 .foregroundStyle(Theme.Colors.textPrimary)
-            caption("The Operator is still checking this message"
-                    + (moderation.map { " with \($0.sourceLabel)" } ?? "") + ".")
-        } else if moderation?.didFail == true {
+            caption("The Operator is still checking this message with \(moderation.sourceLabel).")
+        case .failed(let moderation):
             Text("Moderation failed")
                 .font(Theme.Fonts.bodyLarge)
                 .foregroundStyle(Theme.Colors.textPrimary)
@@ -372,13 +382,11 @@ struct ReviewDetailView: View {
             Label("The automatic moderation failed.", systemImage: "exclamationmark.triangle.fill")
                 .font(Theme.Fonts.bodyMedium)
                 .foregroundStyle(Theme.Colors.error)
-            if let error = moderation?.error, !error.isEmpty {
+            if let error = moderation.error, !error.isEmpty {
                 caption(error)
             }
-            if let moderation {
-                caption("Engine: \(moderation.sourceLabel)")
-            }
-        } else {
+            caption("Engine: \(moderation.sourceLabel)")
+        case .none:
             Text("No recommendation yet")
                 .font(Theme.Fonts.bodyLarge)
                 .foregroundStyle(Theme.Colors.textPrimary)
@@ -911,6 +919,24 @@ struct ReviewDetailView: View {
         case .translating: return "Translating…"
         case .moderating: return "Checking…"
         default: return "Working…"
+        }
+    }
+}
+
+/// The Operator's moderation reduced to the states the detail view renders
+/// differently. A succeeded verdict is handled by `recommendationCard`, so only
+/// pending, failed, and "nothing to show" reach here.
+private enum ModerationDisplayState {
+    case none
+    case pending(Moderation)
+    case failed(Moderation)
+
+    /// True when there is a state worth drawing even without a local fallback:
+    /// a pending run or a failure the operator needs to see.
+    var hasStatus: Bool {
+        switch self {
+        case .none: return false
+        case .pending, .failed: return true
         }
     }
 }
