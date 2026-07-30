@@ -363,6 +363,47 @@ public final class ReviewStore {
         }
     }
 
+    /// Submits a moderation verdict computed on this device for `message` and
+    /// folds the returned row into `latestModeration`, so the recommendation is
+    /// on screen immediately and — because it is now persisted on the Operator —
+    /// visible to every other operator too.
+    ///
+    /// Returns `true` when the submission succeeded, so the caller can clear the
+    /// local on-device verdict it came from.
+    @discardableResult
+    public func submitModeration(
+        _ message: Message,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double?,
+        model: String? = nil
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
+        pendingActions.insert(message.id)
+        actionError = nil
+        defer { pendingActions.remove(message.id) }
+        do {
+            let updated = try await client.submitModeration(
+                messageID: message.id,
+                transcriptionId: message.latestTranscription?.id,
+                flagged: flagged,
+                recommendation: recommendation,
+                maxScore: maxScore ?? 0,
+                reasonSummary: nil,
+                model: model
+            )
+            // Merge into the *current* local message, not the captured one, so a
+            // poll that landed mid-request can't be clobbered with stale fields.
+            let base = messages.first(where: { $0.id == message.id }) ?? message
+            apply(base.replacingLatestModeration(updated))
+            return true
+        } catch {
+            actionError = Self.describe(error, verb: "submit that recommendation")
+            logger.error("Moderation submit failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     /// Replaces a message in the local queue by id, preserving ordering.
     private func apply(_ message: Message) {
         writeGeneration &+= 1

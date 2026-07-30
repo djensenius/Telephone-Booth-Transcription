@@ -48,6 +48,20 @@ public protocol OperatorReviewClient: Sendable {
         translatedText: String,
         translatedLanguage: String?
     ) async throws -> Transcription
+    /// Records a moderation verdict computed on this device for `messageID`.
+    /// The Operator finalizes any pending moderation row or appends a new
+    /// succeeded one attributed to the submitting operator, so a verdict a phone
+    /// produced locally becomes the message's verdict of record — visible to
+    /// every other operator rather than stranded in this device's memory.
+    func submitModeration(
+        messageID: String,
+        transcriptionId: String?,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        reasonSummary: String?,
+        model: String?
+    ) async throws -> Moderation
 }
 
 public actor HTTPOperatorReviewClient: OperatorReviewClient {
@@ -137,6 +151,36 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             translatedLanguage: (trimmedLanguage?.isEmpty == false) ? trimmedLanguage : nil
         )
         return try await post("/v1/messages/\(messageID)/translation", body: body)
+    }
+
+    public func submitModeration(
+        messageID: String,
+        transcriptionId: String?,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        reasonSummary: String?,
+        model: String?
+    ) async throws -> Moderation {
+        struct Body: Encodable {
+            let transcriptionId: String?
+            let flagged: Bool
+            let recommendation: String
+            let maxScore: Double
+            let reasonSummary: String?
+            let model: String?
+        }
+        let body = Body(
+            transcriptionId: Self.normalized(transcriptionId),
+            flagged: flagged,
+            recommendation: recommendation,
+            // The Operator rejects a score outside `0...1`; clamp rather than
+            // let a stray value fail the whole submission.
+            maxScore: min(1, max(0, maxScore)),
+            reasonSummary: Self.normalized(reasonSummary),
+            model: Self.normalized(model)
+        )
+        return try await post("/v1/messages/\(messageID)/moderation", body: body)
     }
 
     /// Trims a metadata field and folds an empty result to `nil`, so a blank

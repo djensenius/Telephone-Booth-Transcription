@@ -153,7 +153,9 @@ struct OnDeviceReviewPipelineTests {
             model: "apple-speech-analyzer",
             translation: "hello",
             recommendation: "block",
-            flagged: true
+            flagged: true,
+            maxScore: 0.9,
+            moderationModel: "apple-foundation-models"
         ))
     }
 
@@ -336,7 +338,9 @@ struct OnDeviceReviewPipelineTests {
             model: nil,
             translation: nil,
             recommendation: "block",
-            flagged: true
+            flagged: true,
+            maxScore: 0.9,
+            moderationModel: "apple-foundation-models"
         ))
     }
 

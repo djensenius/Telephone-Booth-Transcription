@@ -60,6 +60,13 @@ public final class OnDeviceReviewPipeline {
         /// Local moderation verdict, when moderation ran.
         public var recommendation: String?
         public var flagged: Bool?
+        /// Highest category score behind the verdict, in `0...1`. Carried so a
+        /// submitted verdict can populate the Operator's `maxScore`.
+        public var maxScore: Double?
+        /// Identifier of the local model that produced the verdict, so a
+        /// submitted verdict is attributed to it on the Operator. Distinct from
+        /// `model`, which names the engine that produced `transcript`.
+        public var moderationModel: String?
 
         public init(
             transcript: String,
@@ -67,7 +74,9 @@ public final class OnDeviceReviewPipeline {
             model: String? = nil,
             translation: String? = nil,
             recommendation: String? = nil,
-            flagged: Bool? = nil
+            flagged: Bool? = nil,
+            maxScore: Double? = nil,
+            moderationModel: String? = nil
         ) {
             self.transcript = transcript
             self.language = language
@@ -75,6 +84,8 @@ public final class OnDeviceReviewPipeline {
             self.translation = translation
             self.recommendation = recommendation
             self.flagged = flagged
+            self.maxScore = maxScore
+            self.moderationModel = moderationModel
         }
     }
 
@@ -318,7 +329,9 @@ public final class OnDeviceReviewPipeline {
             model: existing?.model,
             translation: existing?.translation,
             recommendation: verdict.recommendation,
-            flagged: verdict.flagged
+            flagged: verdict.flagged,
+            maxScore: verdict.maxScore,
+            moderationModel: verdict.model
         )
         stages[messageID] = .finished
         return verdict.recommendation
@@ -372,9 +385,13 @@ public final class OnDeviceReviewPipeline {
         stages[message.id] = .moderating
         var recommendation: String?
         var flagged: Bool?
+        var maxScore: Double?
+        var moderationModel: String?
         if let verdict = try? await moderate(translation) {
             recommendation = verdict.recommendation
             flagged = verdict.flagged
+            maxScore = verdict.maxScore
+            moderationModel = verdict.model
         }
         guard isCurrent(message.id, generation) else { return nil }
 
@@ -384,7 +401,9 @@ public final class OnDeviceReviewPipeline {
             model: transcriptResult.model,
             translation: translation,
             recommendation: recommendation,
-            flagged: flagged
+            flagged: flagged,
+            maxScore: maxScore,
+            moderationModel: moderationModel
         )
         stages[message.id] = .finished
         return translation

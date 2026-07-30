@@ -334,7 +334,7 @@ struct ReviewView: View {
     #endif
 
     private func row(_ message: Message) -> some View {
-        ReviewMessageRow(message: message, onDeviceOutput: onDevice?.outputs[message.id])
+        ReviewMessageRow(message: message)
             .listRowBackground(Color.clear)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 if message.awaitingModerationDecision {

@@ -196,9 +196,9 @@ The consequences are worth stating plainly:
   operator-facing copy, preserving the metadata-only logging rule.
 - **Manual and advisory.** The pipeline runs only when the operator taps the
   button, and its output _pre-fills_ the translation draft or waits behind an
-  explicit **Submit transcript** tap. It never submits on its own. The human
-  stays in the loop, which also means a bad on-device transcript is a
-  correctable draft rather than a published result.
+  explicit **Submit transcript** / **Submit recommendation** tap. It never
+  submits on its own. The human stays in the loop, which also means a bad
+  on-device transcript is a correctable draft rather than a published result.
 - **Graceful absence.** `makeAppleIntelligence` (the Apple Intelligence wiring,
   which stays in `TranscriptionApp`) returns `nil` when the engines are
   unavailable, and the UI hides the affordance entirely rather than offering a
@@ -242,6 +242,32 @@ Operator translates and moderates the submitted text server-side, so those
 fields arrive on a later poll rather than in the response.
 
 [op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
+
+#### Submitting a moderation verdict from iOS
+
+Moderation is symmetric with transcription and translation: the phone computes
+the verdict locally but stores it on the Operator, and every device reads the
+Operator's copy so they all agree. Without this, a verdict a phone computed
+would live only in that phone's memory — a second operator on another device
+would see no recommendation for the same message.
+
+The write goes to the operator-authenticated
+`POST /v1/messages/{id}/moderation` ([Operator #129][op129]), which — like the
+transcript and translation routes — sits behind `requireOperator()` rather than
+the worker-scoped token that `POST /v1/worker/messages/{id}/moderation`
+requires. The Operator finalizes any pending moderation row or appends a new
+succeeded one attributed to the submitting operator.
+
+`OnDeviceReviewPipeline` carries the verdict's `maxScore` and model identifier
+alongside the recommendation, and
+`ReviewStore.submitModeration(_:flagged:recommendation:maxScore:model:)` folds
+the returned row into `message.latestModeration`. Submission is never automatic:
+the verdict is rendered first and posted only on a deliberate **Submit
+recommendation** tap. Because `message.latestModeration` is the single source of
+truth, the review UI shows a locally computed verdict only as a deliberate,
+unsubmitted preview — the badge everyone sees comes from the Operator.
+
+[op129]: https://github.com/djensenius/Telephone-Booth-Operator/pull/129
 
 ---
 

@@ -424,6 +424,23 @@ extension Message {
             latestModeration: moderation
         )
     }
+
+    /// Returns a copy with `latestModeration` replaced. Used to fold an
+    /// operator-submitted verdict back into local state so it becomes the
+    /// recommendation of record immediately, without waiting for the next poll.
+    public func replacingLatestModeration(_ moderation: Moderation) -> Message {
+        Message(
+            id: id,
+            status: status,
+            questionId: questionId,
+            notes: notes,
+            createdAt: createdAt,
+            receivedAt: receivedAt,
+            audio: audio,
+            latestTranscription: latestTranscription,
+            latestModeration: moderation
+        )
+    }
 }
 
 public struct MessageList: Codable, Sendable, Equatable {

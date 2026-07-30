@@ -245,6 +245,58 @@ struct ReviewHTTPTests {
         #expect(json["model"] == nil || json["model"] is NSNull)
     }
 
+    @Test("submitModeration POSTs the verdict and decodes the moderation row")
+    func submitModeration() async throws {
+        let body = """
+        {"id":"mod","messageId":"m","transcriptionId":"t","provider":"mac_app",
+         "model":"apple-foundation-models","status":"succeeded","flagged":true,
+         "recommendation":"reject","maxScore":0.82,"categories":null,
+         "reasonSummary":null,"latencyMs":140,"error":null,
+         "createdAt":"2026-01-02T03:04:07Z","completedAt":"2026-01-02T03:04:08Z"}
+        """
+        let client = client(status: 202, body: body)
+        let moderation = try await client.submitModeration(
+            messageID: "m", transcriptionId: "t", flagged: true,
+            recommendation: "reject", maxScore: 0.82, reasonSummary: nil, model: "apple-foundation-models"
+        )
+        #expect(moderation.recommendation == .reject)
+        #expect(moderation.flagged == true)
+
+        let request = try #require(StubURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString.hasSuffix("/v1/messages/m/moderation") == true)
+
+        let sent = try #require(StubURLProtocol.lastBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        #expect(json["transcriptionId"] as? String == "t")
+        #expect(json["flagged"] as? Bool == true)
+        #expect(json["recommendation"] as? String == "reject")
+        #expect(json["maxScore"] as? Double == 0.82)
+        #expect(json["model"] as? String == "apple-foundation-models")
+    }
+
+    @Test("submitModeration clamps the score and omits blank metadata")
+    func submitModerationClampsScore() async throws {
+        let body = """
+        {"id":"mod","messageId":"m","transcriptionId":null,"provider":"mac_app",
+         "model":null,"status":"succeeded","flagged":false,
+         "recommendation":"approve","maxScore":1,"categories":null,
+         "reasonSummary":null,"latencyMs":null,"error":null,
+         "createdAt":"2026-01-02T03:04:07Z","completedAt":null}
+        """
+        let client = client(status: 202, body: body)
+        _ = try await client.submitModeration(
+            messageID: "m", transcriptionId: "  ", flagged: false,
+            recommendation: "approve", maxScore: 4.2, reasonSummary: "  ", model: nil
+        )
+        let sent = try #require(StubURLProtocol.lastBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        #expect(json["maxScore"] as? Double == 1)
+        #expect(json["transcriptionId"] == nil || json["transcriptionId"] is NSNull)
+        #expect(json["reasonSummary"] == nil || json["reasonSummary"] is NSNull)
+        #expect(json["model"] == nil || json["model"] is NSNull)
+    }
+
     @Test("decodes the Operator error envelope into .api")
     func decodesErrorEnvelope() async {
         let client = client(status: 409, body: #"{"error":"message_not_decidable"}"#)

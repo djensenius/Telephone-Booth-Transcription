@@ -46,6 +46,18 @@ struct ReviewTranscriptionQueueTests {
         ) async throws -> Transcription {
             throw OperatorReviewError.invalidResponse
         }
+
+        func submitModeration(
+            messageID: String,
+            transcriptionId: String?,
+            flagged: Bool,
+            recommendation: String,
+            maxScore: Double,
+            reasonSummary: String?,
+            model: String?
+        ) async throws -> Moderation {
+            throw OperatorReviewError.invalidResponse
+        }
     }
 
     private final class StubRerunner: TranscriptionRerunRequesting, @unchecked Sendable {

@@ -39,7 +39,7 @@ struct ReviewDetailView: View {
     private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
     private var output: OnDeviceReviewPipeline.Output? { onDevice?.outputs[message.id] }
     private var advice: AIRecommendation? {
-        AIRecommendation(message: message, onDeviceOutput: output)
+        AIRecommendation(message: message)
     }
 
     var body: some View {
@@ -199,42 +199,50 @@ struct ReviewDetailView: View {
                 caption("The Operator has no recommendation for this message. Apple "
                         + "Intelligence can weigh in from here — the text never leaves "
                         + "this device.")
-                HStack {
-                    Button {
-                        Task {
-                            let recommendation = await onDevice.moderateOnly(
-                                text,
-                                transcript: message.latestTranscription?.text ?? text,
-                                language: message.latestTranscription?.language,
-                                for: message.id
-                            )
-                            // The draft is editable while this is suspended, so
-                            // a verdict that arrives against text the operator
-                            // has since changed is already stale. Compared
-                            // against the candidate rather than the draft,
-                            // which is empty in the Decide state this button
-                            // exists for.
-                            if recommendation != nil {
-                                if englishForModeration == text {
-                                    moderatedText = text
-                                } else {
-                                    onDevice.clearModeration(message.id)
+
+                // A verdict computed on this device stays local until submitted:
+                // the pipeline never uploads on its own. Show it with a Submit
+                // action, exactly as a locally produced transcript is shown.
+                if let localAdvice, moderatedText != nil {
+                    localVerdictReview(localAdvice, using: onDevice)
+                } else {
+                    HStack {
+                        Button {
+                            Task {
+                                let recommendation = await onDevice.moderateOnly(
+                                    text,
+                                    transcript: message.latestTranscription?.text ?? text,
+                                    language: message.latestTranscription?.language,
+                                    for: message.id
+                                )
+                                // The draft is editable while this is suspended, so
+                                // a verdict that arrives against text the operator
+                                // has since changed is already stale. Compared
+                                // against the candidate rather than the draft,
+                                // which is empty in the Decide state this button
+                                // exists for.
+                                if recommendation != nil {
+                                    if englishForModeration == text {
+                                        moderatedText = text
+                                    } else {
+                                        onDevice.clearModeration(message.id)
+                                    }
                                 }
                             }
-                        }
-                    } label: {
-                        if running {
-                            HStack(spacing: Theme.Spacing.small) {
-                                ProgressView().controlSize(.small)
-                                Text(stageLabel(onDevice.stage(for: message.id)))
+                        } label: {
+                            if running {
+                                HStack(spacing: Theme.Spacing.small) {
+                                    ProgressView().controlSize(.small)
+                                    Text(stageLabel(onDevice.stage(for: message.id)))
+                                }
+                            } else {
+                                Label("Get a recommendation", systemImage: "apple.intelligence")
                             }
-                        } else {
-                            Label("Get a recommendation", systemImage: "apple.intelligence")
                         }
+                        .buttonStyle(.tbtGlass)
+                        .disabled(busy || isActing)
+                        Spacer()
                     }
-                    .buttonStyle(.tbtGlass)
-                    .disabled(busy || isActing)
-                    Spacer()
                 }
                 if case .failed(let reason) = onDevice.stage(for: message.id), owns(.moderate) {
                     Text(reason)
@@ -246,6 +254,68 @@ struct ReviewDetailView: View {
             .padding(Theme.Spacing.medium)
             .background(Theme.Colors.tertiaryBackground.opacity(0.4),
                         in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        }
+    }
+
+    /// The verdict this device just computed, ready to review and submit. Nil
+    /// until a local moderation run has produced one.
+    private var localAdvice: AIRecommendation? {
+        output.flatMap(AIRecommendation.init(localOutput:))
+    }
+
+    /// Shows the on-device verdict and a deliberate Submit action. On success
+    /// the local verdict is cleared: it is now persisted on the Operator, so
+    /// `message.latestModeration` becomes the source of truth for every device.
+    @ViewBuilder
+    private func localVerdictReview(
+        _ advice: AIRecommendation,
+        using onDevice: OnDeviceReviewPipeline
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            HStack(spacing: Theme.Spacing.small) {
+                Image(systemName: advice.systemImage)
+                    .foregroundStyle(advice.tint)
+                Text(advice.recommendation.displayName)
+                    .font(Theme.Fonts.headerLarge())
+                    .foregroundStyle(advice.tint)
+                if advice.flagged {
+                    StatusPill(text: "Flagged", tint: Theme.Colors.error)
+                }
+                Spacer(minLength: 0)
+                Text(advice.source)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+            caption("Computed on this device. Submit it to the Operator so every "
+                    + "reviewer sees the same recommendation — nothing is sent until "
+                    + "you do.")
+            HStack {
+                Spacer()
+                Button {
+                    Task { await submitLocalVerdict(using: onDevice) }
+                } label: {
+                    actionLabel("Submit recommendation", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(onDevice.isRunning(message.id) || isActing)
+            }
+        }
+    }
+
+    /// Posts the on-device verdict to the Operator and, on success, clears the
+    /// local result so it can't be submitted twice.
+    private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
+        guard let output, let recommendation = output.recommendation else { return }
+        let submitted = await store.submitModeration(
+            message,
+            flagged: output.flagged ?? false,
+            recommendation: recommendation,
+            maxScore: output.maxScore,
+            model: output.moderationModel
+        )
+        if submitted {
+            onDevice.clearModeration(message.id)
+            moderatedText = nil
         }
     }
 

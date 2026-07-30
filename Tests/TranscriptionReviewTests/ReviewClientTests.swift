@@ -149,6 +149,59 @@ struct ReviewClientTests {
         #expect(store.isActing(on: target.id) == false)
     }
 
+    @Test("submitModeration folds the returned verdict into latestModeration")
+    @MainActor
+    func moderationUpdatesState() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingModeration.first)
+        #expect(target.latestModeration == nil)
+
+        client.moderationResult = .success(
+            Moderation(
+                id: "mod", messageId: target.id, transcriptionId: target.latestTranscription?.id,
+                provider: .macApp, model: "apple-foundation-models", status: .succeeded,
+                flagged: true, recommendation: .reject, maxScore: 0.82, categories: nil,
+                reasonSummary: nil, latencyMs: 140, error: nil,
+                createdAt: target.createdAt, completedAt: target.createdAt
+            )
+        )
+        let ok = await store.submitModeration(
+            target, flagged: true, recommendation: "reject", maxScore: 0.82,
+            model: "apple-foundation-models"
+        )
+
+        #expect(ok)
+        #expect(store.actionError == nil)
+        #expect(store.isActing(on: target.id) == false)
+        #expect(client.lastModerationSubmission?.transcriptionId == target.latestTranscription?.id)
+        #expect(client.lastModerationSubmission?.recommendation == "reject")
+        #expect(client.lastModerationSubmission?.maxScore == 0.82)
+        let updated = store.messages.first(where: { $0.id == target.id })
+        #expect(updated?.latestModeration?.recommendation == .reject)
+        #expect(updated?.latestModeration?.flagged == true)
+    }
+
+    @Test("a failed moderation submit surfaces an actionError and returns false")
+    @MainActor
+    func moderationFailureSurfacesError() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingModeration.first)
+
+        client.moderationResult = .failure(.api(status: 404, code: "not_found"))
+        let ok = await store.submitModeration(
+            target, flagged: false, recommendation: "approve", maxScore: 0.1, model: nil
+        )
+
+        #expect(ok == false)
+        #expect(store.actionError != nil)
+        #expect(store.isActing(on: target.id) == false)
+        #expect(store.messages.first(where: { $0.id == target.id })?.latestModeration == nil)
+    }
+
     @Test("a failed decision surfaces an actionError and clears the pending flag")
     @MainActor
     func decideFailureSurfacesError() async {
@@ -170,8 +223,12 @@ struct ReviewClientTests {
         var decisionResult: Result<Message, OperatorReviewError> = .failure(.invalidResponse)
         var translationResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         var transcriptionResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
+        var moderationResult: Result<Moderation, OperatorReviewError> = .failure(.invalidResponse)
         private(set) var lastDecisionNotes: String?
         private(set) var lastTranscriptionSubmission: (text: String, language: String?, model: String?)?
+        private(set) var lastModerationSubmission: (
+            transcriptionId: String?, flagged: Bool, recommendation: String, maxScore: Double, model: String?
+        )?
         private(set) var fetchCount = 0
         private var submittedTranscription: Transcription?
 
@@ -218,6 +275,19 @@ struct ReviewClientTests {
             translatedLanguage: String?
         ) async throws -> Transcription {
             try translationResult.get()
+        }
+
+        func submitModeration(
+            messageID: String,
+            transcriptionId: String?,
+            flagged: Bool,
+            recommendation: String,
+            maxScore: Double,
+            reasonSummary: String?,
+            model: String?
+        ) async throws -> Moderation {
+            lastModerationSubmission = (transcriptionId, flagged, recommendation, maxScore, model)
+            return try moderationResult.get()
         }
 
         static let seed = """
@@ -269,6 +339,18 @@ struct ReviewClientTests {
             throw OperatorReviewError.invalidResponse
         }
 
+        func submitModeration(
+            messageID: String,
+            transcriptionId: String?,
+            flagged: Bool,
+            recommendation: String,
+            maxScore: Double,
+            reasonSummary: String?,
+            model: String?
+        ) async throws -> Moderation {
+            throw OperatorReviewError.invalidResponse
+        }
+
         func fetchMessages(status: MessageStatus?, since: Date?, limit: Int) async throws -> MessageList {
             lock.withLock { _callCount += 1 }
             try? await Task.sleep(for: .milliseconds(20))
@@ -299,6 +381,18 @@ struct ReviewClientTests {
             translatedText: String,
             translatedLanguage: String?
         ) async throws -> Transcription {
+            throw OperatorReviewError.invalidResponse
+        }
+
+        func submitModeration(
+            messageID: String,
+            transcriptionId: String?,
+            flagged: Bool,
+            recommendation: String,
+            maxScore: Double,
+            reasonSummary: String?,
+            model: String?
+        ) async throws -> Moderation {
             throw OperatorReviewError.invalidResponse
         }
 
