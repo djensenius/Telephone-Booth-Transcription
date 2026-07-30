@@ -754,23 +754,14 @@ struct ReviewDetailView: View {
                                 model: draft.model,
                                 translation: text
                             )
-                            if submitted {
-                                onDevice?.reset(message.id)
-                                drafts.clear(message.id)
-                            } else {
-                                // A transcript that landed before the translation
-                                // failed moves the message to the "needs
-                                // translation" step and, via the
-                                // `transcriptionSnapshot` change, clears the
-                                // draft. Restore the reviewed translation (and
-                                // its verdict) so the plain "Submit translation"
-                                // retry now shown by the translation card isn't
-                                // empty.
-                                translationDraft = text
-                                if onDevice?.outputs[message.id]?.recommendation != nil {
-                                    moderatedText = text
-                                }
-                            }
+                            // On success only the spent local work goes: a
+                            // verdict computed for exactly this text is now a
+                            // verdict about the Operator's translation of
+                            // record, so it survives and can be submitted. On
+                            // failure everything stays — the transcript may have
+                            // landed while the translation didn't, and the
+                            // translation card's plain retry needs the draft.
+                            if submitted { retireLocalWork(after: text) }
                         }
                     } label: {
                         actionLabel("Submit", systemImage: "arrow.up.circle.fill")
