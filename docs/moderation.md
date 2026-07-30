@@ -23,7 +23,9 @@ containing a system message that instructs the model to:
   - `violence`, `violence/graphic`
 
 The text under moderation is wrapped in `<<<TEXT>>> … <<<END>>>` delimiters in
-the user message.
+the user message. Any occurrence of those sentinels *inside* the text is
+escaped with zero-width spaces first, so input cannot close the delimited
+region early and have what follows read as instructions.
 
 The response is parsed strictly: if the JSON cannot be decoded, or if the
 chat-completions envelope is malformed, the route returns `502 Bad Gateway`
@@ -39,9 +41,10 @@ This fallback is best-effort. Specifically:
    classify edge cases as reliably as `omni-moderation-2024-09`.
 2. **Prompt injection is possible.** A sufficiently determined attacker could
    craft input that coerces the classifier model into returning `flagged:
-   false` even for clearly harmful content. The system prompt explicitly
-   instructs the model to treat input as data, but this is a soft guarantee,
-   not a hard one.
+   false` even for clearly harmful content. The sentinels are escaped so input
+   can't trivially break out of the delimited region, and the system prompt
+   explicitly instructs the model to treat input as data — but both are soft
+   guarantees, not hard ones.
 3. **Category calibration drifts.** Small models tend to under- or
    over-classify particular categories. Calibrate by running known examples
    through the classifier before relying on it.

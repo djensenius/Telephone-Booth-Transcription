@@ -73,10 +73,10 @@ public actor FoundationModelsTranslationService: TextTranslationService {
     """
 
     static func userPrompt(input: String, sourceLanguage: String?) -> String {
-        let safe = OnDevicePromptSafety.sanitizeForDelimitedPrompt(input)
+        let safe = PromptSafety.sanitizeForDelimitedPrompt(input)
         // Dropped unless it parses as a language tag: the hint sits outside the
         // delimiters, so an unvalidated value could rewrite the prompt.
-        if let tag = OnDevicePromptSafety.normalizedLanguageTag(sourceLanguage) {
+        if let tag = PromptSafety.normalizedLanguageTag(sourceLanguage) {
             return "Source language: \(tag)\n<<<TEXT>>>\n\(safe)\n<<<END>>>"
         }
         return "<<<TEXT>>>\n\(safe)\n<<<END>>>"
