@@ -39,6 +39,9 @@ public struct TranscriptionRoute<Context: RequestContext>: Sendable {
             return Self.errorResponse(status: .badRequest, code: "bad_request", message: message)
         } catch let TranscriptionBackendError.unauthorized(message) {
             return Self.errorResponse(status: .forbidden, code: "permission_denied", message: message)
+        } catch let TranscriptionBackendError.unavailable(message) {
+            return Self.errorResponse(status: .serviceUnavailable, code: "on_device_unavailable",
+                                      message: message)
         } catch let TranscriptionBackendError.timeout(message) {
             return Self.errorResponse(status: .gatewayTimeout, code: "timeout", message: message)
         } catch let TranscriptionBackendError.upstream(status, body) {
@@ -73,6 +76,11 @@ public struct TranscriptionRoute<Context: RequestContext>: Sendable {
 public enum TranscriptionBackendError: Error, Sendable {
     case badRequest(String)
     case unauthorized(String)
+    /// The on-device engine can't run on this device right now (Apple
+    /// Intelligence off, ineligible hardware, model still downloading).
+    /// Rendered as `503 on_device_unavailable`, matching the translation and
+    /// moderation routes.
+    case unavailable(String)
     case timeout(String)
     case upstream(status: Int, body: ByteBuffer)
 }

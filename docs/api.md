@@ -76,6 +76,23 @@ For both native backends the response is the OpenAI default JSON shape:
 (via the locale chosen in Settings) is honoured. First use will prompt for
 Speech Recognition permission.
 
+Errors on the native backends follow the all-local contract used by the
+translation and moderation routes:
+
+| Condition | Status | Code |
+| --- | --- | --- |
+| Engine not available on this device (Apple Intelligence off, ineligible hardware, model still downloading, unsupported OS) | `503` | `on_device_unavailable` |
+| Speech Recognition permission denied | `403` | `permission_denied` |
+| Engine timed out | `504` | `timeout` |
+
+`503` is retryable — enabling Apple Intelligence or finishing a model download
+makes the same request succeed. It never silently falls back to the proxy
+upstream. (Before this contract was unified, an unavailable engine returned
+`403 permission_denied` here, which was indistinguishable from a genuine
+Speech Recognition denial — a permanent, user-actionable failure — so clients
+couldn't tell a retryable condition from one that needed the user to grant
+permission.)
+
 Common fields:
 
 | Field | Required | Notes |
