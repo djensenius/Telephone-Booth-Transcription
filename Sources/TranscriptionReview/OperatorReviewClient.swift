@@ -173,7 +173,7 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
         let body = Body(
             transcriptionId: Self.normalized(transcriptionId),
             flagged: flagged,
-            recommendation: recommendation,
+            recommendation: Self.normalizedRecommendation(recommendation),
             // The Operator rejects a score outside `0...1`; clamp rather than
             // let a stray value fail the whole submission.
             maxScore: min(1, max(0, maxScore)),
@@ -181,6 +181,20 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             model: Self.normalized(model)
         )
         return try await post("/v1/messages/\(messageID)/moderation", body: body)
+    }
+
+    /// Folds a verdict onto the three values the Operator accepts. A local
+    /// model can phrase the same call as `block` or `allow`, and posting that
+    /// verbatim would fail the whole submission over vocabulary; anything
+    /// unrecognized becomes `review`, which is the safe answer to "a human
+    /// should look at this". Mirrors the worker path in
+    /// `TranscriptionOperator.OperatorClient`.
+    private static func normalizedRecommendation(_ value: String) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "approve", "allow", "allowed": return "approve"
+        case "reject", "block", "blocked": return "reject"
+        default: return "review"
+        }
     }
 
     /// Trims a metadata field and folds an empty result to `nil`, so a blank

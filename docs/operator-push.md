@@ -158,8 +158,10 @@ recording skips straight to `Decide`: there's nothing to transcribe or
 translate, but it still needs a verdict.
 
 Rows show distinct "Silent", "Transcribing…", "Transcription failed", and
-"Translation failed" states, and carry the AI's recommendation — the Operator's
-moderation verdict when there is one, otherwise a local Apple Intelligence run.
+"Translation failed" states, and carry the AI's recommendation — always the
+Operator's moderation verdict. A verdict computed on this device shows only in
+the detail view, as an unsubmitted preview, until it is submitted; the badge
+everyone shares comes from the Operator.
 Selecting a message opens the detail view, which holds the full transcript and
 translation plus every action.
 

@@ -297,6 +297,34 @@ struct ReviewHTTPTests {
         #expect(json["model"] == nil || json["model"] is NSNull)
     }
 
+    @Test("submitModeration folds a verdict onto the Operator's vocabulary")
+    func submitModerationNormalizesRecommendation() async throws {
+        let body = """
+        {"id":"mod","messageId":"m","transcriptionId":null,"provider":"mac_app",
+         "model":null,"status":"succeeded","flagged":true,
+         "recommendation":"reject","maxScore":0.9,"categories":null,
+         "reasonSummary":null,"latencyMs":null,"error":null,
+         "createdAt":"2026-01-02T03:04:07Z","completedAt":null}
+        """
+        // A local model can phrase a rejection as "block"; the Operator only
+        // accepts approve/review/reject, so the client folds it rather than
+        // losing the whole submission to vocabulary.
+        for (spoken, expected) in [
+            ("Block", "reject"), ("blocked", "reject"),
+            ("allow", "approve"), ("  APPROVE ", "approve"),
+            ("flag", "review"), ("", "review")
+        ] {
+            let client = client(status: 202, body: body)
+            _ = try await client.submitModeration(
+                messageID: "m", transcriptionId: nil, flagged: true,
+                recommendation: spoken, maxScore: 0.9, reasonSummary: nil, model: nil
+            )
+            let sent = try #require(StubURLProtocol.lastBody)
+            let json = try #require(try JSONSerialization.jsonObject(with: sent) as? [String: Any])
+            #expect(json["recommendation"] as? String == expected)
+        }
+    }
+
     @Test("decodes the Operator error envelope into .api")
     func decodesErrorEnvelope() async {
         let client = client(status: 409, body: #"{"error":"message_not_decidable"}"#)
