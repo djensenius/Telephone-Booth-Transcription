@@ -26,9 +26,11 @@ struct ReviewDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.large) {
                 header
-                // Actions all live on this screen, so their failures do too —
-                // on iOS this is a pushed view, and an error reported back in
-                // the list would be hidden behind it.
+                #if !os(macOS)
+                // Actions all live on this screen, and this is a pushed view —
+                // an error reported back in the list would be hidden behind it.
+                // On macOS the list header is visible alongside this, and
+                // reports it there instead.
                 if let actionError = store.actionError {
                     Label(actionError, systemImage: "xmark.octagon.fill")
                         .font(Theme.Fonts.bodyMedium)
@@ -38,6 +40,7 @@ struct ReviewDetailView: View {
                         .background(Theme.Colors.error.opacity(0.12),
                                     in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
                 }
+                #endif
                 if let advice {
                     recommendationCard(advice)
                 } else {
@@ -191,10 +194,14 @@ struct ReviewDetailView: View {
     }
 
     /// What a local moderation run should classify: the English the operator
-    /// moderates on, falling back to the source transcript when there is no
-    /// translation. Nil when there is no text to judge.
+    /// moderates on. The Operator's translation is the one of record, then a
+    /// locally generated one, and only then the source transcript — which may
+    /// not be English at all, but is better than refusing to classify a message
+    /// nobody has translated yet.
     private var englishForModeration: String? {
-        let candidate = message.translationText ?? message.latestTranscription?.text
+        let candidate = message.translationText
+            ?? output?.translation
+            ?? message.latestTranscription?.text
         guard let candidate,
               !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return candidate
@@ -366,7 +373,16 @@ struct ReviewDetailView: View {
                 Spacer()
                 Button {
                     let text = translationDraft
-                    Task { await store.submitTranslation(message, text: text) }
+                    Task {
+                        await store.submitTranslation(message, text: text)
+                        // The message moves to Decide now, where the local
+                        // verdict would be the only recommendation on screen —
+                        // but it was computed for the pipeline's own
+                        // translation, not the (possibly edited) text just
+                        // submitted. Drop it and let the Operator's moderation
+                        // of the submitted English stand.
+                        onDevice?.reset(message.id)
+                    }
                 } label: {
                     actionLabel("Submit translation", systemImage: "arrow.up.circle.fill")
                 }

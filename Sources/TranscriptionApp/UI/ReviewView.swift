@@ -237,8 +237,12 @@ struct ReviewView: View {
         .onChange(of: filtered.map(\.id)) { _, ids in
             // Keep a selection alive as the list churns under it, but only
             // auto-select when nothing is chosen — never steal a selection the
-            // operator made.
-            if selectedID == nil { selectedID = ids.first }
+            // operator made. A selection that no longer resolves in the store
+            // counts as nothing chosen: the message has left the queue, and
+            // holding the id would pin the detail to the placeholder for good.
+            if selectedID.flatMap({ store.message(id: $0) }) == nil {
+                selectedID = ids.first
+            }
         }
     }
 
@@ -362,10 +366,15 @@ struct ReviewView: View {
                 banner(message, systemImage: "exclamationmark.triangle.fill",
                        tint: Theme.Colors.warning)
             }
-            // `store.actionError` is deliberately not shown here: every action
-            // now happens in the detail view, and on iOS that is a pushed screen
-            // covering this header. An error reported here would look like the
-            // button simply did nothing.
+
+            // Rows can be approved or rejected by swiping, without ever opening
+            // the detail, so a failure has to be reportable from here too. On
+            // iOS the detail is a pushed screen and this header is never
+            // simultaneously visible, so the detail carries its own copy; on
+            // macOS the two sit side by side and this one covers both.
+            if let actionError = store.actionError {
+                banner(actionError, systemImage: "xmark.octagon.fill", tint: Theme.Colors.error)
+            }
         }
         .padding(Theme.Spacing.large)
     }

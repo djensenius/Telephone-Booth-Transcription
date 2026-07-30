@@ -57,7 +57,11 @@ struct OnDeviceReviewPipelineTests {
         var verdict = ModerationVerdict(flagged: true, recommendation: "block",
                                         maxScore: 0.9, model: "apple-foundation-models")
         var error: OnDeviceServiceError?
+        /// Blocks until resumed, so a test can observe an in-flight verdict.
+        var gate: Gate?
+
         func moderate(_ input: String) async throws -> ModerationVerdict {
+            await gate?.wait()
             if let error { throw error }
             return verdict
         }
@@ -280,6 +284,107 @@ struct OnDeviceReviewPipelineTests {
             return
         }
         #expect(!message.contains("SECRET-DETAIL"))
+    }
+
+    // MARK: - Moderate-only
+
+    /// The Decide state's entry point: text is already on screen, so this must
+    /// classify it without touching the audio at all.
+    @Test func moderateOnlySkipsTranscriptionAndTranslation() async {
+        let pipeline = makePipeline(fetcher: StubAudioFetcher(failWith: .tooLarge))
+        let recommendation = await pipeline.moderateOnly(
+            "hello", transcript: "bonjour", language: "fr", for: "m1"
+        )
+
+        #expect(recommendation == "block")
+        #expect(pipeline.stage(for: "m1") == .finished)
+        #expect(pipeline.outputs["m1"] == OnDeviceReviewPipeline.Output(
+            transcript: "bonjour",
+            language: "fr",
+            model: nil,
+            translation: nil,
+            recommendation: "block",
+            flagged: true
+        ))
+    }
+
+    /// A local transcript or translation the operator hasn't submitted yet must
+    /// survive asking for a second opinion on it.
+    @Test func moderateOnlyMergesIntoAnExistingOutput() async {
+        let pipeline = makePipeline()
+        _ = await pipeline.transcribeOnly(for: input())
+        _ = await pipeline.moderateOnly(
+            "hello", transcript: "ignored", language: "en", for: "m1"
+        )
+
+        // The local transcript wins over the passed-in one, and the attribution
+        // that lets it be submitted survives.
+        #expect(pipeline.outputs["m1"]?.transcript == "bonjour")
+        #expect(pipeline.outputs["m1"]?.model == "apple-speech-analyzer")
+        #expect(pipeline.outputs["m1"]?.language == "fr")
+        #expect(pipeline.outputs["m1"]?.recommendation == "block")
+        #expect(pipeline.outputs["m1"]?.flagged == true)
+    }
+
+    /// `reset` has to supersede a verdict still in flight, or a cleared row can
+    /// be repopulated with advice about text it no longer shows.
+    @Test func resetSupersedesAnInFlightModeration() async {
+        let gate = Gate()
+        let pipeline = makePipeline(moderator: StubModerator(gate: gate))
+
+        let task = Task {
+            await pipeline.moderateOnly(
+                "hello", transcript: "bonjour", language: "fr", for: "m1"
+            )
+        }
+        while !pipeline.isRunning("m1") { await Task.yield() }
+        pipeline.reset("m1")
+        await gate.open()
+
+        #expect(await task.value == nil)
+        #expect(pipeline.outputs["m1"] == nil)
+        #expect(pipeline.stage(for: "m1") == .idle)
+    }
+
+    @Test func moderateOnlyReportsFailure() async {
+        let pipeline = makePipeline(moderator: StubModerator(error: .timeout("slow")))
+        let recommendation = await pipeline.moderateOnly(
+            "hello", transcript: "bonjour", language: "fr", for: "m1"
+        )
+
+        #expect(recommendation == nil)
+        #expect(pipeline.outputs["m1"] == nil)
+        guard case .failed(let reason) = pipeline.stage(for: "m1") else {
+            Issue.record("expected a failed stage, got \(pipeline.stage(for: "m1"))")
+            return
+        }
+        #expect(reason.contains("moderate that text"))
+    }
+
+    /// A moderation failure must not destroy a local transcript the operator is
+    /// still holding: the verdict is advisory, the transcript is work.
+    @Test func moderateOnlyFailureKeepsAnExistingOutput() async {
+        let pipeline = makePipeline(moderator: StubModerator(error: .timeout("slow")))
+        _ = await pipeline.transcribeOnly(for: input())
+        _ = await pipeline.moderateOnly(
+            "bonjour", transcript: "bonjour", language: "fr", for: "m1"
+        )
+
+        #expect(pipeline.outputs["m1"]?.transcript == "bonjour")
+    }
+
+    @Test func moderateOnlyRefusesWhileARunIsInFlight() async {
+        let gate = Gate()
+        let pipeline = makePipeline(transcriber: StubTranscriber(gate: gate))
+
+        let task = Task { await pipeline.run(for: input()) }
+        while !pipeline.isRunning("m1") { await Task.yield() }
+
+        #expect(await pipeline.moderateOnly(
+            "hello", transcript: "bonjour", language: "fr", for: "m1"
+        ) == nil)
+        await gate.open()
+        #expect(await task.value == "hello")
     }
 
     // MARK: - Reset and concurrency
