@@ -31,6 +31,9 @@ struct ReviewView: View {
     /// use-time recheck can't rescue that case, because with no pipeline there
     /// is no button to press in the first place.
     @State private var onDevice: OnDeviceReviewPipeline?
+    /// Owned here, not by the detail view, so unsent drafts survive a selection
+    /// change or a navigation pop.
+    @State private var drafts = ReviewDraftStore()
     /// Bumped on every appearance to re-run the capability probe. `.task(id:)`
     /// gives the probe a task to run in (and cancellation on disappear), which
     /// a synchronous `.onAppear` can't.
@@ -62,6 +65,7 @@ struct ReviewView: View {
                 // transcripts would otherwise survive into the next sign-in.
                 // Pruning everything also supersedes any run still in flight.
                 onDevice?.prune(keeping: [])
+                drafts.prune(keeping: [])
                 selectedID = nil
             }
         }
@@ -178,6 +182,7 @@ struct ReviewView: View {
                 // the full set would keep its text resident until it fell out
                 // of the fetch window.
                 onDevice?.prune(keeping: ids)
+                drafts.prune(keeping: ids)
             }
             .onChange(of: transcriptionSnapshots) { old, new in
                 // A poll can replace the transcript of a row the operator isn't
@@ -190,6 +195,9 @@ struct ReviewView: View {
                 // stay put while the text it stands for changes completely.
                 for (id, snapshot) in new where old[id] != snapshot {
                     onDevice?.reset(id)
+                    // The detail view clears its own drafts on the same signal,
+                    // but only for the message it has open.
+                    drafts.clear(id)
                 }
             }
     }
@@ -238,7 +246,7 @@ struct ReviewView: View {
 
             Group {
                 if let selectedID, let message = store.message(id: selectedID) {
-                    ReviewDetailView(message: message, store: store, onDevice: onDevice)
+                    ReviewDetailView(message: message, store: store, onDevice: onDevice, drafts: drafts)
                         .id(message.id)
                 } else {
                     detailPlaceholder
@@ -311,7 +319,7 @@ struct ReviewView: View {
             }
             .navigationDestination(for: String.self) { id in
                 if let message = store.message(id: id) {
-                    ReviewDetailView(message: message, store: store, onDevice: onDevice)
+                    ReviewDetailView(message: message, store: store, onDevice: onDevice, drafts: drafts)
                         .id(message.id)
                         .navigationTitle("Message")
                         .navigationBarTitleDisplayMode(.inline)

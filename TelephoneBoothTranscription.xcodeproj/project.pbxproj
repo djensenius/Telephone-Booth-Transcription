@@ -78,6 +78,7 @@
 		44891029DCC5BEB9DCBE9D4D /* TranslationRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */; };
 		44E16F3669A7B86D92DF746C /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
 		472DDAD2BFD564056D02207D /* TranscriptionShared_iOS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		485CAE9971A87AEDA5CCC9E7 /* ReviewDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F123034F3ACFF3F6F50F193E /* ReviewDraftStore.swift */; };
 		49ED5FAF400A59841DDA2FAE /* TranscriptionReview_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CDD9AEBF64EEC84471EBB6C /* TranscriptionReview_iOS.framework */; };
 		4A59167FB4FB7ECAF43A30F2 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 9803842996C5BB37757AE577 /* AsyncHTTPClient */; };
 		4A69A39458D90E2FEC2255DA /* OperatorJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C19A26676186A2098968F1 /* OperatorJob.swift */; };
@@ -87,6 +88,7 @@
 		4DF794AA0E36D51F5E57C346 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D62D8BD323611B0FB328E1 /* KeychainTokenStore.swift */; };
 		4E1D1D7912260AF6B146C987 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1727A7E08769F44EC9535FA6 /* ReviewView.swift */; };
 		4EA527A386ADBDB9A7077061 /* TranscriptionServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7C6F45B78C730C678D8DC2 /* TranscriptionServer.swift */; };
+		4FFF0C242F8FC762FF3AA1BE /* ReviewDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F123034F3ACFF3F6F50F193E /* ReviewDraftStore.swift */; };
 		503661387633D01570E341C9 /* TranscriptionShared_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F2A2A155F3B71004C7A99E /* TranscriptionShared_iOS.framework */; };
 		507BB2673272B420FDBAD0C0 /* OperatorPollingConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D229D9FFFD1DC06A5D418C /* OperatorPollingConfig.swift */; };
 		509230467C6313D179E42129 /* HealthRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EF607E80299C4B7F64F0DA /* HealthRoute.swift */; };
@@ -542,6 +544,7 @@
 		EC515CEBB052723FAC579782 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		EF10B0150E2BCDA9EEB130EF /* RequestLogWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestLogWriter.swift; sourceTree = "<group>"; };
 		EFB5FB6C8C9C1315039088DF /* Transcriber.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Transcriber.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F123034F3ACFF3F6F50F193E /* ReviewDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewDraftStore.swift; sourceTree = "<group>"; };
 		F460213684A90E631B1439C7 /* AuthBearerAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthBearerAdapter.swift; sourceTree = "<group>"; };
 		F7C876821C6C463D8736854C /* MultipartFilePart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipartFilePart.swift; sourceTree = "<group>"; };
 		FE434919A1E3F53ECD075137 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -790,6 +793,7 @@
 				D3D45EC1EC5F8BFB4925DB38 /* ContentView.swift */,
 				AEEBE4B8194B1A88FAC23804 /* RequestLogView.swift */,
 				7D7DAEBD3D600AB64E516DB9 /* ReviewDetailView.swift */,
+				F123034F3ACFF3F6F50F193E /* ReviewDraftStore.swift */,
 				DC20E06DF1346A26E67E9AB2 /* ReviewMessageRow.swift */,
 				1727A7E08769F44EC9535FA6 /* ReviewView.swift */,
 				A3F76661166EFF4D6AB7E1F9 /* SettingsOperatorWorkerSection.swift */,
@@ -1328,6 +1332,7 @@
 				D78C01B08606B7EE7F876298 /* PowerAssertion.swift in Sources */,
 				6357B6309965DA6B893697EF /* RequestLogView.swift in Sources */,
 				C0A8F2494E653A69BF78A617 /* ReviewDetailView.swift in Sources */,
+				4FFF0C242F8FC762FF3AA1BE /* ReviewDraftStore.swift in Sources */,
 				30374FBF43276AC3C8DE672F /* ReviewMessageRow.swift in Sources */,
 				4E1D1D7912260AF6B146C987 /* ReviewView.swift in Sources */,
 				D103136C6416041ECD60D00B /* ServerHost.swift in Sources */,
@@ -1452,6 +1457,7 @@
 				A438649995C1BE8FC3FB6611 /* PowerAssertion.swift in Sources */,
 				E67B0B0EF0DD8978A290FEF8 /* RequestLogView.swift in Sources */,
 				C202C430D8814A9B1DC52197 /* ReviewDetailView.swift in Sources */,
+				485CAE9971A87AEDA5CCC9E7 /* ReviewDraftStore.swift in Sources */,
 				9992426D298014FCE1202347 /* ReviewMessageRow.swift in Sources */,
 				35E453BE4BF7A56D39711D34 /* ReviewView.swift in Sources */,
 				2ABE3D9993AF9FCDE55D13B3 /* ServerHost.swift in Sources */,

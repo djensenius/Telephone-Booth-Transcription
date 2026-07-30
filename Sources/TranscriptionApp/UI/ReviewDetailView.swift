@@ -12,11 +12,28 @@ struct ReviewDetailView: View {
     let store: ReviewStore
     let onDevice: OnDeviceReviewPipeline?
 
-    @State private var translationDraft = ""
-    @State private var notesDraft = ""
+    /// Held outside this view because it is `.id(message.id)`-scoped: its
+    /// `@State` dies on every selection change and navigation pop, which would
+    /// throw away a hand-typed translation, or one a failed submit kept for the
+    /// operator to retry.
+    let drafts: ReviewDraftStore
+
+    private var translationDraft: String {
+        get { drafts[message.id].translation }
+        nonmutating set { drafts[message.id].translation = newValue }
+    }
+
+    private var notesDraft: String {
+        get { drafts[message.id].notes }
+        nonmutating set { drafts[message.id].notes = newValue }
+    }
+
     /// The text the local verdict on screen was computed from, so an edit that
     /// makes it stale can be detected.
-    @State private var moderatedText: String?
+    private var moderatedText: String? {
+        get { drafts[message.id].moderatedText }
+        nonmutating set { drafts[message.id].moderatedText = newValue }
+    }
 
     private var isActing: Bool { store.isActing(on: message.id) }
     private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
@@ -73,7 +90,7 @@ struct ReviewDetailView: View {
             // Keyed to the text as well as the id, because the Operator can
             // finalize a pending transcription in place: same id, entirely
             // different source text.
-            translationDraft = ""
+            drafts.clear(message.id)
         }
         .onChange(of: translationDraft) {
             // The verdict was computed from the draft as it stood. Editing it
@@ -180,7 +197,16 @@ struct ReviewDetailView: View {
                                 language: message.latestTranscription?.language,
                                 for: message.id
                             )
-                            if recommendation != nil { moderatedText = text }
+                            // The draft is editable while this is suspended, so
+                            // a verdict that arrives against text the operator
+                            // has since changed is already stale.
+                            if recommendation != nil {
+                                if translationDraft == text {
+                                    moderatedText = text
+                                } else {
+                                    onDevice.clearModeration(message.id)
+                                }
+                            }
                         }
                     } label: {
                         if running {
@@ -388,7 +414,11 @@ struct ReviewDetailView: View {
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
-            TextField("English translation", text: $translationDraft, axis: .vertical)
+            TextField(
+                "English translation",
+                text: Binding(get: { translationDraft }, set: { translationDraft = $0 }),
+                axis: .vertical
+            )
                 .textFieldStyle(.plain)
                 .lineLimit(3...12)
                 .font(Theme.Fonts.bodyLarge)
@@ -410,7 +440,10 @@ struct ReviewDetailView: View {
                         // operator submitted. A failure has to keep the draft
                         // and its output, or a transient error would discard
                         // the work being retried.
-                        if submitted { onDevice?.reset(message.id) }
+                        if submitted {
+                            onDevice?.reset(message.id)
+                            drafts.clear(message.id)
+                        }
                     }
                 } label: {
                     actionLabel("Submit translation", systemImage: "arrow.up.circle.fill")
@@ -444,6 +477,13 @@ struct ReviewDetailView: View {
                             if let translation,
                                onDevice.outputs[message.id]?.translation == translation {
                                 translationDraft = translation
+                                // `run` moderates the translation it just
+                                // produced, so the draft starts out as the
+                                // moderated text — without this, editing it
+                                // would leave that verdict on screen.
+                                if onDevice.outputs[message.id]?.recommendation != nil {
+                                    moderatedText = translation
+                                }
                             }
                         }
                     } label: {
@@ -489,7 +529,11 @@ struct ReviewDetailView: View {
                 caption("You can decide now, or finish the step above first for more context.")
             }
 
-            TextField("Notes (optional)", text: $notesDraft, axis: .vertical)
+            TextField(
+                "Notes (optional)",
+                text: Binding(get: { notesDraft }, set: { notesDraft = $0 }),
+                axis: .vertical
+            )
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .font(Theme.Fonts.bodyMedium)
