@@ -988,10 +988,38 @@ struct ReviewDetailView: View {
             maxScore: output.maxScore ?? 0,
             moderationModel: output.moderationModel
         )
-        guard saved else { return }
+        guard saved else {
+            if !generatedReviewMatchesServer(
+                output,
+                translation: translation,
+                replacedTranscript: message.needsTranscriptionWork
+            ) {
+                onDevice.reset(message.id)
+                drafts.clear(message.id)
+            }
+            return
+        }
 
         onDevice.reset(message.id)
         drafts.clear(message.id)
+    }
+
+    private func generatedReviewMatchesServer(
+        _ output: OnDeviceReviewPipeline.Output,
+        translation: String,
+        replacedTranscript: Bool
+    ) -> Bool {
+        guard let current = store.message(id: message.id),
+              let transcription = current.latestTranscription else { return false }
+        if !replacedTranscript,
+           transcription.id != message.latestTranscription?.id {
+            return false
+        }
+        let trim: (String?) -> String? = {
+            $0?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return (!replacedTranscript || trim(transcription.text) == trim(output.transcript))
+            && trim(transcription.translatedText) == trim(translation)
     }
 
     // MARK: - Decision

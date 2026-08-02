@@ -398,7 +398,7 @@ struct ReviewClientTests {
                 recommendation: "approve"
             )
         }
-        while client.lastModerationSubmission == nil { await Task.yield() }
+        await gate.waitUntilEntered()
 
         #expect(store.isWritingText(for: target.id))
         await gate.open()
@@ -548,11 +548,21 @@ struct ReviewClientTests {
 
     private actor Gate {
         private var continuations: [CheckedContinuation<Void, Never>] = []
+        private var entryContinuations: [CheckedContinuation<Void, Never>] = []
         private var isOpen = false
+        private var hasEntered = false
 
         func wait() async {
+            hasEntered = true
+            entryContinuations.forEach { $0.resume() }
+            entryContinuations.removeAll()
             if isOpen { return }
             await withCheckedContinuation { continuations.append($0) }
+        }
+
+        func waitUntilEntered() async {
+            if hasEntered { return }
+            await withCheckedContinuation { entryContinuations.append($0) }
         }
 
         func open() {
