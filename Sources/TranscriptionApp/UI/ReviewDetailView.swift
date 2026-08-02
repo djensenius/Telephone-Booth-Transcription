@@ -456,7 +456,7 @@ struct ReviewDetailView: View {
         // any operation holds the pipeline, since a second one can't start.
         let busy = onDevice.isRunning(message.id)
         let running = busy && owns(.moderate)
-        let savesAutomatically = matchesOperatorEnglish(text)
+        let savesAutomatically = matchesCurrentOperatorEnglish(text)
         caption(savesAutomatically
                 ? "Apple Intelligence can weigh in from here. Because this message has "
                     + "no recommendation yet, the result is saved to the Operator server "
@@ -514,7 +514,7 @@ struct ReviewDetailView: View {
         }
         moderatedText = text
         if saveToOperator,
-           localVerdictIsSubmittable,
+           matchesCurrentOperatorEnglish(text),
            await saveGeneratedRecommendation(using: onDevice) {
             onDevice.clearModeration(message.id)
             moderatedText = nil
@@ -535,10 +535,12 @@ struct ReviewDetailView: View {
         )
     }
 
-    private func matchesOperatorEnglish(_ text: String) -> Bool {
-        guard let operatorEnglish else { return false }
+    private func matchesCurrentOperatorEnglish(_ text: String) -> Bool {
+        guard let current = store.message(id: message.id) else { return false }
+        let currentEnglish = current.translationText ?? current.latestTranscription?.text
+        guard let currentEnglish else { return false }
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
-            == operatorEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
+            == currentEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// What a local moderation run should classify: the English the operator
@@ -977,8 +979,10 @@ struct ReviewDetailView: View {
         }
 
         guard saveToOperator, let output = onDevice.outputs[message.id] else { return }
-        let saved = await store.submitGeneratedReview(
+        let result = await store.submitGeneratedReview(
             message,
+            expectedTranscriptionID: message.latestTranscription?.id,
+            sourceTranscript: output.transcript,
             transcript: message.needsTranscriptionWork ? output.transcript : nil,
             language: output.language,
             transcriptionModel: output.model,
@@ -988,38 +992,13 @@ struct ReviewDetailView: View {
             maxScore: output.maxScore ?? 0,
             moderationModel: output.moderationModel
         )
-        guard saved else {
-            if !generatedReviewMatchesServer(
-                output,
-                translation: translation,
-                replacedTranscript: message.needsTranscriptionWork
-            ) {
-                onDevice.reset(message.id)
-                drafts.clear(message.id)
-            }
-            return
+        switch result {
+        case .saved, .superseded:
+            onDevice.reset(message.id)
+            drafts.clear(message.id)
+        case .failed:
+            break
         }
-
-        onDevice.reset(message.id)
-        drafts.clear(message.id)
-    }
-
-    private func generatedReviewMatchesServer(
-        _ output: OnDeviceReviewPipeline.Output,
-        translation: String,
-        replacedTranscript: Bool
-    ) -> Bool {
-        guard let current = store.message(id: message.id),
-              let transcription = current.latestTranscription else { return false }
-        if !replacedTranscript,
-           transcription.id != message.latestTranscription?.id {
-            return false
-        }
-        let trim: (String?) -> String? = {
-            $0?.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return (!replacedTranscript || trim(transcription.text) == trim(output.transcript))
-            && trim(transcription.translatedText) == trim(translation)
     }
 
     // MARK: - Decision

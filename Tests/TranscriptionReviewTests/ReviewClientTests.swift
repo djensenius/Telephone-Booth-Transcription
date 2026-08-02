@@ -392,6 +392,8 @@ struct ReviewClientTests {
         let task = Task {
             await store.submitGeneratedReview(
                 target,
+                expectedTranscriptionID: target.latestTranscription?.id,
+                sourceTranscript: target.latestTranscription?.text ?? "",
                 transcript: nil,
                 translation: "hello",
                 flagged: false,
@@ -402,9 +404,34 @@ struct ReviewClientTests {
 
         #expect(store.isWritingText(for: target.id))
         await gate.open()
-        #expect(await task.value == false)
+        #expect(await task.value == .failed)
         #expect(store.isWritingText(for: target.id) == false)
         #expect(store.messages.first(where: { $0.id == target.id })?.translationText == "hello")
+    }
+
+    @Test("generated translation refuses a superseded source transcription")
+    @MainActor
+    func generatedTranslationChecksSourceIdentity() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        client.submittedTranscription = target.latestTranscription!.retranscribed("adios")
+        await store.refresh()
+
+        let result = await store.submitGeneratedReview(
+            target,
+            expectedTranscriptionID: target.latestTranscription?.id,
+            sourceTranscript: target.latestTranscription?.text ?? "",
+            transcript: nil,
+            translation: "hello",
+            flagged: false,
+            recommendation: "approve"
+        )
+
+        #expect(result == .superseded)
+        #expect(client.translationSubmissions.isEmpty)
+        #expect(client.lastModerationSubmission == nil)
     }
 
     @Test("replacing translated text clears a recommendation for the old text")
@@ -464,7 +491,7 @@ struct ReviewClientTests {
         )?
         private(set) var translationSubmissions: [String] = []
         private(set) var fetchCount = 0
-        private var submittedTranscription: Transcription?
+        var submittedTranscription: Transcription?
 
         func fetchTranscriptions(messageID: String) async throws -> TranscriptionList {
             TranscriptionList(items: [])
