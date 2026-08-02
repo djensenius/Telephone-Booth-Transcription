@@ -56,13 +56,20 @@ This fallback is best-effort. Specifically:
 
 If you need OpenAI-equivalent moderation semantics, set the moderation
 upstream to OpenAI itself (`https://api.openai.com/v1`) and disable the
-fallback in Settings.
+fallback programmatically:
+
+```swift
+config.moderationUpstream = UpstreamConfig(
+    baseURL: "https://api.openai.com/v1"
+)
+config.moderationFallbackEnabled = false
+```
 
 ## On-device backend (Apple Intelligence)
 
-On iOS — and optionally on macOS — the moderation backend can be set to
-**on-device**, in which case `/v1/moderations` is served by Apple's
-FoundationModels safety model rather than any HTTP upstream. Nothing leaves the
+On supported Apple platforms, set
+`config.moderationBackend = .onDevice` to serve `/v1/moderations` with Apple's
+Foundation Models safety model rather than an HTTP upstream. Nothing leaves the
 device.
 
 FoundationModels exposes only a single safety verdict, not OpenAI's per-category
