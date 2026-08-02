@@ -25,7 +25,14 @@ let server = TranscriptionServer(
     httpClient: client
 )
 let application = server.makeApplication()
-try await application.runService()
+try await withThrowingTaskGroup(of: Void.self) { group in
+    group.addTask { await server.logWriter.run() }
+    group.addTask { try await application.runService() }
+    // runService() exits on signal; shut down the writer so run() drains and returns
+    _ = try await group.next()
+    await server.logWriter.shutdown()
+    await group.waitForAll()
+}
 ```
 
 Use `bearerToken` as `Authorization: Bearer <token>` for every route except
