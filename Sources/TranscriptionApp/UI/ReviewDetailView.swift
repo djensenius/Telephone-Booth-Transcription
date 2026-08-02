@@ -499,7 +499,8 @@ struct ReviewDetailView: View {
             language: message.latestTranscription?.language,
             for: message.id
         )
-        guard recommendation != nil else { return }
+        guard let recommendation,
+              onDevice.outputs[message.id]?.recommendation == recommendation else { return }
 
         guard englishForModeration == text else {
             onDevice.clearModeration(message.id)
@@ -601,7 +602,10 @@ struct ReviewDetailView: View {
                             + "then submit both in one step.")
                 } else {
                     caption(message.latestTranscription == nil
-                            ? "Saving this first transcript to the Operator server…"
+                            ? (isActing
+                               ? "Saving this first transcript to the Operator server…"
+                               : "This transcript is ready. Save it to the Operator server "
+                                   + "to make it available to every reviewer.")
                             : "This is a local preview. Save it to the Operator server "
                                 + "to make it the newest transcript.")
                     HStack {
