@@ -456,14 +456,18 @@ struct ReviewDetailView: View {
         // any operation holds the pipeline, since a second one can't start.
         let busy = onDevice.isRunning(message.id)
         let running = busy && owns(.moderate)
-        caption("Apple Intelligence can weigh in from here. Because this message has "
-                + "no recommendation yet, the result is saved to the Operator server "
-                + "automatically.")
+        let savesAutomatically = matchesOperatorEnglish(text)
+        caption(savesAutomatically
+                ? "Apple Intelligence can weigh in from here. Because this message has "
+                    + "no recommendation yet, the result is saved to the Operator server "
+                    + "automatically."
+                : "This translation is still a local draft. Preview a recommendation, "
+                    + "then save the translation before saving its recommendation.")
         HStack {
             Button {
                 Task {
                     await generateRecommendation(
-                        using: onDevice, text: text, saveToOperator: true
+                        using: onDevice, text: text, saveToOperator: savesAutomatically
                     )
                 }
             } label: {
@@ -473,7 +477,9 @@ struct ReviewDetailView: View {
                         Text(stageLabel(onDevice.stage(for: message.id)))
                     }
                 } else {
-                    Label("Generate and save recommendation",
+                    Label(savesAutomatically
+                          ? "Generate and save recommendation"
+                          : "Preview recommendation",
                           systemImage: "apple.intelligence")
                 }
             }
@@ -527,6 +533,12 @@ struct ReviewDetailView: View {
             maxScore: output.maxScore ?? 0,
             model: output.moderationModel
         )
+    }
+
+    private func matchesOperatorEnglish(_ text: String) -> Bool {
+        guard let operatorEnglish else { return false }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            == operatorEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// What a local moderation run should classify: the English the operator
