@@ -23,9 +23,8 @@ maintains an inbound bearer token, writes a request log, or holds a power
 assertion. Both platforms fetch message audio through pre-signed URLs and send
 reviewed results to the Operator over outbound HTTPS.
 
-`AppState` is deliberately small. It satisfies the review module's optional
-transcription re-run interface, while local Apple Intelligence work is owned by
-`ReviewView` and remains draft-only until submission.
+`ReviewView` owns the local `OnDeviceReviewPipeline`. Generated work remains
+local until the detail view submits it through `ReviewStore`.
 
 ## Library boundaries
 

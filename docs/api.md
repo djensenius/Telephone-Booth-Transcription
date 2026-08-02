@@ -1,325 +1,60 @@
-# API reference
+# TranscriptionCore API
 
-> This documents the standalone `TranscriptionCore` library. The shipped macOS
-> and iOS apps do not link this library, expose these routes, or listen on a
-> network port. reference
+`TranscriptionCore` is a standalone library retained for existing integrations.
+The shipped macOS and iOS apps do not link it, expose HTTP routes, or listen on
+a network port.
 
-Every endpoint except `/healthz` requires `Authorization: Bearer <token>`. The
-token is shown in the app's **Status** tab and rotates from the same screen; it
-lives in the macOS login Keychain under
-`org.davidjensenius.TelephoneBoothTranscription / server-token`.
+Library consumers construct a `ServerConfig`, token store, request-log store,
+and shared `AsyncHTTPClient.HTTPClient`, then create a `TranscriptionServer`:
 
-`401 Unauthorized` is returned for:
+```swift
+import AsyncHTTPClient
+import TranscriptionCore
 
-- missing `Authorization` header (`code: "missing_authorization"`)
-- non-Bearer scheme (`code: "invalid_scheme"`)
-- empty token (`code: "empty_token"`)
-- duplicate `Authorization` headers (`code: "multiple_authorization_headers"`)
-- token mismatch (`code: "bad_token"`)
+var config = ServerConfig()
+config.bindHost = "127.0.0.1"
+config.bindPort = 8089
 
-The validated server config binds to `127.0.0.1` by default. To serve a
-Telephone-Booth Operator running on another Mac, persist a non-loopback
-`bindHost` and set `nonLoopbackBindAcknowledged=true`; otherwise validation
-silently reverts the bind to loopback. See
-[`architecture.md`](./architecture.md#serving-a-remote-operator-mac) for the
-networking trade-offs.
+let client = HTTPClient(eventLoopGroupProvider: .singleton)
+let server = TranscriptionServer(
+    config: config.validated(),
+    tokenStore: InMemoryTokenStore(),
+    logStore: InMemoryRequestLogStore(),
+    httpClient: client
+)
+let application = server.makeApplication()
+try await application.runService()
+```
 
-`503 Service Unavailable` is returned when the server has reached its configured
-maximum concurrent request limit (`maxConcurrentRequests` in Settings, default
-8). The response uses the standard error envelope:
+Production consumers should provide persistent `TokenStore` and
+`RequestLogStoring` implementations and shut down the shared HTTP client during
+their own lifecycle teardown.
+
+## Routes
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/healthz` | Unauthenticated liveness probe. |
+| `GET` | `/v1/models` | Aggregated upstream model discovery. |
+| `GET` | `/v1/requests` | Request-log metadata. |
+| `POST` | `/v1/audio/transcriptions` | OpenAI-compatible transcription. |
+| `POST` | `/v1/audio/translations` | OpenAI-compatible audio translation. |
+| `POST` | `/v1/translations` | Text-to-English translation. |
+| `POST` | `/v1/moderations` | OpenAI-compatible moderation. |
+
+Every route except `/healthz` requires the bearer token supplied by the
+configured `TokenStore`. Errors use the shared envelope:
 
 ```json
 {
   "error": {
     "type": "server_error",
-    "code": "overloaded",
-    "message": "server is at maximum capacity, please retry later"
+    "code": "example_code",
+    "message": "Human-readable description"
   }
 }
 ```
 
-Clients should back off and retry. `/healthz` is never subject to the
-concurrency limit -- it always responds even when the server is at capacity.
-
-## `GET /healthz`
-
-Unauthenticated liveness probe.
-
-```json
-{ "status": "ok", "service": "telephone-booth-transcription" }
-```
-
-## `POST /v1/audio/transcriptions`
-
-OpenAI-compatible multipart upload. The behaviour depends on the configured
-**transcription backend** (see _Settings → Transcription backend_ in the app):
-
-- **Proxy backend** (default) — the server forwards all multipart fields
-  verbatim to the configured upstream (faster-whisper-server, OpenAI, etc.).
-  Only `model` is extracted for the request log. If you've picked a default
-  model in Settings and the request doesn't carry one, the server injects it
-  before forwarding.
-- **macOS 26 Speech Analyzer (Apple Intelligence)** — the server parses the
-  multipart body, extracts the `file` field, and feeds it to `SpeechAnalyzer`
-  paired with `SpeechTranscriber`. Same engine that powers Apple-Intelligence
-  transcription in Notes / Voice Memos. Highest accuracy, handles long-form
-  audio. First use of a new locale may trigger a one-time on-device model
-  download via `AssetInventory`.
-- **macOS legacy Speech Recognizer** — uses the older `SFSpeechRecognizer`.
-  Wider locale coverage and no model download, but lower accuracy. Useful
-  fallback for locales the new engine doesn't yet support.
-
-> **iOS / Apple Intelligence:** on iOS the Speech Analyzer backend is the
-> **default** and runs entirely on-device. The proxy backend is still selectable
-> (and `ServerConfig` supports `.proxy` on every platform), but it is not the
-> default on iOS and needs a reachable upstream to be useful.
-
-For both native backends the response is the OpenAI default JSON shape:
-`{ "text": "…" }`. Other multipart fields (`prompt`, `temperature`,
-`response_format`, etc.) are ignored on the native backends; only `language`
-(via the locale chosen in Settings) is honoured. First use will prompt for
-Speech Recognition permission.
-
-Errors on the native backends follow the all-local contract used by the
-translation and moderation routes:
-
-| Condition | Status | Code |
-| --- | --- | --- |
-| Engine not available on this device (Apple Intelligence off, ineligible hardware, model still downloading, unsupported OS) | `503` | `on_device_unavailable` |
-| Speech Recognition permission denied | `403` | `permission_denied` |
-| Engine timed out | `504` | `timeout` |
-
-`503` is retryable — enabling Apple Intelligence or finishing a model download
-makes the same request succeed. It never silently falls back to the proxy
-upstream. (Before this contract was unified, an unavailable engine returned
-`403 permission_denied` here, which was indistinguishable from a genuine
-Speech Recognition denial — a permanent, user-actionable failure — so clients
-couldn't tell a retryable condition from one that needed the user to grant
-permission.)
-
-Common fields:
-
-| Field | Required | Notes |
-| --- | --- | --- |
-| `file` | yes | The audio file (wav / mp3 / m4a / webm / flac / ogg). |
-| `model` | recommended | e.g. `whisper-1`, `whisper-large-v3`, model alias served by your upstream. |
-| `language` | no | ISO-639-1 (`en`, `fr`, …) |
-| `prompt` | no | Optional prompt to bias the decoder. |
-| `temperature` | no | 0..1 |
-| `response_format` | no | `json` (default), `text`, `srt`, `vtt`, `verbose_json` |
-
-Response body and status code are passed through from the upstream unchanged
-(minus hop-by-hop headers).
-
-## `POST /v1/audio/translations`
-
-OpenAI-compatible multipart upload that translates non-English audio into
-English text. The backend is selectable in Settings:
-
-- **Proxy** (default on macOS) — forwards the multipart body verbatim to the
-  configured **translation** upstream. The translation upstream is configured
-  independently from the transcription upstream, so a deployment may run
-  faster-whisper-server `:8000` for transcription and a larger Whisper model on
-  a different host for translation.
-- **On-device** — Apple ships no direct speech→English model, so this runs two
-  on-device steps: the Speech engine (`SpeechAnalyzer`, or the legacy
-  `SFSpeechRecognizer` if that's the selected transcription backend)
-  transcribes the audio, then Foundation Models translates the resulting
-  _text_. No audio or text leaves the machine. Slower than a single Whisper
-  call.
-
-The multipart fields mirror OpenAI's `/v1/audio/translations`:
-
-| Field | Required | Notes |
-| --- | --- | --- |
-| `file` | yes | Audio in any format the upstream Whisper model accepts. |
-| `model` | yes / injected | If omitted and a default translation model is set in Settings, it is injected before forwarding. Ignored by the on-device backend. |
-| `prompt` | no | Optional prompt to bias the decoder. Ignored by the on-device backend. |
-| `temperature` | no | 0..1. Ignored by the on-device backend. |
-| `response_format` | no | `json` (default), `text`, `srt`, `vtt`, `verbose_json`. The on-device backend always returns `json`. |
-| `language` | no | BCP-47 hint naming the **source** language of the audio, e.g. `fr`. On-device only; the proxy backend forwards it and Whisper ignores it. |
-
-For the proxy backend, response body and status code are passed through from
-the upstream unchanged (minus hop-by-hop headers). The on-device backend
-returns the same `{"text": "…"}` shape, so OpenAI-compatible clients can't tell
-the two apart.
-
-`language` never selects the _target_ language — translation always targets
-English by design. It names the language of the _incoming audio_. Supplying it
-matters for the on-device backend: unlike Whisper, Apple's Speech engine does
-not detect the spoken language, so without a hint it decodes using the
-configured transcription locale (`en-US` by default). French audio would then
-be transcribed as if it were English and "translated" from that garbage. The
-locale picker in Settings is hidden when transcription is proxied, so on that
-combination `language` is the only way to get this right.
-
-## `POST /v1/translations`
-
-Custom JSON endpoint (not part of OpenAI's surface) that translates
-already-transcribed text into English. Useful when you have a transcript and
-want English without re-uploading audio. Routed through the translation
-upstream's `/chat/completions`; returns `502 translation_upstream_no_chat`
-when the upstream doesn't implement chat completions (faster-whisper-server
-alone does not).
-
-Request:
-
-```json
-{ "input": "Bonjour, comment ça va ?", "source_language": "fr" }
-```
-
-`source_language` is optional — when omitted the model auto-detects.
-
-Response (HTTP 200):
-
-```json
-{
-  "translated_text": "Hello, how are you?",
-  "source_language": "fr",
-  "target_language": "en",
-  "model": "llama-3.1-8b-instruct"
-}
-```
-
-The prompt instructs the model to treat the input strictly as data and
-return a single JSON object. As with the moderation fallback, this is
-best-effort: local LLMs vary in quality and can occasionally be coerced.
-Bodies are **not** logged.
-
-### On-device backend (Apple Intelligence)
-
-When the **text-translation backend** is set to on-device (the default on iOS),
-`/v1/translations` is served by Apple's FoundationModels on-device model instead
-of the translation upstream. The response `model` is `apple-foundation-models`
-and no data leaves the device. If on-device translation is selected but Apple
-Intelligence is unavailable (e.g. older OS, simulator, unsupported hardware),
-the endpoint returns `503 on_device_unavailable` — it never silently falls back
-to the proxy upstream. `/v1/audio/translations` has its own independent
-backend setting; see that section above.
-
-## All-local mode
-
-Every route can run entirely on this machine. _Settings → Privacy mode →
-**Switch everything to on-device**_ sets, in one step:
-
-| Endpoint | On-device engine |
-| --- | --- |
-| `POST /v1/audio/transcriptions` | `SpeechAnalyzer` (Apple Intelligence), or the legacy Speech Recognizer if that was already selected |
-| `POST /v1/audio/translations` | `SpeechAnalyzer` → Foundation Models, or the legacy Speech Recognizer → Foundation Models if that was already selected |
-| `POST /v1/translations` | Foundation Models |
-| `POST /v1/moderations` | Foundation Models |
-
-Upstream URLs are preserved so switching back to proxy mode doesn't lose the
-configuration. In this mode no audio or text is sent to a configured upstream,
-and `GET /v1/models` returns only the on-device model ids. Note this is not the
-same as "no network activity": `SpeechAnalyzer` may still fetch per-locale
-model assets from Apple the first time a locale is used. Message content is
-never part of that. Requires Apple Intelligence
-to be enabled and macOS 26 or newer; otherwise the on-device routes return
-`503 on_device_unavailable`.
-
-## `POST /v1/moderations`
-
-OpenAI-compatible moderation. JSON body:
-
-```json
-{ "input": "string or array of strings", "model": "omni-moderation-latest" }
-```
-
-The server first tries the configured moderation upstream's `/v1/moderations`.
-If the upstream returns 2xx, that response is forwarded verbatim. Otherwise, if
-the **chat-completion fallback** is enabled in Settings (default on), the
-server asks the moderation upstream's `/v1/chat/completions` endpoint to
-classify the input against OpenAI's category set and returns a result in the
-OpenAI moderation response shape:
-
-```json
-{
-  "id": "modr-local-…",
-  "model": "omni-moderation-latest",
-  "results": [
-    {
-      "flagged": true,
-      "categories": {
-        "sexual": false, "sexual/minors": false,
-        "harassment": false, "harassment/threatening": false,
-        "hate": true, "hate/threatening": false,
-        "illicit": false, "illicit/violent": false,
-        "self-harm": false, "self-harm/intent": false, "self-harm/instructions": false,
-        "violence": false, "violence/graphic": false
-      },
-      "category_scores": { "hate": 0.91, "...": 0.0 }
-    }
-  ]
-}
-```
-
-See [`moderation.md`](./moderation.md) for the limitations of the local
-fallback. **It is not a replacement for OpenAI's first-party safety model.**
-
-### On-device backend (Apple Intelligence)
-
-When the **moderation backend** is set to on-device (the default on iOS),
-`/v1/moderations` is served by Apple's FoundationModels on-device model. Because
-FoundationModels only returns a single safety verdict (not per-category scores),
-the response carries `"model": "apple-foundation-models"`, a single `flagged`
-boolean, and **all-false `categories` with all-zero `category_scores`** — i.e. a
-`flagged: true` result intentionally has zero category scores. If on-device
-moderation is selected but Apple Intelligence is unavailable, the endpoint
-returns `503 on_device_unavailable` and never falls back to the proxy upstream.
-
-## `GET /v1/requests`
-
-Returns the most recent request log entries (defaults to 100, `?limit=N` up to
-1000).
-
-```json
-{
-  "data": [
-    {
-      "id": 42,
-      "receivedAt": "2026-05-23T20:31:11Z",
-      "method": "POST",
-      "path": "/v1/audio/transcriptions",
-      "status": 200,
-      "durationMs": 8421,
-      "model": "whisper-1",
-      "requestBytes": 0,
-      "responseBytes": 142,
-      "authOK": true,
-      "moderationFlagged": null,
-      "error": null
-    }
-  ]
-}
-```
-
-Bodies are **not** logged. Only metadata: method, path, status, duration,
-content sizes, auth result, model, and the moderation `flagged` flag.
-
-## `GET /v1/models`
-
-Composite model list across the configured upstreams. The response shape
-matches OpenAI's `/v1/models`:
-
-```json
-{
-  "object": "list",
-  "data": [
-    { "id": "macos-speech", "object": "model", "owned_by": "transcription", "created": 0 },
-    { "id": "Systran/faster-whisper-medium.en", "object": "model", "owned_by": "transcription" },
-    { "id": "Systran/faster-whisper-large-v3", "object": "model", "owned_by": "translation" },
-    { "id": "llama-3.1-8b-instruct", "object": "model", "owned_by": "moderation" }
-  ]
-}
-```
-
-`owned_by` indicates which of the local app's three upstreams reported the
-model: `transcription` (the Whisper-compatible server), `translation` (the
-audio→English upstream, often the same Whisper server), or `moderation` (the
-LM Studio / chat-completions server). When the macOS native transcription
-backend is selected, a synthetic `macos-speech` entry is prepended so clients
-can pick it through the same picker.
-
-The endpoint is best-effort: if an upstream is unreachable, its entries are
-simply omitted rather than failing the request.
+See the route implementations in
+`Sources/TranscriptionCore/Server/Routes/` and their live-server tests in
+`Tests/TranscriptionCoreTests/` for request and response details.

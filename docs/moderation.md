@@ -1,7 +1,7 @@
 # Moderation: how the local fallback works
 
 > This documents moderation in the standalone `TranscriptionCore` library. The
-> shipped apps use the in-process review pipeline instead of an HTTP route.: how the local fallback works
+> shipped apps use the in-process review pipeline instead of an HTTP route.
 
 When the configured moderation upstream answers `/v1/moderations` with a 2xx,
 the proxy passes the response through unchanged. Most local servers — LM
