@@ -612,7 +612,8 @@ public final class ReviewStore {
     public func submitGeneratedReview(
         _ message: Message,
         expectedTranscriptionID: String?,
-        sourceTranscript: String,
+        expectedTranscriptionStatus: TranscriptionStatus?,
+        expectedSourceTranscript: String?,
         transcript: String?,
         language: String? = nil,
         transcriptionModel: String? = nil,
@@ -631,6 +632,14 @@ public final class ReviewStore {
             pendingTextWrites.remove(message.id)
         }
 
+        let current = messages.first(where: { $0.id == message.id }) ?? message
+        guard current.latestTranscription?.id == expectedTranscriptionID,
+              current.latestTranscription?.status == expectedTranscriptionStatus,
+              Self.trimmed(current.latestTranscription?.text)
+                == Self.trimmed(expectedSourceTranscript) else {
+            return .superseded
+        }
+
         let textResult: TextSubmissionResult
         if let transcript {
             textResult = await postTranscriptAndTranslation(
@@ -642,12 +651,6 @@ public final class ReviewStore {
                 refreshing: false
             )
         } else {
-            let current = messages.first(where: { $0.id == message.id }) ?? message
-            guard current.latestTranscription?.id == expectedTranscriptionID,
-                  Self.trimmed(current.latestTranscription?.text)
-                    == Self.trimmed(sourceTranscript) else {
-                return .superseded
-            }
             textResult = await postTranslation(message, text: translation, language: nil)
                 ? .saved : .failed
         }

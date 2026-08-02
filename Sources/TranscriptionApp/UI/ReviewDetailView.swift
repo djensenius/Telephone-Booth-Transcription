@@ -982,7 +982,8 @@ struct ReviewDetailView: View {
         let result = await store.submitGeneratedReview(
             message,
             expectedTranscriptionID: message.latestTranscription?.id,
-            sourceTranscript: output.transcript,
+            expectedTranscriptionStatus: message.latestTranscription?.status,
+            expectedSourceTranscript: message.latestTranscription?.text,
             transcript: message.needsTranscriptionWork ? output.transcript : nil,
             language: output.language,
             transcriptionModel: output.model,
@@ -1066,6 +1067,7 @@ struct ReviewDetailView: View {
                         let transcript = await onDevice.transcribeOnly(for: message)
                         if transcript != nil,
                            message.latestTranscription == nil,
+                           store.message(id: message.id)?.latestTranscription == nil,
                            let output = onDevice.outputs[message.id] {
                             await submitOnDeviceTranscript(output, using: onDevice)
                         }

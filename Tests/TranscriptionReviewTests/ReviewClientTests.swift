@@ -393,7 +393,8 @@ struct ReviewClientTests {
             await store.submitGeneratedReview(
                 target,
                 expectedTranscriptionID: target.latestTranscription?.id,
-                sourceTranscript: target.latestTranscription?.text ?? "",
+                expectedTranscriptionStatus: target.latestTranscription?.status,
+                expectedSourceTranscript: target.latestTranscription?.text,
                 transcript: nil,
                 translation: "hello",
                 flagged: false,
@@ -422,7 +423,8 @@ struct ReviewClientTests {
         let result = await store.submitGeneratedReview(
             target,
             expectedTranscriptionID: target.latestTranscription?.id,
-            sourceTranscript: target.latestTranscription?.text ?? "",
+            expectedTranscriptionStatus: target.latestTranscription?.status,
+            expectedSourceTranscript: target.latestTranscription?.text,
             transcript: nil,
             translation: "hello",
             flagged: false,
@@ -430,6 +432,33 @@ struct ReviewClientTests {
         )
 
         #expect(result == .superseded)
+        #expect(client.translationSubmissions.isEmpty)
+        #expect(client.lastModerationSubmission == nil)
+    }
+
+    @Test("generated first transcript refuses a changed server state")
+    @MainActor
+    func generatedTranscriptChecksOriginalState() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        client.submittedTranscription = target.latestTranscription!.retranscribed("adios")
+        await store.refresh()
+
+        let result = await store.submitGeneratedReview(
+            target,
+            expectedTranscriptionID: target.latestTranscription?.id,
+            expectedTranscriptionStatus: target.latestTranscription?.status,
+            expectedSourceTranscript: target.latestTranscription?.text,
+            transcript: "bonjour",
+            translation: "hello",
+            flagged: false,
+            recommendation: "approve"
+        )
+
+        #expect(result == .superseded)
+        #expect(client.lastTranscriptionSubmission == nil)
         #expect(client.translationSubmissions.isEmpty)
         #expect(client.lastModerationSubmission == nil)
     }
