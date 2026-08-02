@@ -16,15 +16,20 @@ config.bindHost = "127.0.0.1"
 config.bindPort = 8089
 
 let client = HTTPClient(eventLoopGroupProvider: .singleton)
+let tokenStore = InMemoryTokenStore()
+let bearerToken = try tokenStore.current()
 let server = TranscriptionServer(
     config: config.validated(),
-    tokenStore: InMemoryTokenStore(),
+    tokenStore: tokenStore,
     logStore: InMemoryRequestLogStore(),
     httpClient: client
 )
 let application = server.makeApplication()
 try await application.runService()
 ```
+
+Use `bearerToken` as `Authorization: Bearer <token>` for every route except
+`/healthz`.
 
 Production consumers should provide persistent `TokenStore` and
 `RequestLogStoring` implementations and shut down the shared HTTP client during
