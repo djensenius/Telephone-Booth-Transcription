@@ -31,6 +31,18 @@ public final class ReviewStore {
         case failed(String)
     }
 
+    public enum GeneratedReviewSubmissionResult: Sendable, Equatable {
+        case saved
+        case failed
+        case superseded
+    }
+
+    private enum TextSubmissionResult {
+        case saved
+        case failed
+        case superseded
+    }
+
     @ObservationIgnored
     private let client: any OperatorReviewClient
     @ObservationIgnored
@@ -441,6 +453,25 @@ public final class ReviewStore {
         pendingActions.insert(message.id)
         actionError = nil
         defer { pendingActions.remove(message.id) }
+        return await postModeration(
+            message,
+            flagged: flagged,
+            recommendation: recommendation,
+            maxScore: maxScore,
+            model: model
+        )
+    }
+
+    /// The moderation submission itself, without pending-action bookkeeping, so
+    /// a generated translation and its verdict can retain ownership of their
+    /// local retry state until both writes finish.
+    private func postModeration(
+        _ message: Message,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        model: String?
+    ) async -> Bool {
         do {
             // Tie the verdict to the transcription the *store* currently holds,
             // not the one the caller captured: a poll may have moved it while
@@ -523,10 +554,28 @@ public final class ReviewStore {
             pendingTextWrites.remove(message.id)
         }
 
+        return await postTranscriptAndTranslation(
+            message,
+            transcript: transcript,
+            language: language,
+            model: model,
+            translation: translation,
+            refreshing: true
+        ) == .saved
+    }
+
+    private func postTranscriptAndTranslation(
+        _ message: Message,
+        transcript: String,
+        language: String?,
+        model: String?,
+        translation: String,
+        refreshing: Bool
+    ) async -> TextSubmissionResult {
         guard await postTranscript(
             message, text: transcript, language: language, model: model,
             refreshing: false
-        ) else { return false }
+        ) else { return .failed }
 
         // The transport trims, so the row that comes back is the trimmed form
         // of what was sent; compare like for like or a draft with trailing
@@ -539,18 +588,97 @@ public final class ReviewStore {
             actionError = "The transcript changed before the translation could be sent. "
                 + "Review it and submit the translation again."
             logger.error("Combined submit aborted: transcript superseded before translation")
-            return false
+            return .superseded
         }
         guard await postTranslation(message, text: translation, language: nil) else {
             // The transcript did land, so pull the queue anyway: the operator is
             // about to retry the translation and should be looking at what the
             // Operator actually holds.
             await refresh()
-            return false
+            return .failed
         }
-        // One pull for both writes, now that neither can be superseded by it.
-        await refresh()
-        return true
+        if refreshing {
+            // One pull for both writes, now that neither can be superseded by it.
+            await refresh()
+        }
+        return .saved
+    }
+
+    /// Persists a generated translation and its optional recommendation while
+    /// retaining ownership of the local pipeline output across the whole chain.
+    /// `transcript` is supplied only when this same action generated a new
+    /// transcript that must land before the translation.
+    @discardableResult
+    public func submitGeneratedReview(
+        _ message: Message,
+        expectedTranscriptionID: String?,
+        expectedTranscriptionStatus: TranscriptionStatus?,
+        expectedSourceTranscript: String?,
+        transcript: String?,
+        language: String? = nil,
+        transcriptionModel: String? = nil,
+        translation: String,
+        flagged: Bool?,
+        recommendation: String?,
+        maxScore: Double = 0,
+        moderationModel: String? = nil
+    ) async -> GeneratedReviewSubmissionResult {
+        guard !pendingActions.contains(message.id) else { return .failed }
+        pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
+        actionError = nil
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
+
+        let current = messages.first(where: { $0.id == message.id }) ?? message
+        guard current.latestTranscription?.id == expectedTranscriptionID,
+              current.latestTranscription?.status == expectedTranscriptionStatus,
+              Self.trimmed(current.latestTranscription?.text)
+                == Self.trimmed(expectedSourceTranscript) else {
+            return .superseded
+        }
+
+        let textResult: TextSubmissionResult
+        if let transcript {
+            textResult = await postTranscriptAndTranslation(
+                message,
+                transcript: transcript,
+                language: language,
+                model: transcriptionModel,
+                translation: translation,
+                refreshing: false
+            )
+        } else {
+            textResult = await postTranslation(message, text: translation, language: nil)
+                ? .saved : .failed
+        }
+        switch textResult {
+        case .failed: return .failed
+        case .superseded: return .superseded
+        case .saved: break
+        }
+
+        if let recommendation {
+            let current = messages.first(where: { $0.id == message.id }) ?? message
+            guard Self.trimmed(current.latestTranscription?.translatedText)
+                    == Self.trimmed(translation) else {
+                return .superseded
+            }
+            guard await postModeration(
+                message,
+                flagged: flagged ?? false,
+                recommendation: recommendation,
+                maxScore: maxScore,
+                model: moderationModel
+            ) else {
+                if transcript != nil { await refresh() }
+                return .failed
+            }
+        }
+        if transcript != nil { await refresh() }
+        return .saved
     }
 
     /// Replaces a message in the local queue by id, preserving ordering.
@@ -559,6 +687,10 @@ public final class ReviewStore {
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index] = message
         }
+    }
+
+    private static func trimmed(_ text: String?) -> String? {
+        text?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Clears the "queued" marker for any message whose transcript is now newer

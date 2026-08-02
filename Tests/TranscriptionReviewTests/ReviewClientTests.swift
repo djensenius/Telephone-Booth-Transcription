@@ -377,6 +377,119 @@ struct ReviewClientTests {
         #expect(client.translationSubmissions.isEmpty)
     }
 
+    @Test("generated review owns its text until moderation finishes")
+    @MainActor
+    func generatedReviewRetainsTextWriteOwnership() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        let gate = Gate()
+
+        client.translationResult = .success(target.latestTranscription!.translated("hello"))
+        client.moderationResult = .failure(.api(status: 500, code: "moderation_failed"))
+        client.moderationGate = gate
+        let task = Task {
+            await store.submitGeneratedReview(
+                target,
+                expectedTranscriptionID: target.latestTranscription?.id,
+                expectedTranscriptionStatus: target.latestTranscription?.status,
+                expectedSourceTranscript: target.latestTranscription?.text,
+                transcript: nil,
+                translation: "hello",
+                flagged: false,
+                recommendation: "approve"
+            )
+        }
+        await gate.waitUntilEntered()
+
+        #expect(store.isWritingText(for: target.id))
+        await gate.open()
+        #expect(await task.value == .failed)
+        #expect(store.isWritingText(for: target.id) == false)
+        #expect(store.messages.first(where: { $0.id == target.id })?.translationText == "hello")
+    }
+
+    @Test("generated translation refuses a superseded source transcription")
+    @MainActor
+    func generatedTranslationChecksSourceIdentity() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        client.submittedTranscription = target.latestTranscription!.retranscribed("adios")
+        await store.refresh()
+
+        let result = await store.submitGeneratedReview(
+            target,
+            expectedTranscriptionID: target.latestTranscription?.id,
+            expectedTranscriptionStatus: target.latestTranscription?.status,
+            expectedSourceTranscript: target.latestTranscription?.text,
+            transcript: nil,
+            translation: "hello",
+            flagged: false,
+            recommendation: "approve"
+        )
+
+        #expect(result == .superseded)
+        #expect(client.translationSubmissions.isEmpty)
+        #expect(client.lastModerationSubmission == nil)
+    }
+
+    @Test("generated first transcript refuses a changed server state")
+    @MainActor
+    func generatedTranscriptChecksOriginalState() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        client.submittedTranscription = target.latestTranscription!.retranscribed("adios")
+        await store.refresh()
+
+        let result = await store.submitGeneratedReview(
+            target,
+            expectedTranscriptionID: target.latestTranscription?.id,
+            expectedTranscriptionStatus: target.latestTranscription?.status,
+            expectedSourceTranscript: target.latestTranscription?.text,
+            transcript: "bonjour",
+            translation: "hello",
+            flagged: false,
+            recommendation: "approve"
+        )
+
+        #expect(result == .superseded)
+        #expect(client.lastTranscriptionSubmission == nil)
+        #expect(client.translationSubmissions.isEmpty)
+        #expect(client.lastModerationSubmission == nil)
+    }
+
+    @Test("replacing translated text clears a recommendation for the old text")
+    @MainActor
+    func translationReplacementClearsStaleModeration() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        client.moderationResult = .success(
+            Moderation(
+                id: "old", messageId: target.id, transcriptionId: target.latestTranscription?.id,
+                provider: .macApp, model: nil, status: .succeeded, flagged: false,
+                recommendation: .approve, maxScore: 0.1, categories: nil,
+                reasonSummary: nil, latencyMs: nil, error: nil,
+                createdAt: target.createdAt, completedAt: target.createdAt
+            )
+        )
+        let moderationSaved = await store.submitModeration(
+            target, flagged: false, recommendation: "approve"
+        )
+        #expect(moderationSaved)
+
+        client.translationResult = .success(target.latestTranscription!.translated("hello"))
+        let translationSaved = await store.submitTranslation(target, text: "hello")
+        #expect(translationSaved)
+        #expect(store.messages.first(where: { $0.id == target.id })?.latestModeration == nil)
+    }
+
     @Test("a failed decision surfaces an actionError and clears the pending flag")
     @MainActor
     func decideFailureSurfacesError() async {
@@ -399,6 +512,7 @@ struct ReviewClientTests {
         var translationResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         var transcriptionResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         var moderationResult: Result<Moderation, OperatorReviewError> = .failure(.invalidResponse)
+        var moderationGate: Gate?
         private(set) var lastDecisionNotes: String?
         private(set) var lastTranscriptionSubmission: (text: String, language: String?, model: String?)?
         private(set) var lastModerationSubmission: (
@@ -406,7 +520,7 @@ struct ReviewClientTests {
         )?
         private(set) var translationSubmissions: [String] = []
         private(set) var fetchCount = 0
-        private var submittedTranscription: Transcription?
+        var submittedTranscription: Transcription?
 
         func fetchTranscriptions(messageID: String) async throws -> TranscriptionList {
             TranscriptionList(items: [])
@@ -468,6 +582,7 @@ struct ReviewClientTests {
             model: String?
         ) async throws -> Moderation {
             lastModerationSubmission = (transcriptionId, flagged, recommendation, maxScore, model)
+            await moderationGate?.wait()
             return try moderationResult.get()
         }
 
@@ -485,6 +600,32 @@ struct ReviewClientTests {
            "latestModeration":null}
         ]}
         """
+    }
+
+    private actor Gate {
+        private var continuations: [CheckedContinuation<Void, Never>] = []
+        private var entryContinuations: [CheckedContinuation<Void, Never>] = []
+        private var isOpen = false
+        private var hasEntered = false
+
+        func wait() async {
+            hasEntered = true
+            entryContinuations.forEach { $0.resume() }
+            entryContinuations.removeAll()
+            if isOpen { return }
+            await withCheckedContinuation { continuations.append($0) }
+        }
+
+        func waitUntilEntered() async {
+            if hasEntered { return }
+            await withCheckedContinuation { entryContinuations.append($0) }
+        }
+
+        func open() {
+            isOpen = true
+            continuations.forEach { $0.resume() }
+            continuations.removeAll()
+        }
     }
 
     private final class CountingClient: OperatorReviewClient, @unchecked Sendable {
