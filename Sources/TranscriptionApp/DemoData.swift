@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Activated by the `-uiTestDemoMode` launch argument or `TBT_DEMO_MODE=1` in
 /// the environment. The initial tab can be pinned with `-uiScreenshotTab
-/// <status|settings|requests>` (or `TBT_SCREENSHOT_TAB`).
+/// <review|settings>` (or `TBT_SCREENSHOT_TAB`).
 enum DemoMode {
     static var isActive: Bool {
         // Only available in Debug builds (App Store screenshots are captured
