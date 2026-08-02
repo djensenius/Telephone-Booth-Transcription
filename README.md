@@ -2,208 +2,58 @@
 
 > _"Operator? I'd like to leave a message — and have it written down."_
 
-A native macOS **and iOS** app that exposes an **OpenAI-compatible HTTP API**
-for:
+Transcriber is a native macOS and iOS review client for the
+[Telephone Booth Operator][operator]. It loads messages awaiting attention and
+can draft transcription, translation, and moderation results on-device with
+Apple Intelligence before an operator submits them.
 
-- **Audio transcription** — `POST /v1/audio/transcriptions` (multipart, same wire format
-  as `https://api.openai.com/v1/audio/transcriptions`).
-- **Audio translation** — `POST /v1/audio/translations` (multipart, same wire format
-  as `https://api.openai.com/v1/audio/translations`) for audio → English. Plus a
-  custom `POST /v1/translations` (JSON) for text → English when you already have a
-  transcript.
-- **Text moderation** — `POST /v1/moderations` (JSON, same wire format as
-  `https://api.openai.com/v1/moderations`), with hate / harassment / violence /
-  self-harm / illicit categories.
+The shipped apps do **not** run an HTTP server or listen for inbound network
+connections.
 
-…backed by **local LLMs served by [LM Studio][lmstudio]** for moderation and any
-OpenAI-compatible Whisper server (e.g. [`faster-whisper-server`][fws]) for transcription
-and translation — or **macOS's built-in [Speech][speech] framework** for fully
-on-device transcription with no separate server. Every request is logged to a local
-SQLite database, every endpoint is protected by a bearer token stored in the macOS
-Keychain, and the app can optionally keep the Mac awake while the server is running.
+[operator]: https://github.com/djensenius/Telephone-Booth-Operator
 
-Lives next to the rest of the [Telephone-Booth][tb] family:
-
-| Repo | What it is |
-| --- | --- |
-| [`Telephone-Booth`][tb] | Rust phone client running on a Pi inside the booth. |
-| [`Telephone-Booth-Operator`][tbo] | Hono + React operator console, Postgres-backed. |
-| [`Telephone-Booth-Operator-Mobile`][tbom] | Native Swift/SwiftUI operator app for iOS, macOS, watchOS, visionOS, and tvOS. |
-| `Telephone-Booth-Transcription` (this repo) | Local OpenAI-compat ASR + moderation gateway. |
-
-[lmstudio]: https://lmstudio.ai
-[fws]: https://github.com/fedirz/faster-whisper-server
-[speech]: https://developer.apple.com/documentation/speech
-[tb]: https://github.com/djensenius/Telephone-Booth
-[tbo]: https://github.com/djensenius/Telephone-Booth-Operator
-[tbom]: https://github.com/djensenius/Telephone-Booth-Operator-Mobile
-
-## How it fits together
-
-```text
-┌──────────────────── macOS app ────────────────────┐
-│  SwiftUI window (status / token / settings / log) │
-│        │                                          │
-│        ▼                                          │
-│  Hummingbird HTTP server   127.0.0.1:8089         │
-│    AuthMiddleware (Bearer)                        │
-│    RequestLogMiddleware (SQLite)                  │
-│    /v1/audio/transcriptions  ──► transcription    │
-│    /v1/audio/translations    ──► translation      │
-│    /v1/translations          ──► translation      │
-│    /v1/moderations           ──► moderation       │
-│    /v1/requests              ──► local            │
-│    /healthz                  ──► local            │
-└──────────┬────────────────────────┬───────────────┘
-           │                        │
-           ▼                        ▼
-  Whisper-compatible        LM Studio (or any
-  upstream  (default:       OpenAI-compatible
-  faster-whisper-server     chat backend)
-  on :8000)                 on :1234
-```
-
-Optionally, the app can also run an **Operator push worker** that subscribes to
-a remote Operator backend, runs requested work locally through the same routes,
-and posts results back — handy when the Operator can't reach the Mac directly.
-Transcription is _discovered_ rather than solicited: the worker polls the
-Operator for messages that still need one, so a message is never stranded
-waiting on an event. The **Review** tab shows which messages have no
-transcription yet and lets an operator re-run the AI over one that already
-does. See [`docs/operator-push.md`](docs/operator-push.md).
-
-## Quickstart
-
-You'll need:
-
-- macOS 26 or newer (the toolchain ships with the Xcode 26 SDK).
-- For **OpenAI-compatible moderation**: [LM Studio][lmstudio] running locally,
-  serving a chat/instruct model on `http://localhost:1234/v1` (default).
-- For **proxy transcription** (default backend): a local Whisper-compatible
-  server (e.g. [`faster-whisper-server`][fws]) on `http://localhost:8000/v1`,
-  **or** an OpenAI API key (point the transcription upstream at
-  `https://api.openai.com/v1`).
-- Alternatively, switch the transcription backend in _Settings_ to either:
-  - **macOS 26 Speech Analyzer (Apple Intelligence)** — the new on-device
-    engine powering Notes / Voice Memos transcription. Highest accuracy.
-  - **macOS legacy Speech Recognizer** — older `SFSpeechRecognizer`, broader
-    locales but lower accuracy.
-
-  Both run fully on-device, no separate server. Grant the permission prompt at
-  first use.
-
-- **Moderation**, **text translation** (`/v1/translations`), and **audio
-  translation** (`/v1/audio/translations`) can likewise be switched in
-  _Settings_ between **on-device Apple Intelligence** (Foundation Models,
-  `model: apple-foundation-models`) and a **proxy** upstream. On macOS the
-  default stays proxy (so existing setups are unchanged); pick on-device to run
-  with no LM Studio. Because Apple ships no direct speech→English model,
-  on-device audio translation transcribes with the Speech engine and then
-  translates that text — slower than one Whisper call, but nothing leaves the
-  machine.
-
-- **All-local mode** — _Settings → Privacy mode → "Switch everything to
-  on-device"_ switches transcription, both translation routes, and moderation
-  to on-device processing in one step, keeping your upstream URLs so you can
-  switch back. Translation and moderation use Apple Intelligence; transcription
-  does too, unless you'd already selected the legacy Speech Recognizer, which
-  is kept because it is itself local.
-
-### iOS app
-
-The same codebase ships an iOS app (also named **Transcriber**, bundle id
-`org.davidjensenius.TelephoneBoothTranscription`). **iOS does not run the HTTP
-server** — that's a macOS-only feature. On iOS the app is a review client for
-the Operator, and it does its AI work **in-process with Apple Intelligence**
-rather than over HTTP:
+## Features
 
 - **Review queue** — polls the Operator for messages needing transcription,
-  translation, or a moderation decision.
-- **On-device pipeline** — _Draft with Apple Intelligence_ downloads the message
-  audio, verifies its SHA-256, re-transcribes it with `SpeechAnalyzer`,
-  translates the transcript with FoundationModels, and computes a local
-  moderation verdict. In the "Needs transcription" buckets a single press runs
-  the whole chain — transcribe, translate, and moderate — so the operator no
-  longer has to submit a transcript just to unlock translation and a
-  recommendation. A transcribe-only version is offered on devices that can't
-  translate locally.
-- **Human in the loop** — the run pre-fills the translation draft, and the local
-  transcript is shown before it goes anywhere. Nothing is submitted
-  automatically; the operator reviews and taps Submit.
-- **Review submission** — a locally drafted review is submitted with one
-  _Submit_ that posts the transcript to the Operator's operator-authenticated
-  `POST /v1/messages/{id}/transcription` ([Operator #122][op122]), attributed to
-  the `apple-speech-analyzer` engine, and then — once that row has landed, since
-  the Operator attaches a translation to the message's latest transcription —
-  the translation drafted from it to `POST /v1/messages/{id}/translation`. The
-  two writes are not atomic; if the second fails the message keeps the submitted
-  transcript and the translation card offers a plain retry. (When only a
-  transcript is produced, _Submit transcript_ posts it alone and the Operator
-  translates and moderates it server-side.) macOS is unaffected — it posts
-  transcripts back through its worker as before.
+  translation, moderation, or a human decision.
+- **On-device transcription** — downloads message audio from its pre-signed URL,
+  verifies its SHA-256, and transcribes it with `SpeechAnalyzer`.
+- **On-device translation and moderation** — uses Apple Foundation Models to
+  draft results without sending message content to another AI service.
+- **Human in the loop** — locally generated work remains a draft until the
+  operator explicitly submits it.
+- **OIDC sign-in** — authenticates directly with the Operator's identity
+  provider and stores tokens in the Keychain.
 
-[op122]: https://github.com/djensenius/Telephone-Booth-Operator/pull/122
+On-device features require macOS 26 or iOS 26 and compatible Apple Intelligence
+hardware. Unsupported capabilities are hidden rather than offered and failing.
 
-Audio is fetched with no `Authorization` header: the Operator hands out
-pre-signed, short-lived URLs, so attaching the operator's token would leak it to
-blob storage for no benefit.
-
-The on-device buttons are hidden entirely when the device can't run the engines.
-iOS requires iOS 26 and a device with Apple Intelligence support; on-device
-features are unavailable on the simulator. First use prompts for speech
-recognition permission. The app ships Light, Dark, and Tinted home-screen icons.
-
-The Settings panel auto-discovers available models by calling `GET /v1/models`
-on each upstream, and shows them in a picker. Refresh the list with the
-circular-arrow button next to it.
+## Development
 
 ```sh
-# Open the native macOS app project in Xcode
-open TelephoneBoothTranscription.xcodeproj
+swift build -c release
+swift test
 
-# Or build a local .app bundle into ./build/
+# Build the macOS app bundle into ./build/
 ./scripts/build-app.sh
-open ./build/Transcriber.app
 ```
 
-The first launch generates a random bearer token, stores it in the Keychain, and
-shows it in the **Status** tab — copy it before you make your first request.
-
-```sh
-TOKEN="$(security find-generic-password \
-  -s org.davidjensenius.TelephoneBoothTranscription \
-  -a server-token -w)"
-
-# Transcribe an audio file
-curl -s http://127.0.0.1:8089/v1/audio/transcriptions \
-  -H "Authorization: Bearer $TOKEN" \
-  -F file=@./hello.wav \
-  -F model=whisper-1
-
-# Moderate some text
-curl -s http://127.0.0.1:8089/v1/moderations \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"input":"I hope you have a nice day."}'
-```
-
-See [`docs/api.md`](./docs/api.md) for the full surface, and
-[`docs/moderation.md`](./docs/moderation.md) for how the local moderation
-fallback works (and how it differs from OpenAI's first-party moderation model).
+The repository still contains `TranscriptionCore`, the reusable and fully
+tested Hummingbird server library developed for earlier releases. It is not a
+dependency of either app target and no server entitlement is shipped.
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
-| `Sources/TranscriptionApp/` | `@main` SwiftUI app, server lifecycle, power assertion, UI. |
-| `Sources/TranscriptionCore/` | Platform-agnostic library: auth, request log, upstream proxy, route handlers, server composition. Fully unit-tested. |
-| `Tests/TranscriptionCoreTests/` | Swift Testing suite for `TranscriptionCore`. |
-| `TelephoneBoothTranscription.xcodeproj` + `project.yml` | Native macOS app project and its XcodeGen source. |
-| `Resources/AppIconSource.png` + `Resources/AppIcon.icon` | Source-of-truth app icon art and generated Icon Composer document. |
-| `scripts/make-icon.sh` | Extracts the PNG foreground and renders iOS fallback assets plus the layered Icon Composer icon. |
-| `scripts/build-app.sh` | Builds the native macOS `.app` bundle from the Xcode project. |
-| `docs/` | Architecture notes, API reference, LM Studio setup, moderation design, [OIDC sign-in setup](./docs/oidc-setup.md). |
-| `.github/workflows/ci.yml` | macOS CI: build, test, `.app` packaging, doc lint. |
+| `Sources/TranscriptionApp/` | Shared SwiftUI app for macOS and iOS. |
+| `Sources/TranscriptionReview/` | Operator review API client and review state. |
+| `Sources/TranscriptionOnDevice/` | Apple Speech and Foundation Models adapters. |
+| `Sources/TranscriptionPipeline/` | App-linked in-process job and audio pipeline. |
+| `Sources/TranscriptionOperator/` | Unlinked legacy background and loopback worker. |
+| `Sources/TranscriptionCore/` | Unlinked legacy OpenAI-compatible server library. |
+| `Tests/` | Swift Testing suites for the libraries. |
+| `project.yml` | XcodeGen source for the macOS and iOS projects. |
 
 ## License
 

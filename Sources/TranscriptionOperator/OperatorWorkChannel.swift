@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import TranscriptionPipeline
 import TranscriptionShared
 
 /// Subscribes to Operator status events and yields only `work` envelopes.

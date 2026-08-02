@@ -13,11 +13,13 @@ let package = Package(
         .library(name: "TranscriptionAuth", targets: ["TranscriptionAuth"]),
         .library(name: "TranscriptionReview", targets: ["TranscriptionReview"]),
         .library(name: "TranscriptionOnDevice", targets: ["TranscriptionOnDevice"]),
+        .library(name: "TranscriptionPipeline", targets: ["TranscriptionPipeline"]),
         .library(name: "TranscriptionOperator", targets: ["TranscriptionOperator"])
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.5.0"),
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0")
@@ -56,12 +58,25 @@ let package = Package(
             ]
         ),
         .target(
+            name: "TranscriptionPipeline",
+            dependencies: [
+                "TranscriptionShared",
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny"),
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .target(
             name: "TranscriptionOperator",
             dependencies: [
                 "TranscriptionShared",
+                "TranscriptionPipeline",
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "Crypto", package: "swift-crypto")
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "Logging", package: "swift-log")
             ],
             swiftSettings: [
                 .enableUpcomingFeature("ExistentialAny"),
@@ -73,6 +88,7 @@ let package = Package(
             dependencies: [
                 "TranscriptionShared",
                 "TranscriptionOnDevice",
+                "TranscriptionPipeline",
                 "TranscriptionOperator",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
@@ -88,10 +104,9 @@ let package = Package(
         .executableTarget(
             name: "TranscriptionApp",
             dependencies: [
-                "TranscriptionCore",
                 "TranscriptionShared",
                 "TranscriptionOnDevice",
-                "TranscriptionOperator",
+                "TranscriptionPipeline",
                 "TranscriptionAuth",
                 "TranscriptionReview"
             ],
@@ -112,6 +127,7 @@ let package = Package(
             dependencies: [
                 "TranscriptionCore",
                 "TranscriptionOnDevice",
+                "TranscriptionPipeline",
                 "TranscriptionOperator",
                 .product(name: "HummingbirdTesting", package: "hummingbird")
             ]

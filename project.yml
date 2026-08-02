@@ -82,6 +82,34 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.ondevice
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
+  TranscriptionPipeline:
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionPipeline
+    info:
+      path: Resources/TranscriptionPipeline-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionPipeline
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared
+      - package: swift-log
+        product: Logging
+      - package: swift-crypto
+        product: Crypto
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.pipeline
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionOperator:
     type: framework
     platform: macOS
@@ -101,16 +129,13 @@ targets:
         CFBundleVersion: "1"
     dependencies:
       - target: TranscriptionShared
+      - target: TranscriptionPipeline
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio
         product: NIOCore
-      - package: swift-nio
-        product: NIOHTTP1
       - package: swift-log
         product: Logging
-      - package: swift-crypto
-        product: Crypto
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.operator
@@ -136,6 +161,7 @@ targets:
     dependencies:
       - target: TranscriptionShared
       - target: TranscriptionOnDevice
+      - target: TranscriptionPipeline
       - target: TranscriptionOperator
       - package: hummingbird
         product: Hummingbird
@@ -214,18 +240,13 @@ targets:
       - path: Resources/Assets.xcassets
         buildPhase: resources
     dependencies:
-      - target: TranscriptionCore
       - target: TranscriptionShared
       - target: TranscriptionOnDevice
-      - target: TranscriptionOperator
+      - target: TranscriptionPipeline
       - target: TranscriptionAuth
       - target: TranscriptionReview
-      - package: async-http-client
-        product: AsyncHTTPClient
-      - package: swift-nio-transport-services
-        product: NIOTransportServices
-      - package: swift-crypto
-        product: Crypto
+      # Linked directly because the on-device pipeline's `logger:` default
+      # arguments are inlined into this target's call sites.
       - package: swift-log
         product: Logging
     info:
@@ -245,8 +266,7 @@ targets:
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHighResolutionCapable: true
         NSHumanReadableCopyright: "Copyright 2026 David Jensenius"
-        NSMicrophoneUsageDescription: "Transcription Booth needs microphone access only if you point a client at the macOS Speech backend with a live audio source."
-        NSSpeechRecognitionUsageDescription: "Transcription Booth uses on-device speech recognition to convert audio to text when the built-in macOS transcription backend is selected."
+        NSSpeechRecognitionUsageDescription: "Transcriber uses on-device speech recognition to transcribe message audio locally with Apple Intelligence, so audio never leaves your device."
         OIDCIssuerBase: "https://auth.fluxhaus.io/application/o/telephone-booth-operator-mobile"
         OIDCClientID: "x0M0MleMvCSCx8MqIE2jVoYe57nAhGymIG8azTEY"
         OIDCRedirectScheme: "tbtranscription"
@@ -327,6 +347,36 @@ targets:
         PRODUCT_MODULE_NAME: TranscriptionOnDevice
         OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
 
+  TranscriptionPipeline_iOS:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/TranscriptionPipeline
+    info:
+      path: Resources/TranscriptionPipeline-Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: TranscriptionPipeline
+        CFBundlePackageType: FMWK
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: TranscriptionShared_iOS
+      - package: swift-log
+        product: Logging
+      - package: swift-crypto
+        product: Crypto
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.pipeline
+        PRODUCT_NAME: TranscriptionPipeline
+        PRODUCT_MODULE_NAME: TranscriptionPipeline
+        OTHER_SWIFT_FLAGS: "$(inherited) -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency"
+
   TranscriptionOperator_iOS:
     type: framework
     platform: iOS
@@ -346,16 +396,13 @@ targets:
         CFBundleVersion: "1"
     dependencies:
       - target: TranscriptionShared_iOS
+      - target: TranscriptionPipeline_iOS
       - package: async-http-client
         product: AsyncHTTPClient
       - package: swift-nio
         product: NIOCore
-      - package: swift-nio
-        product: NIOHTTP1
       - package: swift-log
         product: Logging
-      - package: swift-crypto
-        product: Crypto
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.davidjensenius.TelephoneBoothTranscription.operator
@@ -383,6 +430,7 @@ targets:
     dependencies:
       - target: TranscriptionShared_iOS
       - target: TranscriptionOnDevice_iOS
+      - target: TranscriptionPipeline_iOS
       - target: TranscriptionOperator_iOS
       - package: hummingbird
         product: Hummingbird
@@ -467,7 +515,7 @@ targets:
     dependencies:
       - target: TranscriptionShared_iOS
       - target: TranscriptionOnDevice_iOS
-      - target: TranscriptionOperator_iOS
+      - target: TranscriptionPipeline_iOS
       - target: TranscriptionAuth_iOS
       - target: TranscriptionReview_iOS
       # Linked directly because the on-device pipeline's `logger:` default
@@ -548,6 +596,10 @@ schemes:
     build:
       targets:
         TranscriptionOnDevice: all
+  TranscriptionPipeline:
+    build:
+      targets:
+        TranscriptionPipeline: all
   TranscriptionOperator:
     build:
       targets:
