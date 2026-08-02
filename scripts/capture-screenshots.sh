@@ -4,11 +4,7 @@
 #
 # Builds the app, launches it in the bundled demo mode (login-free, deterministic
 # DemoData) via the `-uiTestDemoMode` / `-uiScreenshotTab` launch arguments, and
-# writes one PNG per tab into fastlane/screenshots/<platform>/en-CA/.
-#
-# Demo mode (see Sources/TranscriptionApp/DemoData.swift) swaps the live server
-# for sample data: the server reads as "Running", the bearer token is revealed,
-# and the request log is pre-populated, so no upstreams or network are required.
+# writes one PNG per screen into fastlane/screenshots/<platform>/en-CA/.
 #
 # Usage:  scripts/capture-screenshots.sh <iphone|ipad|ios|mac|all>
 #
@@ -37,10 +33,7 @@ APP_OWNER="Transcriber" # CFBundleName, used to find the macOS window
 DD="/tmp/tbt-dd"
 SHOTS="$ROOT/fastlane/screenshots"
 LOCALE="en-CA"
-# iOS only has the two tabs; ContentView.iOSSelection folds the macOS-only
-# `status` and `requests` values into Review, so asking for them there would
-# just capture the same screen three times.
-MAC_TABS=(review status settings requests)
+MAC_TABS=(review settings)
 IOS_TABS=(review settings)
 
 log() { printf '\033[1;35m[shots]\033[0m %s\n' "$*"; }

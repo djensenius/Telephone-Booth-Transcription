@@ -1,5 +1,9 @@
 # API reference
 
+> This documents the standalone `TranscriptionCore` library. The shipped macOS
+> and iOS apps do not link this library, expose these routes, or listen on a
+> network port. reference
+
 Every endpoint except `/healthz` requires `Authorization: Bearer <token>`. The
 token is shown in the app's **Status** tab and rotates from the same screen; it
 lives in the macOS login Keychain under

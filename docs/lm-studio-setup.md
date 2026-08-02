@@ -1,5 +1,9 @@
 # Setting up LM Studio + a Whisper server
 
+> This setup applies only to consumers embedding the standalone
+> `TranscriptionCore` library. The shipped macOS and iOS apps no longer proxy to
+> LM Studio or Whisper servers.
+
 This app proxies to two upstreams. Both speak the OpenAI HTTP wire format.
 
 ## Moderation / chat — LM Studio

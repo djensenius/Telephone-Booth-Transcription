@@ -14,20 +14,18 @@ inside this repository. Read them in full before proposing changes.
 3. **Never log audio or text bodies** to the request log, even on errors. The
    request log is metadata-only by design (see [`docs/moderation.md`](../docs/moderation.md)).
 4. **Don't commit secrets, real tokens, real API keys, or anything from a real
-   `.env`.** The Keychain owns the server's bearer token; the configured
-   upstream API keys live in `UserDefaults` and must never be checked in.
+   `.env`.** OIDC credentials belong in the Keychain and must never be checked
+   in.
 5. **`swift build -c release && swift test` must pass on macOS 26 before
    merging.** CI runs the same set plus `.app` packaging and docs lint, so this
    catches almost all CI failures up front.
 
 ## What this repo is
 
-A native macOS app that exposes an **OpenAI-compatible HTTP API** for audio
-transcription and text moderation, backed by user-configured local upstreams
-(LM Studio for chat/moderation; faster-whisper-server or OpenAI for
-transcription). It is a sibling of [`Telephone-Booth`][tb] (Rust phone client)
-and [`Telephone-Booth-Operator`][tbo] (Hono + React backend); the three
-projects collectively run the Telephone Booth art installation.
+A native macOS and iOS review client for Telephone Booth Operator. It can draft
+transcription, translation, and moderation results on-device with Apple
+Intelligence. The repository retains the legacy `TranscriptionCore` HTTP server
+as an unlinked library, but neither shipped app target runs a listener.
 
 [tb]: https://github.com/djensenius/Telephone-Booth
 [tbo]: https://github.com/djensenius/Telephone-Booth-Operator
@@ -36,8 +34,8 @@ projects collectively run the Telephone Booth art installation.
 
 | Path | Contents |
 | --- | --- |
-| `Sources/TranscriptionApp/` | `@main` SwiftUI executable. Owns lifecycle (server, power assertion, HTTPClient), settings persistence, and all UI. macOS-only — depends on AppKit, SwiftUI, IOKit, Security. |
-| `Sources/TranscriptionCore/` | Platform-agnostic library. Auth, request log, upstream proxy, route handlers, server composition. Fully unit-testable; the SwiftUI app is a thin shell over this. |
+| `Sources/TranscriptionApp/` | Shared macOS/iOS SwiftUI review client. |
+| `Sources/TranscriptionCore/` | Unlinked legacy server library retained for compatibility and tests. |
 | `Tests/TranscriptionCoreTests/` | Swift Testing suite. |
 | `Resources/` | `AppIconSource.png` (source of truth), generated layer split, and `AppIcon.icns`. |
 | `scripts/` | `make-icon.sh` (PNG source → `.icns`), `build-app.sh` (bundle `.app`). |
@@ -53,8 +51,7 @@ projects collectively run the Telephone Booth art installation.
   `Sources/TranscriptionCore/Server/Routes/`. New endpoints get a `*Route`
   struct conforming to a `handle(_:context:)` shape and are wired into
   `TranscriptionServer.makeRouter`.
-- **HTTP client:** `AsyncHTTPClient`. A single `HTTPClient` is owned by the
-  app and shared by upstreams; never create one per request.
+- **App networking:** URLSession-based outbound Operator API calls only.
 - **Persistence:** GRDB + SQLite. Schema lives in
   `RequestLogStore.migrate()`. New columns require a new migration; never edit
   an already-shipped migration.

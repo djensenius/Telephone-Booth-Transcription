@@ -1,22 +1,10 @@
-Telephone Booth Transcription turns your Mac or iPhone into a private, OpenAI-compatible transcription and moderation server. Point any OpenAI-style client at it and get speech-to-text, audio and text translation, and content moderation — without sending your audio to anyone else's cloud.
+Transcriber is the private review client for the Telephone Booth art installation. Sign in to the Operator, inspect messages awaiting attention, and prepare transcription, translation, and moderation results before submitting them.
 
-It speaks the same wire format as the OpenAI API, so existing tools work unchanged:
+On compatible devices, Apple Intelligence keeps the AI workflow local:
 
-• POST /v1/audio/transcriptions — speech-to-text from an uploaded audio file.
-• POST /v1/audio/translations — translate spoken audio into English.
-• POST /v1/translations — translate an existing transcript into English.
-• POST /v1/moderations — flag hate, harassment, violence, self-harm, and illicit content.
+• Speech Analyzer transcribes message audio on-device.
+• Apple Foundation Models draft translations and moderation recommendations.
+• Generated work stays a draft until you explicitly submit it.
+• Audio downloads are integrity-checked before processing.
 
-Choose how the work gets done:
-
-• On device with Apple Intelligence — the Speech Analyzer for transcription and Apple Foundation Models for moderation and text translation. Nothing leaves your device.
-• Local Whisper server — proxy transcription to faster-whisper-server or any OpenAI-compatible Whisper backend you run.
-• Local LLM via LM Studio — route moderation through any chat model you host yourself.
-
-Built for privacy and control:
-
-• Every endpoint is protected by a bearer token kept in the Keychain.
-• Every request is logged to a local SQLite database — metadata only, never your audio or text.
-• On macOS the app can keep your Mac awake while the server is running.
-
-This is a focused developer and operator tool, originally built for the Telephone-Booth art installation — a restored rotary phone booth where visitors leave messages that the app transcribes and moderates. It has no ads, no analytics, and no third-party tracking.
+The app does not run a local server, accept inbound connections, include ads, or use analytics and third-party tracking.

@@ -6,7 +6,7 @@
 // non-macOS worker clients can depend on it directly without linking the HTTP
 // server stack.
 @_exported import TranscriptionShared
-// Re-export the operator worker layer (worker, client, dispatchers) so the macOS
-// app and existing tests keep importing it via `TranscriptionCore`. It carries
-// no Hummingbird/GRDB dependency, so mobile clients depend on it directly.
+// Preserve the historical TranscriptionOperator surface for existing
+// TranscriptionCore consumers. The shipped apps link TranscriptionPipeline
+// directly and therefore do not include the worker implementation.
 @_exported import TranscriptionOperator

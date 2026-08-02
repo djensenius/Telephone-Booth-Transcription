@@ -2,7 +2,7 @@ import Crypto
 import Foundation
 import NIOCore
 import Testing
-@testable import TranscriptionOperator
+@testable import TranscriptionPipeline
 import TranscriptionShared
 
 /// Stubs the network for `URLSessionAudioFetcher` so the tests exercise the
@@ -270,8 +270,8 @@ struct StreamingAudioDownloadTests {
         download.urlSession(session, task: task, didCompleteWithError: nil)
 
         var iterator = download.chunks.makeAsyncIterator()
-        #expect(try await iterator.next()?.readableBytes == 3)
-        #expect(try await iterator.next()?.readableBytes == 2)
+        #expect(try await iterator.next()?.count == 3)
+        #expect(try await iterator.next()?.count == 2)
         #expect(try await iterator.next() == nil)
     }
 
@@ -302,7 +302,7 @@ struct StreamingAudioDownloadTests {
         try await Task.sleep(for: .milliseconds(20))
         download.urlSession(session, dataTask: task, didReceive: Data([7, 7, 7, 7]))
 
-        #expect(try await first?.readableBytes == 4)
+        #expect(try await first?.count == 4)
     }
 
     /// A transport failure surfaces as the content-free fetch error rather than
@@ -372,6 +372,6 @@ struct StreamingAudioDownloadTests {
         download.cancel()
 
         var iterator = download.chunks.makeAsyncIterator()
-        #expect(try await iterator.next()?.readableBytes == 2)
+        #expect(try await iterator.next()?.count == 2)
     }
 }

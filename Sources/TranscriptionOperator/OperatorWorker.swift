@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import TranscriptionPipeline
 import TranscriptionShared
 
 /// Long-running background worker that keeps the Mac supplied with Operator
@@ -591,10 +592,4 @@ public actor OperatorWorker {
             return "operator_\(type(of: error))"
         }
     }
-}
-
-/// Executes a synthetic job and produces an `OperatorJobResult`. Abstracted so
-/// the worker can be tested with a fake dispatcher.
-public protocol OperatorJobDispatcher: Sendable {
-    func execute(job: OperatorJob) async throws -> OperatorJobResult
 }

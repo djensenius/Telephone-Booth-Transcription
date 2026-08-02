@@ -1,5 +1,5 @@
 import SwiftUI
-import TranscriptionOperator
+import TranscriptionPipeline
 import TranscriptionReview
 
 /// One message in the review queue.

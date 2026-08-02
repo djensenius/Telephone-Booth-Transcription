@@ -1,6 +1,5 @@
 import Foundation
 import Logging
-import NIOCore
 import TranscriptionShared
 
 /// `AudioFetching` backed by `URLSession` rather than `AsyncHTTPClient`.

@@ -2,6 +2,7 @@ import AsyncHTTPClient
 import Foundation
 import Logging
 import NIOCore
+import TranscriptionPipeline
 import TranscriptionShared
 
 /// Default `OperatorJobDispatcher` that executes jobs by hitting this
