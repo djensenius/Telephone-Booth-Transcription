@@ -441,6 +441,25 @@ public final class ReviewStore {
         pendingActions.insert(message.id)
         actionError = nil
         defer { pendingActions.remove(message.id) }
+        return await postModeration(
+            message,
+            flagged: flagged,
+            recommendation: recommendation,
+            maxScore: maxScore,
+            model: model
+        )
+    }
+
+    /// The moderation submission itself, without pending-action bookkeeping, so
+    /// a generated translation and its verdict can retain ownership of their
+    /// local retry state until both writes finish.
+    private func postModeration(
+        _ message: Message,
+        flagged: Bool,
+        recommendation: String,
+        maxScore: Double,
+        model: String?
+    ) async -> Bool {
         do {
             // Tie the verdict to the transcription the *store* currently holds,
             // not the one the caller captured: a poll may have moved it while
@@ -523,6 +542,24 @@ public final class ReviewStore {
             pendingTextWrites.remove(message.id)
         }
 
+        return await postTranscriptAndTranslation(
+            message,
+            transcript: transcript,
+            language: language,
+            model: model,
+            translation: translation,
+            refreshing: true
+        )
+    }
+
+    private func postTranscriptAndTranslation(
+        _ message: Message,
+        transcript: String,
+        language: String?,
+        model: String?,
+        translation: String,
+        refreshing: Bool
+    ) async -> Bool {
         guard await postTranscript(
             message, text: transcript, language: language, model: model,
             refreshing: false
@@ -548,8 +585,66 @@ public final class ReviewStore {
             await refresh()
             return false
         }
-        // One pull for both writes, now that neither can be superseded by it.
-        await refresh()
+        if refreshing {
+            // One pull for both writes, now that neither can be superseded by it.
+            await refresh()
+        }
+        return true
+    }
+
+    /// Persists a generated translation and its optional recommendation while
+    /// retaining ownership of the local pipeline output across the whole chain.
+    /// `transcript` is supplied only when this same action generated a new
+    /// transcript that must land before the translation.
+    @discardableResult
+    public func submitGeneratedReview(
+        _ message: Message,
+        transcript: String?,
+        language: String? = nil,
+        transcriptionModel: String? = nil,
+        translation: String,
+        flagged: Bool?,
+        recommendation: String?,
+        maxScore: Double = 0,
+        moderationModel: String? = nil
+    ) async -> Bool {
+        guard !pendingActions.contains(message.id) else { return false }
+        pendingActions.insert(message.id)
+        pendingTextWrites.insert(message.id)
+        actionError = nil
+        defer {
+            pendingActions.remove(message.id)
+            pendingTextWrites.remove(message.id)
+        }
+
+        let textSaved: Bool
+        if let transcript {
+            textSaved = await postTranscriptAndTranslation(
+                message,
+                transcript: transcript,
+                language: language,
+                model: transcriptionModel,
+                translation: translation,
+                refreshing: false
+            )
+        } else {
+            textSaved = await postTranslation(message, text: translation, language: nil)
+        }
+        guard textSaved else { return false }
+
+        if let recommendation {
+            guard await postModeration(
+                message,
+                flagged: flagged ?? false,
+                recommendation: recommendation,
+                maxScore: maxScore,
+                model: moderationModel
+            ) else {
+                if transcript != nil { await refresh() }
+                return false
+            }
+        }
+        if transcript != nil { await refresh() }
         return true
     }
 

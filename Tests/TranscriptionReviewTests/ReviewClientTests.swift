@@ -377,6 +377,63 @@ struct ReviewClientTests {
         #expect(client.translationSubmissions.isEmpty)
     }
 
+    @Test("generated review owns its text until moderation finishes")
+    @MainActor
+    func generatedReviewRetainsTextWriteOwnership() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        let gate = Gate()
+
+        client.translationResult = .success(target.latestTranscription!.translated("hello"))
+        client.moderationResult = .failure(.api(status: 500, code: "moderation_failed"))
+        client.moderationGate = gate
+        let task = Task {
+            await store.submitGeneratedReview(
+                target,
+                transcript: nil,
+                translation: "hello",
+                flagged: false,
+                recommendation: "approve"
+            )
+        }
+        while client.lastModerationSubmission == nil { await Task.yield() }
+
+        #expect(store.isWritingText(for: target.id))
+        await gate.open()
+        #expect(await task.value == false)
+        #expect(store.isWritingText(for: target.id) == false)
+        #expect(store.messages.first(where: { $0.id == target.id })?.translationText == "hello")
+    }
+
+    @Test("replacing translated text clears a recommendation for the old text")
+    @MainActor
+    func translationReplacementClearsStaleModeration() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.messages.first)
+        client.moderationResult = .success(
+            Moderation(
+                id: "old", messageId: target.id, transcriptionId: target.latestTranscription?.id,
+                provider: .macApp, model: nil, status: .succeeded, flagged: false,
+                recommendation: .approve, maxScore: 0.1, categories: nil,
+                reasonSummary: nil, latencyMs: nil, error: nil,
+                createdAt: target.createdAt, completedAt: target.createdAt
+            )
+        )
+        let moderationSaved = await store.submitModeration(
+            target, flagged: false, recommendation: "approve"
+        )
+        #expect(moderationSaved)
+
+        client.translationResult = .success(target.latestTranscription!.translated("hello"))
+        let translationSaved = await store.submitTranslation(target, text: "hello")
+        #expect(translationSaved)
+        #expect(store.messages.first(where: { $0.id == target.id })?.latestModeration == nil)
+    }
+
     @Test("a failed decision surfaces an actionError and clears the pending flag")
     @MainActor
     func decideFailureSurfacesError() async {
@@ -399,6 +456,7 @@ struct ReviewClientTests {
         var translationResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         var transcriptionResult: Result<Transcription, OperatorReviewError> = .failure(.invalidResponse)
         var moderationResult: Result<Moderation, OperatorReviewError> = .failure(.invalidResponse)
+        var moderationGate: Gate?
         private(set) var lastDecisionNotes: String?
         private(set) var lastTranscriptionSubmission: (text: String, language: String?, model: String?)?
         private(set) var lastModerationSubmission: (
@@ -468,6 +526,7 @@ struct ReviewClientTests {
             model: String?
         ) async throws -> Moderation {
             lastModerationSubmission = (transcriptionId, flagged, recommendation, maxScore, model)
+            await moderationGate?.wait()
             return try moderationResult.get()
         }
 
@@ -485,6 +544,22 @@ struct ReviewClientTests {
            "latestModeration":null}
         ]}
         """
+    }
+
+    private actor Gate {
+        private var continuations: [CheckedContinuation<Void, Never>] = []
+        private var isOpen = false
+
+        func wait() async {
+            if isOpen { return }
+            await withCheckedContinuation { continuations.append($0) }
+        }
+
+        func open() {
+            isOpen = true
+            continuations.forEach { $0.resume() }
+            continuations.removeAll()
+        }
     }
 
     private final class CountingClient: OperatorReviewClient, @unchecked Sendable {

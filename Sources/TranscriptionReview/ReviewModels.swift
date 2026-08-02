@@ -449,7 +449,10 @@ extension Message {
     /// verdict would show the new transcript under a recommendation and reason
     /// that were computed for different text.
     public func replacingLatestTranscription(_ transcription: Transcription) -> Message {
+        let textChanged = latestTranscription?.text != transcription.text
+            || latestTranscription?.translatedText != transcription.translatedText
         let moderation = latestModeration.flatMap { existing -> Moderation? in
+            guard !textChanged else { return nil }
             guard let owner = existing.transcriptionId else { return existing }
             return owner == transcription.id ? existing : nil
         }

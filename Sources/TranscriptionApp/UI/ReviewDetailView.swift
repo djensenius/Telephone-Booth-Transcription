@@ -961,32 +961,21 @@ struct ReviewDetailView: View {
         }
 
         guard saveToOperator, let output = onDevice.outputs[message.id] else { return }
-        let textSaved: Bool
-        if message.needsTranscriptionWork {
-            textSaved = await store.submitTranscriptAndTranslation(
-                message,
-                transcript: output.transcript,
-                language: output.language,
-                model: output.model,
-                translation: translation
-            )
-        } else {
-            textSaved = await store.submitTranslation(message, text: translation)
-        }
-        guard textSaved else { return }
+        let saved = await store.submitGeneratedReview(
+            message,
+            transcript: message.needsTranscriptionWork ? output.transcript : nil,
+            language: output.language,
+            transcriptionModel: output.model,
+            translation: translation,
+            flagged: output.flagged,
+            recommendation: output.recommendation,
+            maxScore: output.maxScore ?? 0,
+            moderationModel: output.moderationModel
+        )
+        guard saved else { return }
 
-        translationDraft = ""
-        if output.recommendation != nil {
-            if await saveGeneratedRecommendation(using: onDevice) {
-                onDevice.reset(message.id)
-                drafts.clear(message.id)
-            } else {
-                moderatedText = translation
-            }
-        } else {
-            onDevice.reset(message.id)
-            drafts.clear(message.id)
-        }
+        onDevice.reset(message.id)
+        drafts.clear(message.id)
     }
 
     // MARK: - Decision
