@@ -169,6 +169,28 @@ struct OnDeviceReviewPipelineTests {
         #expect(pipeline.outputs["m1"]?.recommendation == nil)
     }
 
+    @Test func translateOnlySkipsTranscriptionAndProducesVerdict() async {
+        let pipeline = makePipeline(fetcher: StubAudioFetcher(failWith: .tooLarge))
+        let translation = await pipeline.translateOnly(
+            "bonjour",
+            sourceLanguage: "fr",
+            transcriptModel: "server-model",
+            for: "m1"
+        )
+
+        #expect(translation == "hello")
+        #expect(pipeline.outputs["m1"] == OnDeviceReviewPipeline.Output(
+            transcript: "bonjour",
+            language: "fr",
+            model: "server-model",
+            translation: "hello",
+            recommendation: "block",
+            flagged: true,
+            maxScore: 0.9,
+            moderationModel: "apple-foundation-models"
+        ))
+    }
+
     /// The submit path attributes a transcript to the local engine, so the
     /// output has to carry the model and language alongside the text.
     @Test func transcribeOnlyCarriesAttribution() async {
@@ -560,6 +582,11 @@ struct OnDeviceReviewPipelineTests {
 
         await pipeline.moderateOnly("hello", transcript: "bonjour", language: "fr", for: "m1")
         #expect(pipeline.operation(for: "m1") == .moderate)
+
+        await pipeline.translateOnly(
+            "bonjour", sourceLanguage: "fr", transcriptModel: nil, for: "m1"
+        )
+        #expect(pipeline.operation(for: "m1") == .translate)
 
         await pipeline.run(for: input())
         #expect(pipeline.operation(for: "m1") == .translate)

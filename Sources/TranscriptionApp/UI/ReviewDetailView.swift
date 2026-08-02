@@ -203,6 +203,31 @@ struct ReviewDetailView: View {
                  : "A recommendation — the decision was made by a person.")
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
+
+            if message.isReviewable,
+               let onDevice,
+               onDevice.supportsModeration,
+               let text = operatorEnglish {
+                Divider().overlay(Theme.Colors.textSecondary.opacity(0.2))
+                if let localAdvice, moderatedText != nil {
+                    localVerdictReview(localAdvice, using: onDevice)
+                } else {
+                    regenerationMenu(
+                        title: "Regenerate recommendation",
+                        systemImage: "apple.intelligence",
+                        preview: {
+                            await generateRecommendation(
+                                using: onDevice, text: text, saveToOperator: false
+                            )
+                        },
+                        save: {
+                            await generateRecommendation(
+                                using: onDevice, text: text, saveToOperator: true
+                            )
+                        }
+                    )
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Theme.Spacing.medium)
@@ -286,17 +311,16 @@ struct ReviewDetailView: View {
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
-            caption("""
-                Computed on this device. Submit it to the Operator so every reviewer \
-                sees the same recommendation — nothing is sent until you do.
-                """)
+            caption("Computed on this device. Save it to the Operator server to replace "
+                    + "the shared recommendation.")
             if localVerdictIsSubmittable {
                 HStack {
                     Spacer()
                     Button {
                         Task { await submitLocalVerdict(using: onDevice) }
                     } label: {
-                        actionLabel("Submit recommendation", systemImage: "arrow.up.circle.fill")
+                        actionLabel("Save recommendation to server",
+                                    systemImage: "arrow.up.circle.fill")
                     }
                     .buttonStyle(.tbtGlass)
                     .disabled(onDevice.isRunning(message.id) || isActing)
@@ -432,29 +456,15 @@ struct ReviewDetailView: View {
         // any operation holds the pipeline, since a second one can't start.
         let busy = onDevice.isRunning(message.id)
         let running = busy && owns(.moderate)
-        caption("Apple Intelligence can weigh in from here — the text never leaves "
-                + "this device.")
+        caption("Apple Intelligence can weigh in from here. Because this message has "
+                + "no recommendation yet, the result is saved to the Operator server "
+                + "automatically.")
         HStack {
             Button {
                 Task {
-                    let recommendation = await onDevice.moderateOnly(
-                        text,
-                        transcript: message.latestTranscription?.text ?? text,
-                        language: message.latestTranscription?.language,
-                        for: message.id
+                    await generateRecommendation(
+                        using: onDevice, text: text, saveToOperator: true
                     )
-                    // The draft is editable while this is suspended, so a
-                    // verdict that arrives against text the operator has since
-                    // changed is already stale. Compared against the candidate
-                    // rather than the draft, which is empty in the Decide state
-                    // this button exists for.
-                    if recommendation != nil {
-                        if englishForModeration == text {
-                            moderatedText = text
-                        } else {
-                            onDevice.clearModeration(message.id)
-                        }
-                    }
                 }
             } label: {
                 if running {
@@ -463,7 +473,8 @@ struct ReviewDetailView: View {
                         Text(stageLabel(onDevice.stage(for: message.id)))
                     }
                 } else {
-                    Label("Get a recommendation", systemImage: "apple.intelligence")
+                    Label("Generate and save recommendation",
+                          systemImage: "apple.intelligence")
                 }
             }
             .buttonStyle(.tbtGlass)
@@ -475,6 +486,46 @@ struct ReviewDetailView: View {
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.error)
         }
+    }
+
+    private func generateRecommendation(
+        using onDevice: OnDeviceReviewPipeline,
+        text: String,
+        saveToOperator: Bool
+    ) async {
+        let recommendation = await onDevice.moderateOnly(
+            text,
+            transcript: message.latestTranscription?.text ?? text,
+            language: message.latestTranscription?.language,
+            for: message.id
+        )
+        guard recommendation != nil else { return }
+
+        guard englishForModeration == text else {
+            onDevice.clearModeration(message.id)
+            return
+        }
+        moderatedText = text
+        if saveToOperator,
+           localVerdictIsSubmittable,
+           await saveGeneratedRecommendation(using: onDevice) {
+            onDevice.clearModeration(message.id)
+            moderatedText = nil
+        }
+    }
+
+    private func saveGeneratedRecommendation(
+        using onDevice: OnDeviceReviewPipeline
+    ) async -> Bool {
+        guard let output = onDevice.outputs[message.id],
+              let recommendation = output.recommendation else { return false }
+        return await store.submitModeration(
+            message,
+            flagged: output.flagged ?? false,
+            recommendation: recommendation,
+            maxScore: output.maxScore ?? 0,
+            model: output.moderationModel
+        )
     }
 
     /// What a local moderation run should classify: the English the operator
@@ -549,14 +600,17 @@ struct ReviewDetailView: View {
                     caption("Translated and checked below — review the translation, "
                             + "then submit both in one step.")
                 } else {
-                    caption("Review it, then submit it to the Operator — nothing is sent "
-                            + "until you do.")
+                    caption(message.latestTranscription == nil
+                            ? "Saving this first transcript to the Operator server…"
+                            : "This is a local preview. Save it to the Operator server "
+                                + "to make it the newest transcript.")
                     HStack {
                         Spacer()
                         Button {
                             Task { await submitOnDeviceTranscript(output, using: onDevice) }
                         } label: {
-                            actionLabel("Submit transcript", systemImage: "arrow.up.circle.fill")
+                            actionLabel("Save transcript to server",
+                                        systemImage: "arrow.up.circle.fill")
                         }
                         .buttonStyle(.tbtGlass)
                         .disabled(onDevice.isRunning(message.id) || isActing)
@@ -602,8 +656,8 @@ struct ReviewDetailView: View {
                 Task { await store.requestTranscription(message) }
             } label: {
                 actionLabel(message.latestTranscription == nil
-                            ? "Transcribe"
-                            : "Re-run transcription",
+                            ? "Transcribe and save to server"
+                            : "Re-run and save new version",
                             systemImage: "waveform")
             }
             .buttonStyle(.tbtGlass)
@@ -618,7 +672,7 @@ struct ReviewDetailView: View {
             if output == nil {
                 caption("Apple Intelligence can transcribe, translate, and check this "
                         + "message in one pass — the audio never leaves this device. "
-                        + "Review the draft, then submit.")
+                        + "The result is saved to the Operator server automatically.")
             }
             onDeviceTranslateActions
         } else {
@@ -627,7 +681,8 @@ struct ReviewDetailView: View {
         #endif
 
         if message.latestTranscription != nil {
-            caption("Re-running keeps the old transcript; the newest one wins.")
+            caption("Saving a re-run keeps the old transcript in history and makes "
+                    + "the new version current.")
         }
     }
 
@@ -676,6 +731,11 @@ struct ReviewDetailView: View {
                 translationEditor
             } else if localReviewDraft != nil {
                 localReviewDraftEditor
+            } else if message.translationText != nil, message.isReviewable {
+                translationRegenerationActions
+                if !translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    translationEditor
+                }
             }
         }
     }
@@ -721,7 +781,10 @@ struct ReviewDetailView: View {
                         if submitted { retireLocalWork(after: text) }
                     }
                 } label: {
-                    actionLabel("Submit translation", systemImage: "arrow.up.circle.fill")
+                    actionLabel(message.translationText == nil
+                                ? "Save translation to server"
+                                : "Replace server translation",
+                                systemImage: "arrow.up.circle.fill")
                 }
                 .buttonStyle(.tbtGlass)
                 .disabled(isActing || translationDraft.trimmingCharacters(
@@ -770,7 +833,8 @@ struct ReviewDetailView: View {
                             if submitted { retireLocalWork(after: text) }
                         }
                     } label: {
-                        actionLabel("Submit", systemImage: "arrow.up.circle.fill")
+                        actionLabel("Save transcript and translation to server",
+                                    systemImage: "arrow.up.circle.fill")
                     }
                     .buttonStyle(.tbtGlass)
                     .disabled(isActing || onDevice?.isRunning(message.id) == true
@@ -781,23 +845,30 @@ struct ReviewDetailView: View {
         }
     }
 
-    /// Apple Intelligence entry point: re-transcribes the audio on this device,
-    /// translates it, and pre-fills the draft. Never submits — the operator
-    /// still reviews and taps Submit.
+    /// First-time Apple Intelligence entry point. A missing result is saved
+    /// immediately; regeneration uses the explicit preview/save menu below.
     @ViewBuilder
     private var onDeviceTranslateActions: some View {
-        // `run` transcribes the audio before it translates, so this needs both
-        // halves: a moderation-only pipeline would offer a button that always
-        // fails at the first stage.
-        if let onDevice, onDevice.supportsTranslation, onDevice.supportsTranscription {
+        if let onDevice,
+           onDevice.supportsTranslation,
+           (!message.needsTranscriptionWork || onDevice.supportsTranscription) {
             let stage = onDevice.stage(for: message.id)
             let busy = onDevice.isRunning(message.id)
             let running = busy && owns(.translate)
 
             VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                if output == nil {
+                    caption("This message has no saved translation yet. Apple Intelligence "
+                            + "will generate one and save it to the Operator server "
+                            + "automatically.")
+                }
                 HStack {
                     Button {
-                        Task { await draftEverything(using: onDevice) }
+                        Task {
+                            await generateTranslation(
+                                using: onDevice, saveToOperator: true
+                            )
+                        }
                     } label: {
                         if running {
                             HStack(spacing: Theme.Spacing.small) {
@@ -806,8 +877,8 @@ struct ReviewDetailView: View {
                             }
                         } else {
                             Label(message.translationFailed
-                                  ? "Retry on device"
-                                  : "Draft with Apple Intelligence",
+                                  ? "Retry and save translation"
+                                  : "Generate and save translation",
                                   systemImage: "apple.intelligence")
                         }
                     }
@@ -823,24 +894,47 @@ struct ReviewDetailView: View {
                 }
 
                 if output != nil {
-                    // The audio itself *was* downloaded from blob storage, so
-                    // don't claim nothing left the device — only that no content
-                    // reached an AI service.
-                    caption("Processed on this device — no audio or text was sent to an AI "
-                            + "service. Review the draft before submitting.")
+                    caption("Processed on this device. If saving failed, the result remains "
+                            + "here so it can be retried.")
                 }
             }
         }
     }
 
-    /// Runs the whole local pipeline for `message` — transcribe, translate, and
-    /// moderate — and pre-fills the translation draft. Never submits: the
-    /// operator still reviews and taps Submit. Shared by the translation step
-    /// and the transcription step, so a message with no transcript yet can be
-    /// drafted end to end in one press (issue #84).
-    private func draftEverything(using onDevice: OnDeviceReviewPipeline) async {
+    @ViewBuilder
+    private var translationRegenerationActions: some View {
+        if let onDevice, onDevice.supportsTranslation {
+            regenerationMenu(
+                title: "Regenerate translation",
+                systemImage: "apple.intelligence",
+                preview: {
+                    await generateTranslation(using: onDevice, saveToOperator: false)
+                },
+                save: {
+                    await generateTranslation(using: onDevice, saveToOperator: true)
+                }
+            )
+        }
+    }
+
+    private func generateTranslation(
+        using onDevice: OnDeviceReviewPipeline,
+        saveToOperator: Bool
+    ) async {
         let draftBefore = translationDraft
-        let translation = await onDevice.run(for: message)
+        let translation: String?
+        if message.needsTranscriptionWork {
+            translation = await onDevice.run(for: message)
+        } else if let transcript = message.latestTranscription?.text {
+            translation = await onDevice.translateOnly(
+                transcript,
+                sourceLanguage: message.latestTranscription?.language,
+                transcriptModel: message.latestTranscription?.model,
+                for: message.id
+            )
+        } else {
+            return
+        }
         // `reset` can land between `run` returning and this continuation
         // resuming, so re-check against the pipeline's current output rather
         // than trusting the returned value — otherwise a cleared draft gets
@@ -864,6 +958,34 @@ struct ReviewDetailView: View {
         // verdict on screen.
         if onDevice.outputs[message.id]?.recommendation != nil {
             moderatedText = translation
+        }
+
+        guard saveToOperator, let output = onDevice.outputs[message.id] else { return }
+        let textSaved: Bool
+        if message.needsTranscriptionWork {
+            textSaved = await store.submitTranscriptAndTranslation(
+                message,
+                transcript: output.transcript,
+                language: output.language,
+                model: output.model,
+                translation: translation
+            )
+        } else {
+            textSaved = await store.submitTranslation(message, text: translation)
+        }
+        guard textSaved else { return }
+
+        translationDraft = ""
+        if output.recommendation != nil {
+            if await saveGeneratedRecommendation(using: onDevice) {
+                onDevice.reset(message.id)
+                drafts.clear(message.id)
+            } else {
+                moderatedText = translation
+            }
+        } else {
+            onDevice.reset(message.id)
+            drafts.clear(message.id)
         }
     }
 
@@ -917,9 +1039,8 @@ struct ReviewDetailView: View {
     // MARK: - Transcription runs
 
     /// iOS has no Operator worker, but it can still transcribe locally with
-    /// Apple Intelligence. The transcript is shown first and only posted to the
-    /// Operator on a deliberate Submit tap — never automatically, matching how
-    /// translations pre-fill a draft.
+    /// Apple Intelligence. A first transcript is saved automatically; a re-run
+    /// stays local until the operator chooses to replace the server version.
     @ViewBuilder
     private var onDeviceTranscribeActions: some View {
         if let onDevice, onDevice.supportsTranscription {
@@ -929,7 +1050,14 @@ struct ReviewDetailView: View {
 
             HStack {
                 Button {
-                    Task { await onDevice.transcribeOnly(for: message) }
+                    Task {
+                        let transcript = await onDevice.transcribeOnly(for: message)
+                        if transcript != nil,
+                           message.latestTranscription == nil,
+                           let output = onDevice.outputs[message.id] {
+                            await submitOnDeviceTranscript(output, using: onDevice)
+                        }
+                    }
                 } label: {
                     if running {
                         HStack(spacing: Theme.Spacing.small) {
@@ -937,7 +1065,10 @@ struct ReviewDetailView: View {
                             Text(stageLabel(stage))
                         }
                     } else {
-                        Label("Transcribe on device", systemImage: "apple.intelligence")
+                        Label(message.latestTranscription == nil
+                              ? "Transcribe and save to server"
+                              : "Re-run transcription preview",
+                              systemImage: "apple.intelligence")
                     }
                 }
                 .buttonStyle(.tbtGlass)
@@ -974,6 +1105,38 @@ struct ReviewDetailView: View {
     }
 
     // MARK: - Building blocks
+
+    private func regenerationMenu(
+        title: String,
+        systemImage: String,
+        preview: @escaping @MainActor () async -> Void,
+        save: @escaping @MainActor () async -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+            caption("Choose whether to keep the regenerated result as a local preview "
+                    + "or replace the version on the Operator server.")
+            HStack {
+                Menu {
+                    Button {
+                        Task { await preview() }
+                    } label: {
+                        Label("Regenerate preview only", systemImage: "eye")
+                    }
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        Label("Regenerate and replace server version",
+                              systemImage: "arrow.up.circle.fill")
+                    }
+                } label: {
+                    Label(title, systemImage: systemImage)
+                }
+                .buttonStyle(.tbtGlass)
+                .disabled(onDevice?.isRunning(message.id) == true || isActing)
+                Spacer()
+            }
+        }
+    }
 
     @ViewBuilder
     private func card<Content: View>(

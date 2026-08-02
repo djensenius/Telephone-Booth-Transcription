@@ -1698,7 +1698,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
 				PRODUCT_NAME = Transcriber;
@@ -1825,7 +1825,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
 				PRODUCT_NAME = Transcriber;
@@ -1951,7 +1951,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
 				PRODUCT_NAME = Transcriber;
@@ -2431,7 +2431,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) -enable-upcoming-feature ExistentialAny";
 				PRODUCT_BUNDLE_IDENTIFIER = org.davidjensenius.TelephoneBoothTranscription;
 				PRODUCT_NAME = Transcriber;

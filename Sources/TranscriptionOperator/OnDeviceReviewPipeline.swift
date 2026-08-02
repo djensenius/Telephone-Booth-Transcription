@@ -14,8 +14,8 @@ import TranscriptionShared
 /// Operator itself is contacted, and only to download the audio the operator is
 /// already authorized to review.
 ///
-/// Results are **never** submitted automatically — the caller pre-fills the
-/// operator's draft so a human still reviews and submits.
+/// This type only computes local results. The caller decides whether to keep a
+/// preview or persist it to the Operator.
 @MainActor
 @Observable
 public final class OnDeviceReviewPipeline {
@@ -281,6 +281,59 @@ public final class OnDeviceReviewPipeline {
         )
         stages[message.id] = .finished
         return trimmed
+    }
+
+    /// Translates text the Operator already holds, without re-downloading or
+    /// re-transcribing the audio. Moderation remains advisory: a failed verdict
+    /// does not discard a successful translation.
+    @discardableResult
+    public func translateOnly(
+        _ transcript: String,
+        sourceLanguage: String?,
+        transcriptModel: String?,
+        for messageID: String
+    ) async -> String? {
+        guard !isRunning(messageID) else { return nil }
+        let generation = beginGeneration(messageID)
+        outputs[messageID] = nil
+        operations[messageID] = .translate
+        stages[messageID] = .translating
+
+        let translation: String
+        do {
+            translation = try await translate(transcript, sourceLanguage: sourceLanguage)
+        } catch {
+            guard isCurrent(messageID, generation) else { return nil }
+            fail(messageID, error, verb: "translate that transcript")
+            return nil
+        }
+        guard isCurrent(messageID, generation) else { return nil }
+
+        stages[messageID] = .moderating
+        var recommendation: String?
+        var flagged: Bool?
+        var maxScore: Double?
+        var moderationModel: String?
+        if let verdict = try? await moderate(translation) {
+            recommendation = verdict.recommendation
+            flagged = verdict.flagged
+            maxScore = verdict.maxScore
+            moderationModel = verdict.model
+        }
+        guard isCurrent(messageID, generation) else { return nil }
+
+        outputs[messageID] = Output(
+            transcript: transcript,
+            language: sourceLanguage,
+            model: transcriptModel,
+            translation: translation,
+            recommendation: recommendation,
+            flagged: flagged,
+            maxScore: maxScore,
+            moderationModel: moderationModel
+        )
+        stages[messageID] = .finished
+        return translation
     }
 
     /// Classifies text the Operator already holds, without touching the audio.
