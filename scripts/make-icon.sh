@@ -138,19 +138,39 @@ magick "$foreground" -trim +repage -resize 720x -depth 8 "$icon_composer_assets/
 cat > "$icon_composer/icon.json" <<JSON
 {
   "color-space-for-untagged-svg-colors" : "display-p3",
-  "fill" : {
-    "linear-gradient" : [
-      "srgb:0.94902,0.88235,0.75294,1.00000",
-      "srgb:0.85098,0.74902,0.58431,1.00000"
-    ]
-  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.94902,0.88235,0.75294,1.00000",
+          "srgb:0.85098,0.74902,0.58431,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "srgb:0.16078,0.13725,0.12157,1.00000"
+      }
+    }
+  ],
   "groups" : [
     {
       "blend-mode" : "normal",
       "layers" : [
         {
           "blend-mode" : "normal",
-          "fill" : "automatic",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.78824,0.60784,0.38824,1.00000"
+              }
+            }
+          ],
           "glass" : true,
           "hidden" : false,
           "image-name" : "brushstroke.png",

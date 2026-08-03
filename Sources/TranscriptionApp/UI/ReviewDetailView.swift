@@ -388,7 +388,8 @@ struct ReviewDetailView: View {
     /// Posts the on-device verdict to the Operator and, on success, clears the
     /// local result so it can't be submitted twice.
     private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
-        guard localVerdictIsSubmittable,
+        guard canModify,
+              localVerdictIsSubmittable,
               let output, let recommendation = output.recommendation else { return }
         let submitted = await store.submitModeration(
             message,
@@ -501,6 +502,7 @@ struct ReviewDetailView: View {
         text: String,
         saveToOperator: Bool
     ) async {
+        guard canModify else { return }
         let recommendation = await onDevice.moderateOnly(
             text,
             transcript: message.latestTranscription?.text ?? text,
@@ -526,7 +528,8 @@ struct ReviewDetailView: View {
     private func saveGeneratedRecommendation(
         using onDevice: OnDeviceReviewPipeline
     ) async -> Bool {
-        guard let output = onDevice.outputs[message.id],
+        guard canModify,
+              let output = onDevice.outputs[message.id],
               let recommendation = output.recommendation else { return false }
         return await store.submitModeration(
             message,
@@ -610,13 +613,13 @@ struct ReviewDetailView: View {
                 } else {
                     bodyText(output.transcript)
                 }
-                if localReviewDraft != nil {
+                if localReviewDraft != nil, canModify {
                     // The transcript and the translation it produced are
                     // submitted together from the translation card below, so
                     // there is no separate transcript submit here.
                     caption("Translated and checked below — review the translation, "
                             + "then submit both in one step.")
-                } else {
+                } else if canModify {
                     caption(message.latestTranscription == nil
                             ? (isActing
                                ? "Saving this first transcript to the Operator server…"
@@ -717,10 +720,10 @@ struct ReviewDetailView: View {
                         : "Waiting on a transcript.")
             }
 
-            if message.needsTranslation {
+            if message.needsTranslation, canModify {
                 onDeviceTranslateActions
                 translationEditor
-            } else if localReviewDraft != nil {
+            } else if localReviewDraft != nil, canModify {
                 localReviewDraftEditor
             } else if message.translationText != nil, canModify {
                 translationRegenerationActions
@@ -912,6 +915,7 @@ struct ReviewDetailView: View {
         using onDevice: OnDeviceReviewPipeline,
         saveToOperator: Bool
     ) async {
+        guard canModify else { return }
         let draftBefore = translationDraft
         let translation: String?
         if message.needsTranscriptionWork {
@@ -1079,6 +1083,7 @@ struct ReviewDetailView: View {
         _ output: OnDeviceReviewPipeline.Output,
         using onDevice: OnDeviceReviewPipeline
     ) async {
+        guard canModify else { return }
         let submitted = await store.submitTranscription(
             message,
             text: output.transcript,
