@@ -37,6 +37,9 @@ struct ReviewDetailView: View {
 
     private var isActing: Bool { store.isActing(on: message.id) }
     private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
+    /// The Operator accepts corrections and replacement decisions for every
+    /// message except one whose upload has not completed yet.
+    private var canModify: Bool { message.status != .uploading }
     private var output: OnDeviceReviewPipeline.Output? { onDevice?.outputs[message.id] }
     private var advice: AIRecommendation? {
         AIRecommendation(message: message)
@@ -95,7 +98,7 @@ struct ReviewDetailView: View {
                 }
                 transcriptCard
                 translationCard
-                if message.awaitingModerationDecision { decisionCard }
+                if canModify { decisionCard }
             }
             .padding(Theme.Spacing.large)
             .frame(maxWidth: 720, alignment: .leading)
@@ -204,7 +207,7 @@ struct ReviewDetailView: View {
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
-            if message.isReviewable,
+            if canModify,
                let onDevice,
                onDevice.supportsModeration,
                let text = operatorEnglish {
@@ -250,7 +253,7 @@ struct ReviewDetailView: View {
     @ViewBuilder
     private var noRecommendationCard: some View {
         let state = moderationDisplayState
-        let canRunLocal = message.isReviewable
+        let canRunLocal = canModify
             && (onDevice?.supportsModeration ?? false)
             && englishForModeration != nil
         // Nothing to say and nothing to do — don't render an empty card. Only
@@ -639,7 +642,7 @@ struct ReviewDetailView: View {
             // The controls that produce this text belong with it. Kept as a
             // footer rather than a card of its own so the detail reads as one
             // step per card: transcript, translation, decision.
-            if message.isReviewable, canRunTranscription { transcriptionRunFooter }
+            if canModify, canRunTranscription { transcriptionRunFooter }
         }
     }
 
@@ -749,7 +752,7 @@ struct ReviewDetailView: View {
                 translationEditor
             } else if localReviewDraft != nil {
                 localReviewDraftEditor
-            } else if message.translationText != nil, message.isReviewable {
+            } else if message.translationText != nil, canModify {
                 translationRegenerationActions
                 if !translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     translationEditor
@@ -1006,7 +1009,9 @@ struct ReviewDetailView: View {
 
     private var decisionCard: some View {
         card(title: "Decision", systemImage: "checkmark.seal") {
-            if message.nextStep != .decision {
+            if !message.isReviewable {
+                caption("Current decision: \(message.status.displayName). You can replace it below.")
+            } else if message.nextStep != .decision {
                 caption("You can decide now, or finish the step above first for more context.")
             }
 

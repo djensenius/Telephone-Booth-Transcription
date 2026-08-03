@@ -59,21 +59,21 @@ magick "$source_png" -resize 1024x1024! "$mask" \
 # Light appearance: gt3pro background + ink brushstroke.
 magick "$background" "$foreground" -composite -depth 8 "$composite"
 
-# Dark appearance: dimmed background, white brushstroke so the ink stays
-# legible on a dark field. Tinted appearance: white brushstroke on black for
-# the system to colourise.
+# Dark appearance uses a muted copper stroke on warm charcoal. It stays within
+# the ink-and-paper palette without the harsh white-on-black inversion.
 dark_composite="$root/Resources/AppIcon-dark.png"
 tinted_composite="$root/Resources/AppIcon-tinted.png"
 fg_white="$root/Resources/.AppIcon-fg-white.png"
-bg_dark="$root/Resources/.AppIcon-bg-dark.png"
+fg_dark="$root/Resources/.AppIcon-fg-dark.png"
 
 magick "$foreground" -fill white -colorize 100% -depth 8 "$fg_white"
-magick "$background" -modulate 22 -depth 8 "$bg_dark"
-magick "$bg_dark" "$fg_white" -compose over -composite -depth 8 "$dark_composite"
+magick "$foreground" -fill "#C99B63" -colorize 100% -depth 8 "$fg_dark"
+magick -size 1024x1024 "xc:#29231F" "$fg_dark" -compose over -composite \
+  -alpha remove -alpha off -depth 8 "$dark_composite"
 magick -size 1024x1024 xc:black "$fg_white" -compose over -composite \
   -colorspace sRGB -depth 8 "$tinted_composite"
 
-rm -f "$mask" "$fg_white" "$bg_dark"
+rm -f "$mask" "$fg_white" "$fg_dark"
 
 # Emit the iOS fallback appiconset: light / dark / tinted single-size entries.
 # iOS 26 and macOS 26 use Resources/AppIcon.icon below.

@@ -177,13 +177,12 @@ struct ReviewView: View {
 
     private var queue: some View {
         platformQueue
-            .onChange(of: activeMessageIDs) { _, ids in
+            .onChange(of: retainedMessageIDs) { _, ids in
                 // Transcripts and translations live in the pipeline until
-                // pruned; drop anything that no longer needs work. Keyed to the
-                // *active* set rather than every fetched message: a decided
-                // message stays in the queue for the All filter, so pruning on
-                // the full set would keep its text resident until it fell out
-                // of the fetch window.
+                // pruned; drop anything that has fallen out of the fetched
+                // window. Decided messages stay retained because the All
+                // filter still lets an operator regenerate their transcript,
+                // translation, or recommendation and revise the decision.
                 onDevice?.prune(keeping: ids)
                 drafts.prune(keeping: ids)
             }
@@ -219,11 +218,10 @@ struct ReviewView: View {
         Set(store.messages.map(\.id))
     }
 
-    /// The messages still waiting on the operator — the only ones whose local
-    /// transcripts and translations are still worth holding on to.
-    private var activeMessageIDs: Set<String> {
-        Set(store.messages.filter(\.needsAttention).map(\.id))
-    }
+    /// Every message that can still be opened from the fetched page. Local
+    /// correction drafts remain useful after a decision, so only rows that
+    /// leave the page are pruned.
+    private var retainedMessageIDs: Set<String> { visibleMessageIDs }
 
     /// What the Operator currently holds for each message, as a snapshot that
     /// changes whenever the authoritative text does — a new transcription row,
