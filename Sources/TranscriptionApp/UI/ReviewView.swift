@@ -1,6 +1,6 @@
 import SwiftUI
 import TranscriptionAuth
-import TranscriptionOperator
+import TranscriptionPipeline
 import TranscriptionReview
 
 /// The review queue: the operator's primary surface.
@@ -10,7 +10,6 @@ import TranscriptionReview
 /// and buried every control in the list itself (issue #79). Selecting a message
 /// opens the detail view, where the full text and all actions live.
 struct ReviewView: View {
-    @EnvironmentObject private var host: ServerHost
     @State private var auth = AuthManager.shared
     @State private var isSigningIn = false
     @State private var signInError: String?
@@ -52,7 +51,6 @@ struct ReviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task(id: authState) {
-            store.transcriptionRerunner = host
             switch authState {
             case .signedIn:
                 await store.poll()

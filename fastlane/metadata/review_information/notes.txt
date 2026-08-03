@@ -1,28 +1,14 @@
-No sign-in or account is required to review this app.
+An Operator account is required for live review data.
 
-Telephone Booth Transcription is a local server app: it runs a small
-OpenAI-compatible HTTP API on the device and is normally driven by other
-software on the same machine or local network. There is no consumer UI to
-"use" beyond starting the server and copying its access token.
+For review without credentials, launch the app with:
 
-To review it end to end with no external services:
+  -uiTestDemoMode YES
 
-  1. Launch the app. On macOS the server starts automatically; on iOS tap
-     Start. The Status tab shows the local server URL (for example
-     http://127.0.0.1:8089) and a bearer token generated on first launch.
-  2. In Settings, choose the on-device transcription backend (Apple
-     Intelligence / Speech Analyzer) and the on-device moderation/translation
-     backend (Apple Foundation Models). These require no separate server.
-  3. From a terminal or any HTTP client on the same device/network, send a
-     request to the shown URL with "Authorization: Bearer <token>", e.g. POST
-     an audio file to /v1/audio/transcriptions or JSON text to /v1/moderations.
+Demo mode supplies deterministic sample messages and makes no network request.
+The Review screen demonstrates filtering and message review. On supported
+hardware, the app can use Apple Intelligence to draft a transcription,
+translation, and moderation recommendation; generated work is never submitted
+without an explicit operator action.
 
-The app makes no network requests to developer-operated servers. On-device
-backends keep all audio and text on the device. Optional backends (a local
-Whisper server, LM Studio, or an OpenAI API key) connect only to endpoints the
-operator configures. There are no in-app purchases, ads, or third-party
-tracking. This is a niche developer tool for the developer's own art
-installation and is not intended for general consumer audiences.
-
-Note: on-device transcription and moderation require a device with Apple
-Intelligence support and are unavailable in the iOS Simulator.
+The app is an outbound-only client. It does not run an HTTP server, listen on a
+network port, include ads, or use analytics or third-party tracking.

@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import NIOCore
 import NIOHTTP1
+import TranscriptionPipeline
 import TranscriptionShared
 
 /// Minimal HTTP client for the Operator push worker API. The worker receives

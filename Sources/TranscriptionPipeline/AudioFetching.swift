@@ -1,8 +1,5 @@
-import AsyncHTTPClient
 import Crypto
 import Foundation
-import Logging
-import NIOCore
 import TranscriptionShared
 
 /// Errors raised while fetching and verifying job audio. Messages are fixed
@@ -39,10 +36,10 @@ public protocol AudioFetching: Sendable {
     ) async throws -> T
 }
 
-/// Reusable staging core shared by the HTTP fetcher and tests. Given any
-/// `AsyncSequence` of `ByteBuffer` chunks (real network body or a synthetic
-/// test stream), it writes to a private temp file while hashing and enforcing a
-/// byte cap, verifies the digest, runs `body`, and always cleans up.
+/// Reusable staging core shared by the URLSession fetcher and tests. Given any
+/// `AsyncSequence` of `Data` chunks, it writes to a private temp file while
+/// hashing and enforcing a byte cap, verifies the digest, runs `body`, and
+/// always cleans up.
 public enum AudioFileStaging {
     /// Normalizes a sha256 hex string to lowercase, or returns nil if it is not
     /// exactly 64 hexadecimal characters.
@@ -69,7 +66,7 @@ public enum AudioFileStaging {
         maxBytes: Int,
         suggestedExtension: String?,
         _ body: @Sendable (URL) async throws -> T
-    ) async throws -> T where S.Element == ByteBuffer {
+    ) async throws -> T where S.Element == Data {
         guard let expected = normalizedSHA256(expectedSHA256) else {
             throw AudioFetchError.invalidExpectedHash
         }
@@ -102,16 +99,14 @@ public enum AudioFileStaging {
         var total = 0
         do {
             for try await chunk in chunks {
-                let readable = chunk.readableBytes
+                let readable = chunk.count
                 guard readable > 0 else { continue }
                 total += readable
                 if total > maxBytes {
                     throw AudioFetchError.tooLarge
                 }
-                let bytes = chunk.getBytes(at: chunk.readerIndex, length: readable) ?? []
-                let data = Data(bytes)
-                hasher.update(data: data)
-                try handle.write(contentsOf: data)
+                hasher.update(data: chunk)
+                try handle.write(contentsOf: chunk)
             }
         } catch let error as AudioFetchError {
             throw error
@@ -137,65 +132,5 @@ public enum AudioFileStaging {
             return ".flac"
         }
         return "." + raw.lowercased()
-    }
-}
-
-/// `AsyncHTTPClient`-backed `AudioFetching`. Requires `https` URLs unless
-/// explicitly configured to allow insecure URLs (used only for loopback tests).
-public final class HTTPClientAudioFetcher: AudioFetching {
-    private let httpClient: HTTPClient
-    private let timeout: TimeAmount
-    private let allowInsecureURLs: Bool
-    private let logger: Logger
-
-    public init(
-        httpClient: HTTPClient,
-        timeout: TimeAmount = .seconds(120),
-        allowInsecureURLs: Bool = false,
-        logger: Logger = Logger(label: "audio-fetcher")
-    ) {
-        self.httpClient = httpClient
-        self.timeout = timeout
-        self.allowInsecureURLs = allowInsecureURLs
-        self.logger = logger
-    }
-
-    public func withFetchedAudioFile<T: Sendable>(
-        url: String,
-        expectedSHA256: String,
-        maxBytes: Int,
-        suggestedExtension: String?,
-        _ body: @Sendable (URL) async throws -> T
-    ) async throws -> T {
-        // Validate the hash before opening any connection.
-        guard AudioFileStaging.normalizedSHA256(expectedSHA256) != nil else {
-            throw AudioFetchError.invalidExpectedHash
-        }
-        if !allowInsecureURLs {
-            guard url.lowercased().hasPrefix("https://") else {
-                throw AudioFetchError.insecureURL
-            }
-        }
-
-        var request = HTTPClientRequest(url: url)
-        request.method = .GET
-        let response: HTTPClientResponse
-        do {
-            response = try await httpClient.execute(request, deadline: NIODeadline.now() + timeout)
-        } catch {
-            logger.debug("audio fetch transport failed: \(type(of: error))")
-            throw AudioFetchError.fetchFailed
-        }
-        guard (200..<300).contains(Int(response.status.code)) else {
-            throw AudioFetchError.fetchFailed
-        }
-
-        return try await AudioFileStaging.stage(
-            chunks: response.body,
-            expectedSHA256: expectedSHA256,
-            maxBytes: maxBytes,
-            suggestedExtension: suggestedExtension,
-            body
-        )
     }
 }

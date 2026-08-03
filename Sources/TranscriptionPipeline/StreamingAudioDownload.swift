@@ -1,8 +1,7 @@
 import Foundation
-import NIOCore
 import TranscriptionShared
 
-/// Streams a URL's response body to an async consumer as `ByteBuffer` chunks.
+/// Streams a URL's response body to an async consumer as `Data` chunks.
 ///
 /// Exists because `URLSession.AsyncBytes` yields a single `UInt8` per awaited
 /// `next()`: at the 100 MB audio cap that is on the order of 100M async
@@ -272,16 +271,15 @@ final class StreamingAudioDownload: NSObject, URLSessionDataDelegate, @unchecked
     /// Pull-based view of the body. Nothing is read from the network buffer
     /// until the consumer asks for the next chunk.
     struct Chunks: AsyncSequence, Sendable {
-        typealias Element = ByteBuffer
+        typealias Element = Data
 
         let download: StreamingAudioDownload
 
         struct AsyncIterator: AsyncIteratorProtocol {
             let download: StreamingAudioDownload
 
-            mutating func next() async throws -> ByteBuffer? {
-                guard let data = try await download.nextChunk() else { return nil }
-                return ByteBuffer(bytes: data)
+            mutating func next() async throws -> Data? {
+                try await download.nextChunk()
             }
         }
 

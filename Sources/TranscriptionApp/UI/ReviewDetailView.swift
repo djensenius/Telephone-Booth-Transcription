@@ -1,5 +1,5 @@
 import SwiftUI
-import TranscriptionOperator
+import TranscriptionPipeline
 import TranscriptionReview
 
 /// Everything about one message, and every action that can be taken on it.
@@ -36,7 +36,6 @@ struct ReviewDetailView: View {
     }
 
     private var isActing: Bool { store.isActing(on: message.id) }
-    private var isQueued: Bool { store.isTranscriptionQueued(message.id) }
     /// The Operator accepts corrections and replacement decisions for every
     /// message except one whose upload has not completed yet.
     private var canModify: Bool { message.status != .uploading }
@@ -646,46 +645,18 @@ struct ReviewDetailView: View {
         }
     }
 
-    /// False on a device with no Operator worker and no on-device transcriber —
-    /// there is no button to show, so the footer (and its explanatory caption)
-    /// would be dangling text.
+    /// False when the device has no on-device transcriber. There is no button
+    /// to show, so the footer and its explanatory caption would be dangling.
     private var canRunTranscription: Bool {
-        #if os(macOS)
-        return true
-        #else
         // A moderation-only pipeline exists but has no transcriber, so its
         // presence alone doesn't mean there's a button under this footer.
         return onDevice?.supportsTranscription == true
-        #endif
     }
 
     @ViewBuilder
     private var transcriptionRunFooter: some View {
         Divider().overlay(Theme.Colors.textSecondary.opacity(0.2))
 
-        if isQueued {
-            Label("Queued for the local worker", systemImage: "clock.arrow.circlepath")
-                .font(Theme.Fonts.caption)
-                .foregroundStyle(Theme.Colors.textSecondary)
-        }
-
-        #if os(macOS)
-        // Only the Mac runs the Operator worker, so only the Mac can hand the
-        // job off for a transcript that lands back on the Operator.
-        HStack {
-            Button {
-                Task { await store.requestTranscription(message) }
-            } label: {
-                actionLabel(message.latestTranscription == nil
-                            ? "Transcribe and save to server"
-                            : "Re-run and save new version",
-                            systemImage: "waveform")
-            }
-            .buttonStyle(.tbtGlass)
-            .disabled(isActing || isQueued)
-            Spacer()
-        }
-        #else
         if supportsLocalFullPipeline && message.needsTranscriptionWork {
             // One press runs the whole review locally — transcribe, translate,
             // and moderate — so the operator never has to submit a transcript
@@ -699,7 +670,6 @@ struct ReviewDetailView: View {
         } else {
             onDeviceTranscribeActions
         }
-        #endif
 
         if message.latestTranscription != nil {
             caption("Saving a re-run keeps the old transcript in history and makes "
@@ -1056,9 +1026,9 @@ struct ReviewDetailView: View {
 
     // MARK: - Transcription runs
 
-    /// iOS has no Operator worker, but it can still transcribe locally with
-    /// Apple Intelligence. A first transcript is saved automatically; a re-run
-    /// stays local until the operator chooses to replace the server version.
+    /// Transcribes locally with Apple Intelligence. A first transcript is saved
+    /// automatically; a re-run stays local until the operator chooses to
+    /// replace the Operator version.
     @ViewBuilder
     private var onDeviceTranscribeActions: some View {
         if let onDevice, onDevice.supportsTranscription {

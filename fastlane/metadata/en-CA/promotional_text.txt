@@ -1,1 +1,1 @@
-A private, OpenAI-compatible transcription and moderation server on your own Mac or iPhone.
+Review Telephone Booth messages and draft transcription, translation, and moderation results on-device.

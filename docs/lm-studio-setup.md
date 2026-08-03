@@ -1,78 +1,46 @@
-# Setting up LM Studio + a Whisper server
+# Configuring proxy backends
 
-This app proxies to two upstreams. Both speak the OpenAI HTTP wire format.
+This setup applies only to consumers embedding the standalone
+`TranscriptionCore` library. The shipped apps do not proxy to LM Studio,
+Whisper servers, or OpenAI.
 
-## Moderation / chat — LM Studio
+Configure proxy backends programmatically through `ServerConfig`:
 
-[LM Studio](https://lmstudio.ai) bundles a server that mimics OpenAI's
-`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/models`, and
-`/v1/responses` endpoints. It does **not** ship an audio transcription endpoint
-and it does **not** ship a dedicated `/v1/moderations` endpoint, so this app
-uses LM Studio only for the moderation **fallback** classifier.
+```swift
+import TranscriptionCore
 
-1. Install LM Studio.
-2. Download a small instruct-tuned model (3B–8B is plenty for classification).
-   Pick something with reliable JSON output — Llama 3.1 8B Instruct, Qwen2.5 7B
-   Instruct, and Phi-3.5 Mini Instruct all work well.
-3. Open **Developer → Local Server**, load the model, and start the server.
-   The default URL is `http://localhost:1234/v1`.
-4. In this app's Settings, set the moderation upstream base URL to that value
-   and the model name to whatever LM Studio reports under "Loaded model".
-
-## Transcription — a Whisper-compatible server
-
-LM Studio cannot transcribe audio, so point the transcription upstream at a
-real Whisper server. Pick one:
-
-### Option A: `faster-whisper-server` (local, free, GPU-friendly)
-
-```sh
-docker run --rm -p 8000:8000 \
-  fedirz/faster-whisper-server:latest-cpu
-# or :latest-cuda on Linux/NVIDIA
+var config = ServerConfig()
+config.transcriptionBackend = .proxy(
+    UpstreamConfig(baseURL: "http://127.0.0.1:8000/v1")
+)
+config.moderationBackend = .proxy
+config.moderationUpstream = UpstreamConfig(
+    baseURL: "http://127.0.0.1:1234/v1"
+)
+config.moderationModel = "your-loaded-model"
 ```
 
-Set the transcription upstream base URL to `http://127.0.0.1:8000/v1`.
+## Transcription
 
-### Option B: OpenAI
+Point `transcriptionBackend` at any service implementing OpenAI's
+`POST /v1/audio/transcriptions` multipart format. A local
+[`faster-whisper-server`](https://github.com/fedirz/faster-whisper-server)
+instance commonly listens at `http://127.0.0.1:8000/v1`.
 
-Set the transcription upstream base URL to `https://api.openai.com/v1` and put
-your OpenAI key in the API key field. The app will forward it as
-`Authorization: Bearer …` to OpenAI (separate from the token clients use to
-authenticate to _this_ app).
+For OpenAI, use `https://api.openai.com/v1` and supply the API key through the
+consumer's secure `APIKeyStoring` integration rather than source control.
 
-### Option C: any other OpenAI-compatible ASR server
+## Moderation
 
-If it accepts `POST /v1/audio/transcriptions` with multipart input, it'll work.
-The proxy is intentionally schema-blind — it forwards all multipart fields
-verbatim.
+[LM Studio](https://lmstudio.ai) provides `/v1/chat/completions` but not
+`/v1/moderations`. With `moderationFallbackEnabled` enabled,
+`TranscriptionCore` first tries `/v1/moderations`, then uses its
+chat-completion classifier fallback.
 
-## Skipping LM Studio entirely (native macOS transcription)
+Load an instruct model with reliable JSON output, start LM Studio's local
+server, and set `moderationUpstream.baseURL` plus `moderationModel` as shown
+above.
 
-If you only need transcription and don't care about moderation, you can avoid
-running LM Studio or `faster-whisper-server` altogether:
-
-1. Open the app and go to **Settings → Transcription backend**.
-2. Pick **Built-in macOS (Speech framework)**.
-3. Pick a locale (the picker lists every locale `SFSpeechRecognizer.supportedLocales()`
-   reports — typically 50+ languages).
-4. Make a transcription request. The first one will trigger a permission prompt
-   ("Telephone Booth Transcription would like to use Speech Recognition"). Accept.
-
-Subsequent requests run fully on-device — no network involved, no external model
-server required. Note that the response is the OpenAI default `{ "text": "…" }`
-shape; verbose JSON / SRT / VTT formats are only available through the proxy
-backend.
-
-### Picking between the two macOS backends
-
-macOS 26 ships two on-device transcription engines, and the app exposes both:
-
-| Setting | Engine | Strengths | Trade-offs |
-| --- | --- | --- | --- |
-| **macOS 26 Speech Analyzer (Apple Intelligence)** | `SpeechAnalyzer` + `SpeechTranscriber` | Higher accuracy. Handles long-form audio (lectures, meetings, podcasts). Same engine behind Notes / Voice Memos transcription. | Per-locale model assets must download the first time you use a new locale (typically tens of MB; the system shares assets across apps once installed). Requires macOS 26+. |
-| **macOS legacy Speech Recognizer** | `SFSpeechRecognizer` | Wider locale coverage out of the box. No model download. Works on macOS 12+. | Lower accuracy, especially for long audio. |
-
-The Apple-Intelligence engine is the recommended default if you're on macOS 26.
-The legacy engine remains a useful fallback for locales the new engine doesn't
-support yet, or when you want zero first-run latency.
+Loopback HTTP is appropriate for local services without credentials. Remote
+services carrying API keys must use HTTPS; `UpstreamConfig` strips keys from
+insecure remote connections.

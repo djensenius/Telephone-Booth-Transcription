@@ -1,6 +1,6 @@
 import Foundation
 import TranscriptionOnDevice
-import TranscriptionOperator
+import TranscriptionPipeline
 import TranscriptionReview
 import TranscriptionShared
 
