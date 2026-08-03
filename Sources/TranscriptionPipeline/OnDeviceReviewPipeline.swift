@@ -362,9 +362,10 @@ public final class OnDeviceReviewPipeline {
         operations[messageID] = .moderate
         stages[messageID] = .moderating
 
+        let moderationInput = english.trimmingCharacters(in: .whitespacesAndNewlines)
         let verdict: ModerationVerdict
         do {
-            verdict = try await moderate(english)
+            verdict = try await moderate(moderationInput)
         } catch {
             guard isCurrent(messageID, generation) else { return nil }
             fail(messageID, error, verb: "moderate that text")
@@ -497,7 +498,7 @@ public final class OnDeviceReviewPipeline {
         guard case .translation(let translated, _, _, _) = try await dispatcher.execute(job: job) else {
             throw OperatorJobError(code: "translation_failed", message: "local translation failed")
         }
-        return translated
+        return translated.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func moderate(_ input: String) async throws -> ModerationVerdict {

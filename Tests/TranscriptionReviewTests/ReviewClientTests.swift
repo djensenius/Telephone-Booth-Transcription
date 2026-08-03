@@ -188,7 +188,9 @@ struct ReviewClientTests {
             )
         )
         let ok = await store.submitModeration(
-            target, flagged: true, recommendation: "reject", maxScore: 0.82,
+            target, inputText: target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text ?? "",
+            flagged: true, recommendation: "reject", maxScore: 0.82,
             model: "apple-foundation-models"
         )
 
@@ -213,7 +215,9 @@ struct ReviewClientTests {
 
         client.moderationResult = .failure(.api(status: 404, code: "not_found"))
         let ok = await store.submitModeration(
-            target, flagged: false, recommendation: "approve", maxScore: 0.1, model: nil
+            target, inputText: target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text ?? "",
+            flagged: false, recommendation: "approve", maxScore: 0.1, model: nil
         )
 
         #expect(ok == false)
@@ -240,7 +244,9 @@ struct ReviewClientTests {
             )
         )
         let ok = await store.submitModeration(
-            target, flagged: true, recommendation: "reject", maxScore: 0.82,
+            target, inputText: target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text ?? "",
+            flagged: true, recommendation: "reject", maxScore: 0.82,
             model: "apple-foundation-models"
         )
 
@@ -274,7 +280,9 @@ struct ReviewClientTests {
         let newer = Date(timeIntervalSince1970: 2_000)
         client.moderationResult = .success(verdict("newer", .reject, at: newer))
         _ = await store.submitModeration(
-            target, flagged: true, recommendation: "reject", maxScore: 0.82,
+            target, inputText: target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text ?? "",
+            flagged: true, recommendation: "reject", maxScore: 0.82,
             model: "apple-foundation-models"
         )
         #expect(store.messages.first(where: { $0.id == target.id })?
@@ -285,7 +293,9 @@ struct ReviewClientTests {
             verdict("older", .approve, at: Date(timeIntervalSince1970: 1_000))
         )
         let ok = await store.submitModeration(
-            target, flagged: false, recommendation: "approve", maxScore: 0.1,
+            target, inputText: target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text ?? "",
+            flagged: false, recommendation: "approve", maxScore: 0.1,
             model: "apple-foundation-models"
         )
 
@@ -500,7 +510,9 @@ struct ReviewClientTests {
             )
         )
         let moderationSaved = await store.submitModeration(
-            target, flagged: false, recommendation: "approve"
+            target, inputText: target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text ?? "",
+            flagged: false, recommendation: "approve"
         )
         #expect(moderationSaved)
 
@@ -595,6 +607,7 @@ struct ReviewClientTests {
         func submitModeration(
             messageID: String,
             transcriptionId: String?,
+            inputText: String?,
             flagged: Bool,
             recommendation: String,
             maxScore: Double,
@@ -684,6 +697,7 @@ struct ReviewClientTests {
         func submitModeration(
             messageID: String,
             transcriptionId: String?,
+            inputText: String?,
             flagged: Bool,
             recommendation: String,
             maxScore: Double,
@@ -729,6 +743,7 @@ struct ReviewClientTests {
         func submitModeration(
             messageID: String,
             transcriptionId: String?,
+            inputText: String?,
             flagged: Bool,
             recommendation: String,
             maxScore: Double,

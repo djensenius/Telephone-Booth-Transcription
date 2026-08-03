@@ -256,7 +256,7 @@ struct ReviewHTTPTests {
         """
         let client = client(status: 202, body: body)
         let moderation = try await client.submitModeration(
-            messageID: "m", transcriptionId: "t", flagged: true,
+            messageID: "m", transcriptionId: "t", inputText: "hello", flagged: true,
             recommendation: "reject", maxScore: 0.82, reasonSummary: nil, model: "apple-foundation-models"
         )
         #expect(moderation.recommendation == .reject)
@@ -269,6 +269,10 @@ struct ReviewHTTPTests {
         let sent = try #require(StubURLProtocol.lastBody)
         let json = try #require(try JSONSerialization.jsonObject(with: sent) as? [String: Any])
         #expect(json["transcriptionId"] as? String == "t")
+        #expect(
+            json["inputSha256"] as? String
+                == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        )
         #expect(json["flagged"] as? Bool == true)
         #expect(json["recommendation"] as? String == "reject")
         #expect(json["maxScore"] as? Double == 0.82)
@@ -286,7 +290,7 @@ struct ReviewHTTPTests {
         """
         let client = client(status: 202, body: body)
         _ = try await client.submitModeration(
-            messageID: "m", transcriptionId: "  ", flagged: false,
+            messageID: "m", transcriptionId: "  ", inputText: nil, flagged: false,
             recommendation: "approve", maxScore: 4.2, reasonSummary: "  ", model: nil
         )
         let sent = try #require(StubURLProtocol.lastBody)
@@ -316,7 +320,7 @@ struct ReviewHTTPTests {
         ] {
             let client = client(status: 202, body: body)
             _ = try await client.submitModeration(
-                messageID: "m", transcriptionId: nil, flagged: true,
+                messageID: "m", transcriptionId: nil, inputText: nil, flagged: true,
                 recommendation: spoken, maxScore: 0.9, reasonSummary: nil, model: nil
             )
             let sent = try #require(StubURLProtocol.lastBody)

@@ -390,9 +390,11 @@ struct ReviewDetailView: View {
     private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
         guard canModify,
               localVerdictIsSubmittable,
+              let moderationInput = moderatedText,
               let output, let recommendation = output.recommendation else { return }
         let submitted = await store.submitModeration(
             message,
+            inputText: moderationInput,
             flagged: output.flagged ?? false,
             recommendation: recommendation,
             maxScore: output.maxScore ?? 0,
@@ -503,8 +505,9 @@ struct ReviewDetailView: View {
         saveToOperator: Bool
     ) async {
         guard canModify else { return }
+        let moderationInput = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let recommendation = await onDevice.moderateOnly(
-            text,
+            moderationInput,
             transcript: message.latestTranscription?.text ?? text,
             language: message.latestTranscription?.language,
             for: message.id
@@ -516,23 +519,25 @@ struct ReviewDetailView: View {
             onDevice.clearModeration(message.id)
             return
         }
-        moderatedText = text
+        moderatedText = moderationInput
         if saveToOperator,
-           matchesCurrentOperatorEnglish(text),
-           await saveGeneratedRecommendation(using: onDevice) {
+           matchesCurrentOperatorEnglish(moderationInput),
+           await saveGeneratedRecommendation(using: onDevice, inputText: moderationInput) {
             onDevice.clearModeration(message.id)
             moderatedText = nil
         }
     }
 
     private func saveGeneratedRecommendation(
-        using onDevice: OnDeviceReviewPipeline
+        using onDevice: OnDeviceReviewPipeline,
+        inputText: String
     ) async -> Bool {
         guard canModify,
               let output = onDevice.outputs[message.id],
               let recommendation = output.recommendation else { return false }
         return await store.submitModeration(
             message,
+            inputText: inputText,
             flagged: output.flagged ?? false,
             recommendation: recommendation,
             maxScore: output.maxScore ?? 0,

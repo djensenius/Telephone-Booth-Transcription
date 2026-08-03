@@ -56,6 +56,7 @@ public protocol OperatorReviewClient: Sendable {
     func submitModeration(
         messageID: String,
         transcriptionId: String?,
+        inputText: String?,
         flagged: Bool,
         recommendation: String,
         maxScore: Double,
@@ -156,6 +157,7 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
     public func submitModeration(
         messageID: String,
         transcriptionId: String?,
+        inputText: String?,
         flagged: Bool,
         recommendation: String,
         maxScore: Double,
@@ -164,14 +166,20 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
     ) async throws -> Moderation {
         struct Body: Encodable {
             let transcriptionId: String?
+            let inputSha256: String?
             let flagged: Bool
             let recommendation: String
             let maxScore: Double
             let reasonSummary: String?
             let model: String?
         }
+        let normalizedTranscriptionId = OperatorSubmission.metadata(transcriptionId)
+        guard normalizedTranscriptionId == nil || inputText != nil else {
+            throw OperatorReviewError.invalidResponse
+        }
         let body = Body(
-            transcriptionId: OperatorSubmission.metadata(transcriptionId),
+            transcriptionId: normalizedTranscriptionId,
+            inputSha256: OperatorSubmission.sha256(inputText),
             flagged: flagged,
             recommendation: OperatorSubmission.recommendation(recommendation),
             maxScore: OperatorSubmission.score(maxScore),

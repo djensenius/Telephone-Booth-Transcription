@@ -444,6 +444,7 @@ public final class ReviewStore {
     @discardableResult
     public func submitModeration(
         _ message: Message,
+        inputText: String,
         flagged: Bool,
         recommendation: String,
         maxScore: Double = 0,
@@ -455,6 +456,7 @@ public final class ReviewStore {
         defer { pendingActions.remove(message.id) }
         return await postModeration(
             message,
+            inputText: inputText,
             flagged: flagged,
             recommendation: recommendation,
             maxScore: maxScore,
@@ -467,6 +469,7 @@ public final class ReviewStore {
     /// local retry state until both writes finish.
     private func postModeration(
         _ message: Message,
+        inputText: String,
         flagged: Bool,
         recommendation: String,
         maxScore: Double,
@@ -481,6 +484,7 @@ public final class ReviewStore {
             let updated = try await client.submitModeration(
                 messageID: message.id,
                 transcriptionId: latest.latestTranscription?.id,
+                inputText: inputText,
                 flagged: flagged,
                 recommendation: recommendation,
                 maxScore: maxScore,
@@ -668,6 +672,7 @@ public final class ReviewStore {
             }
             guard await postModeration(
                 message,
+                inputText: Self.trimmed(translation) ?? "",
                 flagged: flagged ?? false,
                 recommendation: recommendation,
                 maxScore: maxScore,
