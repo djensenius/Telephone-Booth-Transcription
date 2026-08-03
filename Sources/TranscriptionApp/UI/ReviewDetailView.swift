@@ -36,9 +36,9 @@ struct ReviewDetailView: View {
     }
 
     private var isActing: Bool { store.isActing(on: message.id) }
-    /// The Operator accepts corrections and replacement decisions for every
-    /// message except one whose upload has not completed yet.
-    private var canModify: Bool { message.status != .uploading }
+    /// The Operator accepts corrections and replacement decisions only for
+    /// explicitly supported states after an upload has completed.
+    private var canModify: Bool { message.status.allowsReviewChanges }
     private var output: OnDeviceReviewPipeline.Output? { onDevice?.outputs[message.id] }
     private var advice: AIRecommendation? {
         AIRecommendation(message: message)
