@@ -59,21 +59,21 @@ magick "$source_png" -resize 1024x1024! "$mask" \
 # Light appearance: gt3pro background + ink brushstroke.
 magick "$background" "$foreground" -composite -depth 8 "$composite"
 
-# Dark appearance: dimmed background, white brushstroke so the ink stays
-# legible on a dark field. Tinted appearance: white brushstroke on black for
-# the system to colourise.
+# Dark appearance uses a muted copper stroke on warm charcoal. It stays within
+# the ink-and-paper palette without the harsh white-on-black inversion.
 dark_composite="$root/Resources/AppIcon-dark.png"
 tinted_composite="$root/Resources/AppIcon-tinted.png"
 fg_white="$root/Resources/.AppIcon-fg-white.png"
-bg_dark="$root/Resources/.AppIcon-bg-dark.png"
+fg_dark="$root/Resources/.AppIcon-fg-dark.png"
 
 magick "$foreground" -fill white -colorize 100% -depth 8 "$fg_white"
-magick "$background" -modulate 22 -depth 8 "$bg_dark"
-magick "$bg_dark" "$fg_white" -compose over -composite -depth 8 "$dark_composite"
+magick "$foreground" -fill "#C99B63" -colorize 100% -depth 8 "$fg_dark"
+magick -size 1024x1024 "xc:#29231F" "$fg_dark" -compose over -composite \
+  -alpha remove -alpha off -depth 8 "$dark_composite"
 magick -size 1024x1024 xc:black "$fg_white" -compose over -composite \
   -colorspace sRGB -depth 8 "$tinted_composite"
 
-rm -f "$mask" "$fg_white" "$bg_dark"
+rm -f "$mask" "$fg_white" "$fg_dark"
 
 # Emit the iOS fallback appiconset: light / dark / tinted single-size entries.
 # iOS 26 and macOS 26 use Resources/AppIcon.icon below.
@@ -138,19 +138,39 @@ magick "$foreground" -trim +repage -resize 720x -depth 8 "$icon_composer_assets/
 cat > "$icon_composer/icon.json" <<JSON
 {
   "color-space-for-untagged-svg-colors" : "display-p3",
-  "fill" : {
-    "linear-gradient" : [
-      "srgb:0.94902,0.88235,0.75294,1.00000",
-      "srgb:0.85098,0.74902,0.58431,1.00000"
-    ]
-  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.94902,0.88235,0.75294,1.00000",
+          "srgb:0.85098,0.74902,0.58431,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "srgb:0.16078,0.13725,0.12157,1.00000"
+      }
+    }
+  ],
   "groups" : [
     {
       "blend-mode" : "normal",
       "layers" : [
         {
           "blend-mode" : "normal",
-          "fill" : "automatic",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.78824,0.60784,0.38824,1.00000"
+              }
+            }
+          ],
           "glass" : true,
           "hidden" : false,
           "image-name" : "brushstroke.png",

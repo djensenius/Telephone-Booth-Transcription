@@ -51,6 +51,17 @@ public enum MessageStatus: Codable, Sendable, Hashable {
     }
 
     public var displayName: String { rawValue.capitalized }
+
+    /// Whether the Operator API accepts review corrections in this state.
+    /// Unknown future states fail closed until their semantics are understood.
+    public var allowsReviewChanges: Bool {
+        switch self {
+        case .received, .pending, .approved, .rejected:
+            return true
+        case .uploading, .unknown:
+            return false
+        }
+    }
 }
 
 public enum AiProvider: Codable, Sendable, Hashable {

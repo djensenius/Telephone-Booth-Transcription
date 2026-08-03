@@ -36,6 +36,9 @@ struct ReviewDetailView: View {
     }
 
     private var isActing: Bool { store.isActing(on: message.id) }
+    /// The Operator accepts corrections and replacement decisions only for
+    /// explicitly supported states after an upload has completed.
+    private var canModify: Bool { message.status.allowsReviewChanges }
     private var output: OnDeviceReviewPipeline.Output? { onDevice?.outputs[message.id] }
     private var advice: AIRecommendation? {
         AIRecommendation(message: message)
@@ -94,7 +97,7 @@ struct ReviewDetailView: View {
                 }
                 transcriptCard
                 translationCard
-                if message.awaitingModerationDecision { decisionCard }
+                if canModify { decisionCard }
             }
             .padding(Theme.Spacing.large)
             .frame(maxWidth: 720, alignment: .leading)
@@ -203,7 +206,7 @@ struct ReviewDetailView: View {
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
-            if message.isReviewable,
+            if canModify,
                let onDevice,
                onDevice.supportsModeration,
                let text = operatorEnglish {
@@ -249,7 +252,7 @@ struct ReviewDetailView: View {
     @ViewBuilder
     private var noRecommendationCard: some View {
         let state = moderationDisplayState
-        let canRunLocal = message.isReviewable
+        let canRunLocal = canModify
             && (onDevice?.supportsModeration ?? false)
             && englishForModeration != nil
         // Nothing to say and nothing to do — don't render an empty card. Only
@@ -385,7 +388,8 @@ struct ReviewDetailView: View {
     /// Posts the on-device verdict to the Operator and, on success, clears the
     /// local result so it can't be submitted twice.
     private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
-        guard localVerdictIsSubmittable,
+        guard canModify,
+              localVerdictIsSubmittable,
               let output, let recommendation = output.recommendation else { return }
         let submitted = await store.submitModeration(
             message,
@@ -498,6 +502,7 @@ struct ReviewDetailView: View {
         text: String,
         saveToOperator: Bool
     ) async {
+        guard canModify else { return }
         let recommendation = await onDevice.moderateOnly(
             text,
             transcript: message.latestTranscription?.text ?? text,
@@ -523,7 +528,8 @@ struct ReviewDetailView: View {
     private func saveGeneratedRecommendation(
         using onDevice: OnDeviceReviewPipeline
     ) async -> Bool {
-        guard let output = onDevice.outputs[message.id],
+        guard canModify,
+              let output = onDevice.outputs[message.id],
               let recommendation = output.recommendation else { return false }
         return await store.submitModeration(
             message,
@@ -607,13 +613,13 @@ struct ReviewDetailView: View {
                 } else {
                     bodyText(output.transcript)
                 }
-                if localReviewDraft != nil {
+                if localReviewDraft != nil, canModify {
                     // The transcript and the translation it produced are
                     // submitted together from the translation card below, so
                     // there is no separate transcript submit here.
                     caption("Translated and checked below — review the translation, "
                             + "then submit both in one step.")
-                } else {
+                } else if canModify {
                     caption(message.latestTranscription == nil
                             ? (isActing
                                ? "Saving this first transcript to the Operator server…"
@@ -638,7 +644,7 @@ struct ReviewDetailView: View {
             // The controls that produce this text belong with it. Kept as a
             // footer rather than a card of its own so the detail reads as one
             // step per card: transcript, translation, decision.
-            if message.isReviewable, canRunTranscription { transcriptionRunFooter }
+            if canModify, canRunTranscription { transcriptionRunFooter }
         }
     }
 
@@ -714,12 +720,12 @@ struct ReviewDetailView: View {
                         : "Waiting on a transcript.")
             }
 
-            if message.needsTranslation {
+            if message.needsTranslation, canModify {
                 onDeviceTranslateActions
                 translationEditor
-            } else if localReviewDraft != nil {
+            } else if localReviewDraft != nil, canModify {
                 localReviewDraftEditor
-            } else if message.translationText != nil, message.isReviewable {
+            } else if message.translationText != nil, canModify {
                 translationRegenerationActions
                 if !translationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     translationEditor
@@ -909,6 +915,7 @@ struct ReviewDetailView: View {
         using onDevice: OnDeviceReviewPipeline,
         saveToOperator: Bool
     ) async {
+        guard canModify else { return }
         let draftBefore = translationDraft
         let translation: String?
         if message.needsTranscriptionWork {
@@ -976,7 +983,9 @@ struct ReviewDetailView: View {
 
     private var decisionCard: some View {
         card(title: "Decision", systemImage: "checkmark.seal") {
-            if message.nextStep != .decision {
+            if !message.isReviewable {
+                caption("Current decision: \(message.status.displayName). You can replace it below.")
+            } else if message.nextStep != .decision {
                 caption("You can decide now, or finish the step above first for more context.")
             }
 
@@ -1074,6 +1083,7 @@ struct ReviewDetailView: View {
         _ output: OnDeviceReviewPipeline.Output,
         using onDevice: OnDeviceReviewPipeline
     ) async {
+        guard canModify else { return }
         let submitted = await store.submitTranscription(
             message,
             text: output.transcript,

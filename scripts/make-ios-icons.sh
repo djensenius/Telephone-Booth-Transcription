@@ -5,7 +5,7 @@
 # The variants are derived from the same sumi-ink brush-stroke source used by
 # scripts/make-icon.sh:
 #   - Light:   the warm-background composite (black brush stroke on warm paper).
-#   - Dark:    the brush stroke recoloured to warm off-white on a dark ground.
+#   - Dark:    a muted copper brush stroke on warm charcoal.
 #   - Tinted:  a grayscale luminance mask (light stroke on black) that the system
 #              recolours with the user's chosen tint.
 set -euo pipefail
@@ -34,12 +34,11 @@ mkdir -p "$appiconset"
 magick "$composite" -resize 1024x1024! -alpha remove -alpha off -depth 8 \
   "$appiconset/AppIcon-light-1024.png"
 
-# Dark: warm off-white brush stroke on a dark warm ground.
-# Extract the stroke alpha, paint it off-white, then flatten on a dark ground.
+# Dark: muted copper stroke on a warm charcoal field.
 magick "$foreground" -resize 1024x1024! -alpha extract "$appiconset/.alpha.png"
-magick -size 1024x1024 "xc:#efe6d6" "$appiconset/.alpha.png" \
+magick -size 1024x1024 "xc:#C99B63" "$appiconset/.alpha.png" \
   -alpha off -compose CopyOpacity -composite "$appiconset/.stroke.png"
-magick -size 1024x1024 "xc:#1c1814" "$appiconset/.stroke.png" -composite \
+magick -size 1024x1024 "xc:#29231F" "$appiconset/.stroke.png" -composite \
   -alpha remove -alpha off -depth 8 \
   "$appiconset/AppIcon-dark-1024.png"
 

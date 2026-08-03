@@ -66,6 +66,17 @@ struct ReviewModelsTests {
         """
         let list = try decodeMessageList(json)
         #expect(list.items.first?.status == .unknown("quarantined"))
+        #expect(list.items.first?.status.allowsReviewChanges == false)
+    }
+
+    @Test("only known completed-upload states allow review changes")
+    func classifiesEditableMessageStatuses() {
+        #expect(MessageStatus.received.allowsReviewChanges)
+        #expect(MessageStatus.pending.allowsReviewChanges)
+        #expect(MessageStatus.approved.allowsReviewChanges)
+        #expect(MessageStatus.rejected.allowsReviewChanges)
+        #expect(!MessageStatus.uploading.allowsReviewChanges)
+        #expect(!MessageStatus.unknown("quarantined").allowsReviewChanges)
     }
 
     @Test("a succeeded transcription with no translation needs translation")

@@ -73,6 +73,26 @@ struct ReviewClientTests {
         #expect(client.lastDecisionNotes == "ok")
     }
 
+    @Test("decide can replace an existing decision")
+    @MainActor
+    func decideReplacesExistingDecision() async {
+        let client = ActionClient()
+        let store = ReviewStore(client: client, pollInterval: .seconds(1))
+        await store.refresh()
+        let target = try! #require(store.awaitingModeration.first)
+
+        client.decisionResult = .success(target.approved())
+        await store.decide(target, .approve)
+        let approved = try! #require(store.message(id: target.id))
+
+        client.decisionResult = .success(approved.rejected())
+        await store.decide(approved, .reject, notes: "changed after review")
+
+        #expect(store.message(id: target.id)?.status == .rejected)
+        #expect(client.lastDecisionNotes == "changed after review")
+        #expect(store.actionError == nil)
+    }
+
     @Test("submitTranslation clears the message from the translation bucket")
     @MainActor
     func translationUpdatesState() async {
@@ -746,6 +766,14 @@ private extension Message {
     func approved() -> Message {
         Message(
             id: id, status: .approved, questionId: questionId, notes: notes,
+            createdAt: createdAt, receivedAt: receivedAt, audio: audio,
+            latestTranscription: latestTranscription, latestModeration: latestModeration
+        )
+    }
+
+    func rejected() -> Message {
+        Message(
+            id: id, status: .rejected, questionId: questionId, notes: notes,
             createdAt: createdAt, receivedAt: receivedAt, audio: audio,
             latestTranscription: latestTranscription, latestModeration: latestModeration
         )
