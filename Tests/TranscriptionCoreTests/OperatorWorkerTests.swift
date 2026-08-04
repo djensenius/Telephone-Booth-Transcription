@@ -138,6 +138,7 @@ struct OperatorWorkerTests {
     }
 
     private func workInput(id: String) -> OperatorWorkInput {
+        let translationInputSHA256 = String(repeating: "b", count: 64)
         let moderationInputSHA256 = String(repeating: "a", count: 64)
         return OperatorWorkInput(
             id: id,
@@ -147,6 +148,7 @@ struct OperatorWorkerTests {
                 id: "tr-\(id)",
                 text: "bonjour",
                 language: "fr",
+                translationInputSha256: translationInputSHA256,
                 moderationText: "hello",
                 moderationInputSha256: moderationInputSHA256
             )
@@ -184,6 +186,30 @@ struct OperatorWorkerTests {
         #expect(status.lastJobID == "m1")
         #expect(status.lastJobKind == .moderation)
         #expect(status.consecutiveFailures == 0)
+    }
+
+    @Test func translationPushIncludesTheReviewedTranscriptHash() async throws {
+        let client = FakeClient()
+        let channel = FakeChannel()
+        let dispatcher = FakeDispatcher()
+        await client.setInput(workInput(id: "translation"), for: "translation")
+        await channel.enqueue(.init(messageId: "translation", needs: [.translation]))
+        await dispatcher.setResult(.translation(
+            translatedText: "hello",
+            sourceLanguage: "fr",
+            targetLanguage: "en",
+            model: nil
+        ))
+
+        let worker = OperatorWorker(client: client, dispatcher: dispatcher, workChannel: channel,
+                                    reconnectBaseSeconds: 1, logger: Logger(label: "test"))
+        await worker.start()
+        try await Task.sleep(nanoseconds: 200_000_000)
+        await worker.stop()
+
+        let push = try #require(await client.pushCalls.first)
+        #expect(push.transcriptionID == "tr-translation")
+        #expect(push.inputSHA256 == String(repeating: "b", count: 64))
     }
 
     @Test func dispatcherErrorRecordsErrorWithoutPush() async throws {

@@ -453,15 +453,22 @@ public actor OperatorWorker {
                 return
             }
             let result = try await dispatcher.execute(job: job)
+            let inputSha256: String?
+            switch need {
+            case .translation:
+                inputSha256 = input.transcription?.translationInputSha256
+            case .moderation:
+                inputSha256 = input.transcription?.moderationInputSha256
+            case .transcription:
+                inputSha256 = nil
+            }
             try await client.pushResult(
                 messageID: messageID,
                 transcriptionId: transcriptionID(for: need, input: input, force: force),
                 expectedLatestTranscriptionId: need == .transcription
                     ? input.transcription?.id
                     : nil,
-                inputSha256: need == .moderation
-                    ? input.transcription?.moderationInputSha256
-                    : nil,
+                inputSha256: inputSha256,
                 result: result
             )
             recordSuccess(jobID: messageID, kind: need)
