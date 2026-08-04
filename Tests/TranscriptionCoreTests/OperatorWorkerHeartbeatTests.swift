@@ -116,12 +116,13 @@ struct OperatorWorkerPushFilterTests {
     }
 
     @Test func workInputBuildsTranslationJobWithTranscriptionIDAvailable() throws {
+        let source = "\u{00A0}\u{FEFF}\u{0085}bonjour\u{0085}\u{2029}"
         let input = OperatorWorkInput(
             id: "m",
             status: "pending",
             transcription: .init(
                 id: "tr",
-                text: "bonjour",
+                text: source,
                 language: "fr",
                 moderationText: "hello",
                 moderationInputSha256: String(repeating: "a", count: 64)
@@ -131,7 +132,7 @@ struct OperatorWorkerPushFilterTests {
         #expect(job.id == "m")
         #expect(job.kind == .translation)
         if case .translation(let payload) = job.payload {
-            #expect(payload.input == "bonjour")
+            #expect(payload.input == "\u{0085}bonjour\u{0085}")
             #expect(payload.sourceLanguage == "fr")
         } else {
             Issue.record("expected translation payload")

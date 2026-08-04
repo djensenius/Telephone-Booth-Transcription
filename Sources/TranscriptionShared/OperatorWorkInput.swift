@@ -116,12 +116,14 @@ public struct OperatorWorkInput: Sendable, Equatable, Decodable {
                 ))
             )
         case .translation:
-            guard let transcription, !transcription.text.isEmpty else { return nil }
+            guard let transcription else { return nil }
+            let input = ECMAScriptText.trim(transcription.text)
+            guard !input.isEmpty else { return nil }
             return OperatorJob(
                 id: id,
                 leaseToken: "",
                 kind: .translation,
-                payload: .translation(.init(input: transcription.text, sourceLanguage: transcription.language))
+                payload: .translation(.init(input: input, sourceLanguage: transcription.language))
             )
         case .moderation:
             guard let transcription,
