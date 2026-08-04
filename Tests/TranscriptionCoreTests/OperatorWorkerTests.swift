@@ -55,6 +55,8 @@ struct OperatorWorkerTests {
         nonisolated func pushResult(
             messageID: String,
             transcriptionId: String?,
+            expectedLatestTranscriptionId: String?,
+            inputSha256: String?,
             result: OperatorJobResult
         ) async throws {
             await self.recordPush(messageID: messageID, transcriptionId: transcriptionId, result: result)
@@ -124,7 +126,13 @@ struct OperatorWorkerTests {
             id: id,
             status: "pending",
             audio: .init(url: "https://example.invalid/audio.flac", sha256: String(repeating: "a", count: 64)),
-            transcription: .init(id: "tr-\(id)", text: "bonjour", language: "fr", moderationText: "hello")
+            transcription: .init(
+                id: "tr-\(id)",
+                text: "bonjour",
+                language: "fr",
+                moderationText: "hello",
+                moderationInputSha256: String(repeating: "a", count: 64)
+            )
         )
     }
 

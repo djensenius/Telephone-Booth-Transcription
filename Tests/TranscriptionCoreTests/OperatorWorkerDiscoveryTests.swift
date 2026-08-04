@@ -64,6 +64,8 @@ struct OperatorWorkerDiscoveryTests {
         nonisolated func pushResult(
             messageID: String,
             transcriptionId: String?,
+            expectedLatestTranscriptionId: String?,
+            inputSha256: String?,
             result: OperatorJobResult
         ) async throws {
             await self.record(messageID: messageID, transcriptionId: transcriptionId, result: result)

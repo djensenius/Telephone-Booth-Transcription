@@ -456,6 +456,12 @@ public actor OperatorWorker {
             try await client.pushResult(
                 messageID: messageID,
                 transcriptionId: transcriptionID(for: need, input: input, force: force),
+                expectedLatestTranscriptionId: need == .transcription
+                    ? input.transcription?.id
+                    : nil,
+                inputSha256: need == .moderation
+                    ? input.transcription?.moderationInputSha256
+                    : nil,
                 result: result
             )
             recordSuccess(jobID: messageID, kind: need)

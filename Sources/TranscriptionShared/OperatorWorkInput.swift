@@ -64,10 +64,12 @@ public struct OperatorWorkInput: Sendable, Equatable, Decodable {
         public var translationStatus: String?
         public var translatedText: String?
         public var moderationText: String?
+        public var moderationInputSha256: String?
 
         public init(id: String, text: String, language: String? = nil, model: String? = nil,
                     translationStatus: String? = nil, translatedText: String? = nil,
-                    moderationText: String? = nil, status: String? = nil) {
+                    moderationText: String? = nil, moderationInputSha256: String? = nil,
+                    status: String? = nil) {
             self.id = id
             self.text = text
             self.status = status
@@ -76,6 +78,7 @@ public struct OperatorWorkInput: Sendable, Equatable, Decodable {
             self.translationStatus = translationStatus
             self.translatedText = translatedText
             self.moderationText = moderationText
+            self.moderationInputSha256 = moderationInputSha256
         }
     }
 
@@ -119,8 +122,8 @@ public struct OperatorWorkInput: Sendable, Equatable, Decodable {
             )
         case .moderation:
             guard let transcription,
-                  let input = transcription.moderationText?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !input.isEmpty else { return nil }
+                  let input = transcription.moderationText,
+                  !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             return OperatorJob(id: id, leaseToken: "", kind: .moderation,
                                payload: .moderation(.init(input: input)))
         }
