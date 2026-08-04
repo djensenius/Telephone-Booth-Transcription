@@ -267,6 +267,28 @@ struct OnDeviceReviewPipelineTests {
         #expect(pipeline.stage(for: "m1") == .finished)
     }
 
+    @Test func moderationCanonicalizationMatchesTheOperator() async {
+        let moderator = SpyModerator()
+        let pipeline = OnDeviceReviewPipeline(
+            dispatcher: InProcessOperatorJobDispatcher(
+                transcriber: StubTranscriber(),
+                translator: StubTranslator(),
+                moderator: moderator,
+                audioFetcher: StubAudioFetcher()
+            ),
+            transcriptionModel: "apple-speech-analyzer"
+        )
+        let canonical = "\u{0085}hello\u{0085}"
+
+        #expect(await pipeline.moderateOnly(
+            " \n\(canonical)\u{FEFF}",
+            transcript: "bonjour",
+            language: "fr",
+            for: "m1"
+        ) == "approve")
+        #expect(moderator.receivedInput == canonical)
+    }
+
     // MARK: - Failure handling
 
     @Test func emptyTranscriptFails() async {
