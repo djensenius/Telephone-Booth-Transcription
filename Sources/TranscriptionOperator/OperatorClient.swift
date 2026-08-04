@@ -137,8 +137,12 @@ public final class HTTPOperatorClient: OperatorClient {
             guard let transcriptionId, !transcriptionId.isEmpty else {
                 throw OperatorClientError.missingTranscriptionId
             }
+            guard let inputSha256, !inputSha256.isEmpty else {
+                throw OperatorClientError.malformedResponse("missing translation input hash")
+            }
             let body: [String: Any] = [
                 "transcriptionId": transcriptionId,
+                "inputSha256": inputSha256,
                 "translatedText": translatedText,
                 "sourceLanguage": sourceLanguage ?? NSNull(),
                 "targetLanguage": targetLanguage,
