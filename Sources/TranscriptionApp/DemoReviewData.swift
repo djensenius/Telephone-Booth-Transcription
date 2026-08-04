@@ -97,6 +97,7 @@ actor DemoOperatorReviewClient: OperatorReviewClient {
     func submitModeration(
         messageID: String,
         transcriptionId: String?,
+        inputText: String?,
         flagged: Bool,
         recommendation: String,
         maxScore: Double,

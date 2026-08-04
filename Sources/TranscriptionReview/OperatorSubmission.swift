@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Shaping rules the Operator imposes on what this app submits. They live here,
@@ -29,5 +30,12 @@ public enum OperatorSubmission {
     public static func metadata(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (trimmed?.isEmpty == false) ? trimmed : nil
+    }
+
+    public static func sha256(_ value: String?) -> String? {
+        guard let value else { return nil }
+        return SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 }

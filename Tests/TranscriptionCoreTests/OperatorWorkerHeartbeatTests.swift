@@ -28,6 +28,8 @@ struct OperatorWorkerPushFilterTests {
         nonisolated func pushResult(
             messageID: String,
             transcriptionId: String?,
+            expectedLatestTranscriptionId: String?,
+            inputSha256: String?,
             result: OperatorJobResult
         ) async throws {
             await bump()
@@ -77,7 +79,13 @@ struct OperatorWorkerPushFilterTests {
         let input = OperatorWorkInput(
             id: "m",
             status: "pending",
-            transcription: .init(id: "tr", text: "bonjour", language: "fr", moderationText: "hello")
+            transcription: .init(
+                id: "tr",
+                text: "bonjour",
+                language: "fr",
+                moderationText: "hello",
+                moderationInputSha256: String(repeating: "a", count: 64)
+            )
         )
         await client.setInput(input, for: "m")
         let channel = ScriptedChannel(envelopes: [.init(messageId: "m", needs: [.translation, .moderation])])
@@ -111,7 +119,13 @@ struct OperatorWorkerPushFilterTests {
         let input = OperatorWorkInput(
             id: "m",
             status: "pending",
-            transcription: .init(id: "tr", text: "bonjour", language: "fr", moderationText: "hello")
+            transcription: .init(
+                id: "tr",
+                text: "bonjour",
+                language: "fr",
+                moderationText: "hello",
+                moderationInputSha256: String(repeating: "a", count: 64)
+            )
         )
         let job = try #require(input.makeJob(for: .translation))
         #expect(job.id == "m")
@@ -121,6 +135,27 @@ struct OperatorWorkerPushFilterTests {
             #expect(payload.sourceLanguage == "fr")
         } else {
             Issue.record("expected translation payload")
+        }
+    }
+
+    @Test func workInputPreservesTheOperatorsCanonicalModerationText() throws {
+        let canonical = "\u{0085}hello\u{0085}"
+        let input = OperatorWorkInput(
+            id: "m",
+            status: "pending",
+            transcription: .init(
+                id: "tr",
+                text: "bonjour",
+                moderationText: canonical,
+                moderationInputSha256: String(repeating: "a", count: 64)
+            )
+        )
+
+        let job = try #require(input.makeJob(for: .moderation))
+        if case .moderation(let payload) = job.payload {
+            #expect(payload.input == canonical)
+        } else {
+            Issue.record("expected moderation payload")
         }
     }
 }

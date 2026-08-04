@@ -7,6 +7,7 @@ import TranscriptionShared
 struct PushCall: Sendable, Equatable {
     var messageID: String
     var transcriptionID: String?
+    var inputSHA256: String?
     var result: OperatorJobResult
 }
 
@@ -55,13 +56,30 @@ struct OperatorWorkerTests {
         nonisolated func pushResult(
             messageID: String,
             transcriptionId: String?,
+            expectedLatestTranscriptionId: String?,
+            inputSha256: String?,
             result: OperatorJobResult
         ) async throws {
-            await self.recordPush(messageID: messageID, transcriptionId: transcriptionId, result: result)
+            await self.recordPush(
+                messageID: messageID,
+                transcriptionId: transcriptionId,
+                inputSha256: inputSha256,
+                result: result
+            )
         }
 
-        func recordPush(messageID: String, transcriptionId: String?, result: OperatorJobResult) {
-            pushCalls.append(.init(messageID: messageID, transcriptionID: transcriptionId, result: result))
+        func recordPush(
+            messageID: String,
+            transcriptionId: String?,
+            inputSha256: String?,
+            result: OperatorJobResult
+        ) {
+            pushCalls.append(.init(
+                messageID: messageID,
+                transcriptionID: transcriptionId,
+                inputSHA256: inputSha256,
+                result: result
+            ))
         }
     }
 
@@ -120,11 +138,18 @@ struct OperatorWorkerTests {
     }
 
     private func workInput(id: String) -> OperatorWorkInput {
-        OperatorWorkInput(
+        let moderationInputSHA256 = String(repeating: "a", count: 64)
+        return OperatorWorkInput(
             id: id,
             status: "pending",
             audio: .init(url: "https://example.invalid/audio.flac", sha256: String(repeating: "a", count: 64)),
-            transcription: .init(id: "tr-\(id)", text: "bonjour", language: "fr", moderationText: "hello")
+            transcription: .init(
+                id: "tr-\(id)",
+                text: "bonjour",
+                language: "fr",
+                moderationText: "hello",
+                moderationInputSha256: moderationInputSHA256
+            )
         )
     }
 
@@ -146,6 +171,7 @@ struct OperatorWorkerTests {
         #expect(pushes.count == 1)
         #expect(pushes.first?.messageID == "m1")
         #expect(pushes.first?.transcriptionID == "tr-m1")
+        #expect(pushes.first?.inputSHA256 == String(repeating: "a", count: 64))
         #expect(pushes.first?.result == .moderation(
             flagged: false,
             recommendation: "approve",

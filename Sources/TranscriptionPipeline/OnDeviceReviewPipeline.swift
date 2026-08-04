@@ -19,6 +19,20 @@ import TranscriptionShared
 @MainActor
 @Observable
 public final class OnDeviceReviewPipeline {
+    private static let ecmaScriptTrimCharacters = CharacterSet(
+        charactersIn: "\u{0009}\u{000B}\u{000C}\u{0020}\u{00A0}\u{1680}"
+            + "\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}"
+            + "\u{2007}\u{2008}\u{2009}\u{200A}\u{202F}\u{205F}\u{3000}"
+            + "\u{FEFF}\u{000A}\u{000D}\u{2028}\u{2029}"
+    )
+
+    /// Matches JavaScript `String.trim()`, which the Operator uses before
+    /// hashing moderation input. Foundation's whitespace set also removes
+    /// U+0085, so using it here would classify different bytes than the server.
+    public static func canonicalModerationInput(_ text: String) -> String {
+        text.trimmingCharacters(in: ecmaScriptTrimCharacters)
+    }
+
     /// The subset of a review message this pipeline needs. Kept separate from
     /// the operator's `Message` model so the orchestration stays independent of
     /// the review client (and testable without it).
@@ -362,9 +376,10 @@ public final class OnDeviceReviewPipeline {
         operations[messageID] = .moderate
         stages[messageID] = .moderating
 
+        let moderationInput = Self.canonicalModerationInput(english)
         let verdict: ModerationVerdict
         do {
-            verdict = try await moderate(english)
+            verdict = try await moderate(moderationInput)
         } catch {
             guard isCurrent(messageID, generation) else { return nil }
             fail(messageID, error, verb: "moderate that text")
@@ -497,7 +512,7 @@ public final class OnDeviceReviewPipeline {
         guard case .translation(let translated, _, _, _) = try await dispatcher.execute(job: job) else {
             throw OperatorJobError(code: "translation_failed", message: "local translation failed")
         }
-        return translated
+        return translated.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func moderate(_ input: String) async throws -> ModerationVerdict {

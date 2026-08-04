@@ -14,7 +14,13 @@ public protocol OperatorClient: Sendable {
     /// pass, which no longer depends on `work` envelopes for transcription.
     func listWork(needs: OperatorWorkNeeds, limit: Int, cursor: String?) async throws -> OperatorWorkListPage
     func fetchWorkInput(messageID: String) async throws -> OperatorWorkInput
-    func pushResult(messageID: String, transcriptionId: String?, result: OperatorJobResult) async throws
+    func pushResult(
+        messageID: String,
+        transcriptionId: String?,
+        expectedLatestTranscriptionId: String?,
+        inputSha256: String?,
+        result: OperatorJobResult
+    ) async throws
 }
 
 public enum OperatorClientError: Error, Sendable, Equatable {
@@ -107,13 +113,20 @@ public final class HTTPOperatorClient: OperatorClient {
         }
     }
 
-    public func pushResult(messageID: String, transcriptionId: String?, result: OperatorJobResult) async throws {
+    public func pushResult(
+        messageID: String,
+        transcriptionId: String?,
+        expectedLatestTranscriptionId: String?,
+        inputSha256: String?,
+        result: OperatorJobResult
+    ) async throws {
         switch result {
         case .transcription(let text, let language, let model):
             var body: [String: Any] = [
                 "text": text,
                 "language": language ?? NSNull(),
-                "model": model ?? NSNull()
+                "model": model ?? NSNull(),
+                "expectedLatestTranscriptionId": expectedLatestTranscriptionId ?? NSNull()
             ]
             // Only sent when the Operator pre-created a pending row for this job.
             if let transcriptionId, !transcriptionId.isEmpty {
@@ -133,8 +146,15 @@ public final class HTTPOperatorClient: OperatorClient {
             ]
             try await postJSON(path: "/v1/worker/messages/\(escape(messageID))/translation", body: body)
         case .moderation(let flagged, let recommendation, let maxScore, let model):
+            guard let transcriptionId, !transcriptionId.isEmpty else {
+                throw OperatorClientError.missingTranscriptionId
+            }
+            guard let inputSha256, !inputSha256.isEmpty else {
+                throw OperatorClientError.malformedResponse("missing moderation input hash")
+            }
             let body: [String: Any] = [
-                "transcriptionId": transcriptionId ?? NSNull(),
+                "transcriptionId": transcriptionId,
+                "inputSha256": inputSha256,
                 "flagged": flagged,
                 "recommendation": normalizedRecommendation(recommendation),
                 "maxScore": max(0, min(1, maxScore)),

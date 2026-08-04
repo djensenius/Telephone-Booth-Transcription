@@ -353,8 +353,8 @@ struct ReviewDetailView: View {
         guard let moderatedText, let operatorEnglish else { return false }
         // Trim-insensitive: the transport trims, so the Operator's copy of a
         // draft that had stray whitespace is the trimmed form of it.
-        return moderatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-            == operatorEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
+        return OnDeviceReviewPipeline.canonicalModerationInput(moderatedText)
+            == OnDeviceReviewPipeline.canonicalModerationInput(operatorEnglish)
     }
 
     /// Retires the local work behind a translation that has just landed on the
@@ -370,8 +370,8 @@ struct ReviewDetailView: View {
         // The transport trims before sending, so the Operator's copy of record
         // is the trimmed text. Compare — and retain — the same form, or a draft
         // with stray whitespace would never match what came back.
-        let sent = submitted.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard moderatedText?.trimmingCharacters(in: .whitespacesAndNewlines) == sent,
+        let sent = OnDeviceReviewPipeline.canonicalModerationInput(submitted)
+        guard moderatedText.map(OnDeviceReviewPipeline.canonicalModerationInput) == sent,
               output?.recommendation != nil else {
             onDevice?.reset(message.id)
             drafts.clear(message.id)
@@ -390,9 +390,11 @@ struct ReviewDetailView: View {
     private func submitLocalVerdict(using onDevice: OnDeviceReviewPipeline) async {
         guard canModify,
               localVerdictIsSubmittable,
+              let moderationInput = moderatedText,
               let output, let recommendation = output.recommendation else { return }
         let submitted = await store.submitModeration(
             message,
+            inputText: moderationInput,
             flagged: output.flagged ?? false,
             recommendation: recommendation,
             maxScore: output.maxScore ?? 0,
@@ -503,8 +505,9 @@ struct ReviewDetailView: View {
         saveToOperator: Bool
     ) async {
         guard canModify else { return }
+        let moderationInput = OnDeviceReviewPipeline.canonicalModerationInput(text)
         let recommendation = await onDevice.moderateOnly(
-            text,
+            moderationInput,
             transcript: message.latestTranscription?.text ?? text,
             language: message.latestTranscription?.language,
             for: message.id
@@ -516,23 +519,25 @@ struct ReviewDetailView: View {
             onDevice.clearModeration(message.id)
             return
         }
-        moderatedText = text
+        moderatedText = moderationInput
         if saveToOperator,
-           matchesCurrentOperatorEnglish(text),
-           await saveGeneratedRecommendation(using: onDevice) {
+           matchesCurrentOperatorEnglish(moderationInput),
+           await saveGeneratedRecommendation(using: onDevice, inputText: moderationInput) {
             onDevice.clearModeration(message.id)
             moderatedText = nil
         }
     }
 
     private func saveGeneratedRecommendation(
-        using onDevice: OnDeviceReviewPipeline
+        using onDevice: OnDeviceReviewPipeline,
+        inputText: String
     ) async -> Bool {
         guard canModify,
               let output = onDevice.outputs[message.id],
               let recommendation = output.recommendation else { return false }
         return await store.submitModeration(
             message,
+            inputText: inputText,
             flagged: output.flagged ?? false,
             recommendation: recommendation,
             maxScore: output.maxScore ?? 0,
@@ -544,8 +549,8 @@ struct ReviewDetailView: View {
         guard let current = store.message(id: message.id) else { return false }
         let currentEnglish = current.translationText ?? current.latestTranscription?.text
         guard let currentEnglish else { return false }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
-            == currentEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
+        return OnDeviceReviewPipeline.canonicalModerationInput(text)
+            == OnDeviceReviewPipeline.canonicalModerationInput(currentEnglish)
     }
 
     /// What a local moderation run should classify: the English the operator

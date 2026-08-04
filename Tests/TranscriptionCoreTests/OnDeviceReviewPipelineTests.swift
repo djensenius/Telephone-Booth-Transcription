@@ -248,11 +248,12 @@ struct OnDeviceReviewPipelineTests {
     /// current locale has no speech model. Classifying text the Operator
     /// already holds needs no transcriber at all.
     @Test func moderationWorksWithoutATranscriber() async {
+        let moderator = SpyModerator()
         let pipeline = OnDeviceReviewPipeline(
             dispatcher: InProcessOperatorJobDispatcher(
                 transcriber: nil,
                 translator: StubTranslator(),
-                moderator: StubModerator(),
+                moderator: moderator,
                 audioFetcher: StubAudioFetcher()
             ),
             transcriptionModel: nil
@@ -260,9 +261,32 @@ struct OnDeviceReviewPipelineTests {
 
         #expect(pipeline.supportsTranscription == false)
         #expect(pipeline.supportsModeration)
-        #expect(await pipeline.moderateOnly("hello", transcript: "bonjour",
-                                            language: "fr", for: "m1") == "block")
+        #expect(await pipeline.moderateOnly("  hello \n", transcript: "bonjour",
+                                            language: "fr", for: "m1") == "approve")
+        #expect(moderator.receivedInput == "hello")
         #expect(pipeline.stage(for: "m1") == .finished)
+    }
+
+    @Test func moderationCanonicalizationMatchesTheOperator() async {
+        let moderator = SpyModerator()
+        let pipeline = OnDeviceReviewPipeline(
+            dispatcher: InProcessOperatorJobDispatcher(
+                transcriber: StubTranscriber(),
+                translator: StubTranslator(),
+                moderator: moderator,
+                audioFetcher: StubAudioFetcher()
+            ),
+            transcriptionModel: "apple-speech-analyzer"
+        )
+        let canonical = "\u{0085}hello\u{0085}"
+
+        #expect(await pipeline.moderateOnly(
+            " \n\(canonical)\u{FEFF}",
+            transcript: "bonjour",
+            language: "fr",
+            for: "m1"
+        ) == "approve")
+        #expect(moderator.receivedInput == canonical)
     }
 
     // MARK: - Failure handling
@@ -534,7 +558,7 @@ struct OnDeviceReviewPipelineTests {
         let pipeline = OnDeviceReviewPipeline(
             dispatcher: InProcessOperatorJobDispatcher(
                 transcriber: StubTranscriber(text: "bonjour"),
-                translator: StubTranslator(text: "hello"),
+                translator: StubTranslator(text: "  hello \n"),
                 moderator: moderator,
                 audioFetcher: StubAudioFetcher()
             ),
@@ -544,6 +568,7 @@ struct OnDeviceReviewPipelineTests {
         await pipeline.run(for: input())
 
         #expect(moderator.receivedInput == "hello")
+        #expect(pipeline.outputs["m1"]?.translation == "hello")
         #expect(pipeline.outputs["m1"]?.recommendation == "approve")
     }
 
