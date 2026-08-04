@@ -146,6 +146,7 @@
 		844AFC3A014B47A5488FC0BD /* MultipartFilePart.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C876821C6C463D8736854C /* MultipartFilePart.swift */; };
 		8506831E906C17E974C99EAC /* TranscriptionOnDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 224C8B3DA1B3BA56A24F6BF4 /* TranscriptionOnDevice.framework */; };
 		85F3F7B54A31CBD489629207 /* ProxyTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07439F83860C723C48DAE827 /* ProxyTranscriptionBackend.swift */; };
+		8651566848F979D3DCCBAEC1 /* ECMAScriptText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A273640D1484C2E08E88094 /* ECMAScriptText.swift */; };
 		87ED0AAB436FA65E0EB28DBE /* TextTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B41180B457AF420AC1D90 /* TextTranslator.swift */; };
 		887F942B2E527AFF09549D5A /* APIKeyStoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020BB961F3116444D91D359 /* APIKeyStoring.swift */; };
 		8D8B82EB7F2819DBAC3E8925 /* AppAuthConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45B48E2C59EDD65E83A554A /* AppAuthConfig.swift */; };
@@ -211,6 +212,7 @@
 		D6043B587692A0136BC773A7 /* OnDeviceReviewPipelineFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E017510E161DACF28EFD9B /* OnDeviceReviewPipelineFactory.swift */; };
 		D8228D718C3C4781EAEDAC0E /* AuthAnchorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 410F993584E3E22BA61858EF /* AuthAnchorProvider.swift */; };
 		DBBDAEA1D7EB89568DC308FF /* OperatorJobDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F599692AD5F0CE12A49E0A92 /* OperatorJobDispatcher.swift */; };
+		DBCC078530E0B7B7B2CB7325 /* ECMAScriptText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A273640D1484C2E08E88094 /* ECMAScriptText.swift */; };
 		DD06AB6BF619F74E2C866A2D /* NativeMacOSTranscriptionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75829394808888619BD6465 /* NativeMacOSTranscriptionBackend.swift */; };
 		DDA422E5A64752B9C65E9256 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 502BD8F936467717819437D2 /* Logging */; };
 		DEB8A8521978E3E543FA71DB /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2736FB1E3EF59690FF4FAA02 /* TokenStore.swift */; };
@@ -497,6 +499,7 @@
 		2DC1B92D07B162639013A1D3 /* TranslationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRoute.swift; sourceTree = "<group>"; };
 		2EACA09D600D816D4B2D9E7E /* OperatorReviewClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatorReviewClient.swift; sourceTree = "<group>"; };
 		3373E182AD91EF6E87E45896 /* TranscriptionRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRoute.swift; sourceTree = "<group>"; };
+		3A273640D1484C2E08E88094 /* ECMAScriptText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ECMAScriptText.swift; sourceTree = "<group>"; };
 		3B0F24327C5F58F88C66F976 /* ModerationRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModerationRoute.swift; sourceTree = "<group>"; };
 		3B677675667170EBC8F37CD4 /* Transcriber.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Transcriber.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C1FE06937F735B0793BD824 /* OpenAIUpstream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUpstream.swift; sourceTree = "<group>"; };
@@ -742,6 +745,7 @@
 		38FAB5A2BBAA5EEDF1242D01 /* TranscriptionShared */ = {
 			isa = PBXGroup;
 			children = (
+				3A273640D1484C2E08E88094 /* ECMAScriptText.swift */,
 				C7C19A26676186A2098968F1 /* OperatorJob.swift */,
 				87D229D9FFFD1DC06A5D418C /* OperatorPollingConfig.swift */,
 				B4C396E133C82E0416105D98 /* OperatorWorkInput.swift */,
@@ -1387,6 +1391,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DBCC078530E0B7B7B2CB7325 /* ECMAScriptText.swift in Sources */,
 				4A69A39458D90E2FEC2255DA /* OperatorJob.swift in Sources */,
 				507BB2673272B420FDBAD0C0 /* OperatorPollingConfig.swift in Sources */,
 				2278FFAA9DED60847E5FEF92 /* OperatorWorkInput.swift in Sources */,
@@ -1645,6 +1650,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8651566848F979D3DCCBAEC1 /* ECMAScriptText.swift in Sources */,
 				F8833CC770F56E7846154CA3 /* OperatorJob.swift in Sources */,
 				70AA212808346C01626AC06A /* OperatorPollingConfig.swift in Sources */,
 				2A34B713734C702F740CD7DD /* OperatorWorkInput.swift in Sources */,
