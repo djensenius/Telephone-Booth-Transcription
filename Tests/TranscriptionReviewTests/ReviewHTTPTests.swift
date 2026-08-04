@@ -301,6 +301,35 @@ struct ReviewHTTPTests {
         #expect(json["model"] == nil || json["model"] is NSNull)
     }
 
+    @Test("submitModeration requires input text and transcription ID together")
+    func submitModerationRequiresPairedInput() async {
+        let client = client(status: 202, body: "{}")
+        await #expect(throws: OperatorReviewError.invalidResponse) {
+            try await client.submitModeration(
+                messageID: "m",
+                transcriptionId: nil,
+                inputText: "hello",
+                flagged: false,
+                recommendation: "approve",
+                maxScore: 0.1,
+                reasonSummary: nil,
+                model: nil
+            )
+        }
+        await #expect(throws: OperatorReviewError.invalidResponse) {
+            try await client.submitModeration(
+                messageID: "m",
+                transcriptionId: "t",
+                inputText: nil,
+                flagged: false,
+                recommendation: "approve",
+                maxScore: 0.1,
+                reasonSummary: nil,
+                model: nil
+            )
+        }
+    }
+
     @Test("submitModeration folds a verdict onto the Operator's vocabulary")
     func submitModerationNormalizesRecommendation() async throws {
         let body = """

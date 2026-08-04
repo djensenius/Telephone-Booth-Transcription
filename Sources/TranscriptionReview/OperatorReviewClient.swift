@@ -174,7 +174,7 @@ public actor HTTPOperatorReviewClient: OperatorReviewClient {
             let model: String?
         }
         let normalizedTranscriptionId = OperatorSubmission.metadata(transcriptionId)
-        guard normalizedTranscriptionId == nil || inputText != nil else {
+        guard (normalizedTranscriptionId == nil) == (inputText == nil) else {
             throw OperatorReviewError.invalidResponse
         }
         let body = Body(

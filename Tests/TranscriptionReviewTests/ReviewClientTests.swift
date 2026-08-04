@@ -198,6 +198,9 @@ struct ReviewClientTests {
         #expect(store.actionError == nil)
         #expect(store.isActing(on: target.id) == false)
         #expect(client.lastModerationSubmission?.transcriptionId == target.latestTranscription?.id)
+        #expect(client.lastModerationSubmission?.inputText
+            == target.latestTranscription?.completedTranslation
+                ?? target.latestTranscription?.text)
         #expect(client.lastModerationSubmission?.recommendation == "reject")
         #expect(client.lastModerationSubmission?.maxScore == 0.82)
         let updated = store.messages.first(where: { $0.id == target.id })
@@ -426,7 +429,7 @@ struct ReviewClientTests {
                 expectedTranscriptionStatus: target.latestTranscription?.status,
                 expectedSourceTranscript: target.latestTranscription?.text,
                 transcript: nil,
-                translation: "hello",
+                translation: "  hello \n",
                 flagged: false,
                 recommendation: "approve"
             )
@@ -438,6 +441,7 @@ struct ReviewClientTests {
         #expect(await task.value == .failed)
         #expect(store.isWritingText(for: target.id) == false)
         #expect(store.messages.first(where: { $0.id == target.id })?.translationText == "hello")
+        #expect(client.lastModerationSubmission?.inputText == "hello")
     }
 
     @Test("generated translation refuses a superseded source transcription")
@@ -548,7 +552,12 @@ struct ReviewClientTests {
         private(set) var lastDecisionNotes: String?
         private(set) var lastTranscriptionSubmission: (text: String, language: String?, model: String?)?
         private(set) var lastModerationSubmission: (
-            transcriptionId: String?, flagged: Bool, recommendation: String, maxScore: Double, model: String?
+            transcriptionId: String?,
+            inputText: String?,
+            flagged: Bool,
+            recommendation: String,
+            maxScore: Double,
+            model: String?
         )?
         private(set) var translationSubmissions: [String] = []
         private(set) var fetchCount = 0
@@ -614,7 +623,14 @@ struct ReviewClientTests {
             reasonSummary: String?,
             model: String?
         ) async throws -> Moderation {
-            lastModerationSubmission = (transcriptionId, flagged, recommendation, maxScore, model)
+            lastModerationSubmission = (
+                transcriptionId,
+                inputText,
+                flagged,
+                recommendation,
+                maxScore,
+                model
+            )
             await moderationGate?.wait()
             return try moderationResult.get()
         }
